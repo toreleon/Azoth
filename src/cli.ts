@@ -6,17 +6,56 @@ import { runTurn } from "./agent/orchestrator.js";
 import { loadConfig } from "./config/loader.js";
 import { getDb } from "./storage/db.js";
 
-function printAssistantContent(content: unknown) {
-  if (!Array.isArray(content)) {
-    process.stdout.write(String(content) + "\n");
-    return;
+const DIM = "\x1b[2m";
+const ITALIC = "\x1b[3m";
+const RESET = "\x1b[0m";
+
+type StreamState = {
+  mode: "idle" | "thinking" | "text";
+  thinkingHeaderShown: boolean;
+};
+
+function setMode(state: StreamState, next: "thinking" | "text") {
+  if (state.mode === next) return;
+  if (state.mode !== "idle") process.stdout.write("\n");
+  if (next === "thinking" && !state.thinkingHeaderShown) {
+    process.stdout.write(`${DIM}${ITALIC}[thinking]${RESET}${DIM} `);
+    state.thinkingHeaderShown = true;
+  } else if (next === "thinking") {
+    process.stdout.write(`${DIM} `);
   }
-  for (const block of content as Array<{ type: string; text?: string; name?: string }>) {
-    if (block.type === "text" && block.text) {
-      process.stdout.write(block.text + "\n");
-    } else if (block.type === "tool_use" && block.name) {
-      process.stdout.write(`  [tool: ${block.name}]\n`);
+  state.mode = next;
+}
+
+function endStreamLine(state: StreamState) {
+  if (state.mode === "thinking") process.stdout.write(RESET);
+  if (state.mode !== "idle") process.stdout.write("\n");
+  state.mode = "idle";
+}
+
+function handleStreamEvent(state: StreamState, ev: any) {
+  // Anthropic RawMessageStreamEvent: content_block_start / _delta / _stop
+  if (ev?.type === "content_block_start") {
+    const cb = ev.content_block;
+    if (cb?.type === "thinking") setMode(state, "thinking");
+    else if (cb?.type === "text") setMode(state, "text");
+    else if (cb?.type === "tool_use") {
+      endStreamLine(state);
+      process.stdout.write(`${DIM}[tool: ${cb.name}]${RESET}\n`);
     }
+  } else if (ev?.type === "content_block_delta") {
+    const d = ev.delta;
+    if (d?.type === "thinking_delta" && d.thinking) {
+      setMode(state, "thinking");
+      process.stdout.write(d.thinking);
+    } else if (d?.type === "text_delta" && d.text) {
+      setMode(state, "text");
+      process.stdout.write(d.text);
+    }
+  } else if (ev?.type === "content_block_stop") {
+    endStreamLine(state);
+  } else if (ev?.type === "message_stop") {
+    endStreamLine(state);
   }
 }
 
@@ -32,14 +71,28 @@ async function main() {
   console.log("Type a question. Empty line or Ctrl+C to exit.\n");
 
   const rl = readline.createInterface({ input, output });
+  let stdinClosed = false;
+  rl.on("close", () => {
+    stdinClosed = true;
+  });
   for (;;) {
-    const userInput = (await rl.question("you> ")).trim();
+    if (stdinClosed) break;
+    let userInput: string;
+    try {
+      userInput = (await rl.question("you> ")).trim();
+    } catch {
+      break;
+    }
     if (!userInput) break;
     process.stdout.write("\n");
+    const state: StreamState = { mode: "idle", thinkingHeaderShown: false };
     try {
       for await (const message of runTurn(userInput)) {
-        if (message.type === "assistant") {
-          printAssistantContent(message.message.content);
+        if (message.type === "stream_event") {
+          handleStreamEvent(state, (message as { event: unknown }).event);
+        } else if (message.type === "assistant") {
+          // final assistant message — already streamed; just emit tool_use markers we missed
+          endStreamLine(state);
         } else if (message.type === "result") {
           const r = message as unknown as {
             total_cost_usd?: number;

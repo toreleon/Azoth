@@ -90,24 +90,63 @@ export function buildMcpServer() {
   });
 }
 
-export function buildOptions(): Options {
+export function buildOptions(opts: { resume?: string } = {}): Options {
   const cfg = loadConfig();
   return {
     model: cfg.model,
     systemPrompt: buildSystemPrompt(),
+    ...(opts.resume ? { resume: opts.resume } : {}),
     mcpServers: {
-      vnstock: {
-        type: "sdk",
-        name: "vnstock",
-        instance: buildMcpServer(),
-      },
+      vnstock: buildMcpServer(),
     },
+    includePartialMessages: true,
+    // Restrict to our MCP tools — the SDK's default toolset (Bash, Read, Edit,
+    // Task, …) is unnecessary for an analyst agent and can confuse non-Claude
+    // models like GLM into recursive subagent calls.
+    allowedTools: [
+      "mcp__vnstock__market_quote",
+      "mcp__vnstock__market_ohlcv",
+      "mcp__vnstock__technical_indicators",
+      "mcp__vnstock__fundamentals_snapshot",
+      "mcp__vnstock__ticker_news",
+      "mcp__vnstock__macro_indices",
+      "mcp__vnstock__foreign_flow",
+      "mcp__vnstock__portfolio_list",
+      "mcp__vnstock__portfolio_record",
+      "mcp__vnstock__portfolio_remove",
+      "mcp__vnstock__journal_append",
+      "mcp__vnstock__journal_read",
+      ...(cfg.autonomy === "advisory"
+        ? []
+        : [
+            "mcp__vnstock__place_order",
+            "mcp__vnstock__cancel_order",
+            "mcp__vnstock__list_orders",
+            "mcp__vnstock__broker_state",
+          ]),
+    ],
   };
 }
 
+let activeSessionId: string | undefined;
+
+export function resetSession() {
+  activeSessionId = undefined;
+}
+
 export async function* runTurn(prompt: string) {
-  const stream = query({ prompt, options: buildOptions() });
+  const stream = query({
+    prompt,
+    options: buildOptions({ resume: activeSessionId }),
+  });
   for await (const message of stream) {
+    if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
+      const sid = (message as { session_id?: string }).session_id;
+      if (sid) activeSessionId = sid;
+    } else if (message.type === "result") {
+      const sid = (message as { session_id?: string }).session_id;
+      if (sid) activeSessionId = sid;
+    }
     yield message;
   }
 }

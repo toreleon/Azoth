@@ -5,7 +5,7 @@
 autonomy: advisory
 
 # Default Claude model for the orchestrator.
-model: claude-sonnet-4-6
+model: glm-5.1
 
 # Tickers the agent should track by default.
 watchlist:
