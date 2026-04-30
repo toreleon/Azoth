@@ -2,8 +2,13 @@
 
 CLI agent platform for Vietnam stock investment decisions, built on the Claude Agent SDK (TypeScript).
 
-**Phase 1 (current)** — advisory only: market data + technical indicators via a CLI chat.
-Future phases add fundamentals, news/sentiment, macro, paper trading, and live broker execution (DNSE Entrade X).
+All five phases of the original plan are now in:
+
+- **Phase 1** — market data + technical indicators
+- **Phase 2** — fundamentals + per-ticker news
+- **Phase 3** — macro indices, foreign flow, portfolio, and decision journal
+- **Phase 4** — paper broker, autonomy modes (advisory / confirm / auto), risk guardrails, RSI backtest
+- **Phase 5** — DNSE Entrade X live broker (LightSpeed v2 REST) + broker contract tests
 
 ## Setup
 
@@ -49,6 +54,48 @@ src/
   data/cache.ts            # SQLite TTL cache
   storage/                 # better-sqlite3 + schema
   config/                  # YAML config + zod loader
+```
+
+## Live trading (DNSE Entrade X)
+
+**Read this before flipping the switch.** Live mode places real orders against
+a real account.
+
+1. Open a DNSE account and enable Entrade X / LightSpeed API access.
+2. Fill `DNSE_USERNAME`, `DNSE_PASSWORD`, `DNSE_ACCOUNT_NO` in `.env`.
+3. **Find your `DNSE_LOAN_PACKAGE_ID`**: this is account-specific. After
+   logging in once, hit `GET https://api.dnse.com.vn/margin-service/loan-products`
+   with the JWT and pick an `id` for your equity sub-account. Community values
+   like `1372` are NOT yours.
+4. Set `broker: dnse` in `src/config/config.yaml`.
+5. Set `autonomy: confirm` (recommended) — every order will prompt y/N in the
+   CLI before submission.
+6. Run `pnpm test` and `pnpm dev` with `DNSE_TEST_LIVE=1` set, but **leave
+   `VNSTOCK_LIVE_TRADING` unset** for now. Verify `broker_state` and
+   `list_orders` calls return your real cash + positions.
+7. Only then set `VNSTOCK_LIVE_TRADING=1` and place a single 100-share test
+   order on a liquid ticker (SSI, VND, VPB) during market hours.
+8. The first `place_order` of each session triggers an email OTP prompt.
+
+The DNSE client is built defensively — DNSE has not published a stable public
+spec, so field names are parsed leniently. If you hit a parse error, capture
+the raw HTTP response and patch `src/broker/dnse.ts`.
+
+## Backtesting
+
+```
+pnpm backtest --days=180 --rsi-buy=30 --rsi-sell=70 --lots=2
+```
+
+Replays an RSI mean-reversion strategy on the watchlist via PaperBroker.
+Sanity-checks data feeds, lot sizing, fees, and accounting without spending
+LLM tokens.
+
+## Tests
+
+```
+pnpm test                # PaperBroker contract suite
+DNSE_TEST_LIVE=1 pnpm test   # also runs DNSE read-only probes
 ```
 
 See `/home/tore/.claude/plans/i-am-planning-to-wise-catmull.md` for the full multi-phase plan.

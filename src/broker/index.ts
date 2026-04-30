@@ -1,4 +1,5 @@
 import { PaperBroker } from "./paper.js";
+import { DNSEBroker } from "./dnse.js";
 import type { Broker } from "./types.js";
 import { loadConfig } from "../config/loader.js";
 
@@ -12,6 +13,7 @@ export function getBroker(): Broker {
       cached = new PaperBroker();
       return cached;
     case "dnse":
-      throw new Error("dnse broker is not yet implemented (Phase 5)");
+      cached = new DNSEBroker();
+      return cached;
   }
 }
