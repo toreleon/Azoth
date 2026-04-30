@@ -26,6 +26,43 @@ CREATE TABLE IF NOT EXISTS decisions (
 
 CREATE INDEX IF NOT EXISTS decisions_ticker_idx ON decisions(ticker, created_at);
 
+-- Paper / live broker state (Phase 4+)
+
+CREATE TABLE IF NOT EXISTS broker_state (
+  broker     TEXT PRIMARY KEY,        -- 'paper' | 'dnse'
+  cash_vnd   REAL NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS broker_positions (
+  broker     TEXT NOT NULL,
+  ticker     TEXT NOT NULL,
+  quantity   INTEGER NOT NULL,
+  avg_cost   REAL NOT NULL,           -- thousand VND
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (broker, ticker)
+);
+
+CREATE TABLE IF NOT EXISTS broker_orders (
+  id              TEXT PRIMARY KEY,
+  broker          TEXT NOT NULL,
+  ticker          TEXT NOT NULL,
+  side            TEXT NOT NULL,      -- BUY | SELL
+  type            TEXT NOT NULL,      -- MARKET | LIMIT
+  quantity        INTEGER NOT NULL,
+  limit_price     REAL,                -- thousand VND
+  status          TEXT NOT NULL,      -- PENDING | FILLED | CANCELLED | REJECTED
+  reject_reason   TEXT,
+  created_at      INTEGER NOT NULL,
+  filled_at       INTEGER,
+  filled_price    REAL,                -- thousand VND
+  filled_qty      INTEGER,
+  notes           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS broker_orders_ticker_idx ON broker_orders(broker, ticker, created_at);
+CREATE INDEX IF NOT EXISTS broker_orders_status_idx ON broker_orders(broker, status);
+
 CREATE TABLE IF NOT EXISTS alerts (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at  INTEGER NOT NULL,

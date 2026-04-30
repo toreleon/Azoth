@@ -14,6 +14,12 @@ import {
   removePositionTool,
 } from "../tools/portfolio.js";
 import { journalAppendTool, journalReadTool } from "../tools/journal.js";
+import {
+  placeOrderTool,
+  cancelOrderTool,
+  listOrdersTool,
+  brokerStateTool,
+} from "../tools/order.js";
 import { loadConfig } from "../config/loader.js";
 
 export function buildSystemPrompt(): string {
@@ -33,6 +39,9 @@ export function buildSystemPrompt(): string {
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
     "- portfolio_list / portfolio_record / portfolio_remove: read and update the user's positions in local SQLite. Avg cost is in thousand VND.",
     "- journal_append / journal_read: persist and review past decisions.",
+    cfg.autonomy === "advisory"
+      ? "- (no order tools — autonomy=advisory)"
+      : "- place_order / cancel_order / list_orders / broker_state: trade through the configured broker (paper or dnse). Quantity must be a multiple of 100. Prices are in thousand VND.",
     "",
     "Operating rules:",
     "1. Always ground recommendations in tool output, not memory. Cite the value, ticker, and source you used.",
@@ -42,27 +51,42 @@ export function buildSystemPrompt(): string {
     "5. When citing news, include the URL and publish date so the user can verify.",
     "6. After delivering a recommendation, call journal_append to persist the rationale and exit plan.",
     "7. Keep replies concise. Show the numbers, then a one-paragraph synthesis covering all four dimensions (technical / fundamental / news / macro).",
-    "8. Phase 1 has NO order-placement tools. Never claim to have placed an order. The user executes manually.",
+    cfg.autonomy === "advisory"
+      ? "8. Order-placement tools are NOT available in advisory mode. Recommend; do not claim to have placed an order. The user executes manually."
+      : `8. Order tools ARE available (autonomy=${cfg.autonomy}, broker=${cfg.broker}). In 'confirm' mode the user is prompted in the CLI; in 'auto' the order goes through risk guardrails. Always call journal_append after a fill.`,
   ].join("\n");
 }
 
 export function buildMcpServer() {
+  const cfg = loadConfig();
+  const baseTools = [
+    quoteTool,
+    ohlcvTool,
+    indicatorsTool,
+    fundamentalsTool,
+    newsTool,
+    indicesTool,
+    foreignFlowTool,
+    listPositionsTool,
+    recordPositionTool,
+    removePositionTool,
+    journalAppendTool,
+    journalReadTool,
+  ];
+  const orderTools = [
+    placeOrderTool,
+    cancelOrderTool,
+    listOrdersTool,
+    brokerStateTool,
+  ];
+  const tools =
+    cfg.autonomy === "advisory"
+      ? baseTools
+      : [...baseTools, ...orderTools];
+  // SDK accepts a heterogeneous tool array; widen the element type.
   return createSdkMcpServer({
     name: "vnstock",
-    tools: [
-      quoteTool,
-      ohlcvTool,
-      indicatorsTool,
-      fundamentalsTool,
-      newsTool,
-      indicesTool,
-      foreignFlowTool,
-      listPositionsTool,
-      recordPositionTool,
-      removePositionTool,
-      journalAppendTool,
-      journalReadTool,
-    ],
+    tools: tools as unknown as Parameters<typeof createSdkMcpServer>[0]["tools"],
   });
 }
 

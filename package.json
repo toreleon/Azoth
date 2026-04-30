@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
+    "backtest": "tsx src/cli/backtest.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/cli.js",
     "test": "vitest run",
