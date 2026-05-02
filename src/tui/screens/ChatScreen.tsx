@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Box, Static, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
 import { useAgentStream, type ChatBlock } from "../hooks/useAgentStream.js";
@@ -53,6 +53,8 @@ export function ChatScreen(props: ChatScreenProps) {
   const [input, setInput] = useState("");
   const [suggestSel, setSuggestSel] = useState(0);
   const { snapshot } = useBrokerSnapshot(8000);
+  const [decisions, setDecisions] = useState<DecisionRow[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
 
   const matches = matchSlash(input);
   const showSuggest = matches.length > 0;
@@ -63,10 +65,43 @@ export function ChatScreen(props: ChatScreenProps) {
     onStatsRef.current(stream.cumulative);
   }, [stream.cumulative]);
 
-  const toolResults = new Map<string, string>();
-  for (const b of stream.blocks) {
-    if (b.role === "tool_result" && b.toolUseId) toolResults.set(b.toolUseId, b.text);
-  }
+  // Poll sidebar tables on a timer instead of querying SQLite on every render
+  // (which fired on every stream-delta state update and caused flicker).
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const db = getDb();
+        setDecisions(
+          db.prepare("SELECT ticker, action, rationale, created_at FROM decisions ORDER BY created_at DESC LIMIT 5").all() as DecisionRow[],
+        );
+        setOrders(
+          db.prepare("SELECT ticker, side, status, quantity, limit_price, created_at FROM broker_orders ORDER BY created_at DESC LIMIT 5").all() as OrderRow[],
+        );
+      } catch {}
+    };
+    refresh();
+    const id = setInterval(refresh, 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  const toolResults = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const b of stream.blocks) {
+      if (b.role === "tool_result" && b.toolUseId) m.set(b.toolUseId, b.text);
+    }
+    return m;
+  }, [stream.blocks]);
+
+  // Split blocks into a Static (render-once) prefix and a live tail. While
+  // streaming, the last block is being mutated in place by stream deltas, so
+  // it must stay outside <Static> to receive updates. Static items render
+  // once and are never re-diffed → eliminates flicker on completed blocks.
+  const liveId = stream.streaming ? stream.blocks[stream.blocks.length - 1]?.id : undefined;
+  const finalized = useMemo(
+    () => stream.blocks.filter((b) => b.id !== liveId),
+    [stream.blocks, liveId],
+  );
+  const liveBlock = liveId ? stream.blocks[stream.blocks.length - 1] : undefined;
 
   useInput((_inp, key) => {
     if (key.ctrl && _inp === "c" && stream.streaming) stream.abort();
@@ -105,25 +140,18 @@ export function ChatScreen(props: ChatScreenProps) {
     void stream.send(v);
   };
 
-  const recent = stream.blocks.slice(-60);
-
-  let decisions: DecisionRow[] = [];
-  let orders: OrderRow[] = [];
-  try {
-    const db = getDb();
-    decisions = db.prepare("SELECT ticker, action, rationale, created_at FROM decisions ORDER BY created_at DESC LIMIT 5").all() as DecisionRow[];
-    orders = db.prepare("SELECT ticker, side, status, quantity, limit_price, created_at FROM broker_orders ORDER BY created_at DESC LIMIT 5").all() as OrderRow[];
-  } catch {}
-
   return (
     <Box flexDirection="row" flexGrow={1}>
       <Box flexDirection="column" flexGrow={2} marginRight={1}>
         <Box flexDirection="column" flexGrow={1} borderStyle="round" borderColor="gray" paddingX={1}>
-          {recent.length === 0 ? (
+          {stream.blocks.length === 0 ? (
             <Logo tagline={`persona ${props.persona} · autonomy ${props.autonomy} · type / for commands`} />
           ) : (
-            recent.map((b) => renderBlock(b, toolResults))
+            <Static items={finalized}>
+              {(b) => renderBlock(b, toolResults)}
+            </Static>
           )}
+          {liveBlock ? renderBlock(liveBlock, toolResults) : null}
           {stream.streaming ? (
             <Box marginTop={1}><Text color="yellow"><Spinner type="dots" /> thinking…</Text></Box>
           ) : null}
@@ -155,8 +183,8 @@ export function ChatScreen(props: ChatScreenProps) {
         </Panel>
         <Panel title="LATEST ORDERS" borderColor="yellow">
           {orders.length === 0 ? <Text dimColor>none</Text> : null}
-          {orders.map((o, i) => (
-            <Text key={i}>
+          {orders.map((o) => (
+            <Text key={`${o.created_at}-${o.ticker}-${o.side}`}>
               <Text color={o.side === "BUY" ? "green" : "red"}>{o.side.padEnd(4)}</Text>
               <Text color="white"> {o.ticker.padEnd(5)}</Text>
               <Text dimColor> {o.quantity}</Text>
@@ -166,8 +194,8 @@ export function ChatScreen(props: ChatScreenProps) {
         </Panel>
         <Panel title="DECISION JOURNAL" borderColor="magenta">
           {decisions.length === 0 ? <Text dimColor>empty</Text> : null}
-          {decisions.map((d, i) => (
-            <Box key={i} flexDirection="column">
+          {decisions.map((d) => (
+            <Box key={`${d.created_at}-${d.ticker}`} flexDirection="column">
               <Text>
                 <Text color={d.action === "BUY" ? "green" : d.action === "SELL" ? "red" : "yellow"}>{d.action.padEnd(5)}</Text>
                 <Text color="white"> {d.ticker}</Text>

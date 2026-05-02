@@ -1,5 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { runTurn, resetSession } from "../../agent/orchestrator.js";
+
+const FLUSH_INTERVAL_MS = 80; // ~12fps; halves Ink tree-diff rate vs 50ms while still feeling live
 
 export type ChatRole = "user" | "thinking" | "text" | "tool_use" | "tool_result" | "system" | "error";
 
@@ -40,18 +42,57 @@ export function useAgentStream(): AgentStreamState {
   const [cumulative, setCumulative] = useState<TurnStats>({ inTokens: 0, outTokens: 0, costUsd: 0 });
   const abortRef = useRef(false);
 
-  const append = (b: ChatBlock) => setBlocks((prev) => [...prev, b]);
+  // Coalesce stream-delta writes: write to a ref-mirror of the blocks array
+  // and flush to React state on a fixed cadence so per-token deltas don't
+  // each trigger a full Ink re-render.
+  const blocksRef = useRef<ChatBlock[]>([]);
+  const dirtyRef = useRef(false);
+  const flushTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const scheduleFlush = () => {
+    if (flushTimer.current != null) return;
+    flushTimer.current = setTimeout(() => {
+      flushTimer.current = null;
+      if (!dirtyRef.current) return;
+      dirtyRef.current = false;
+      setBlocks(blocksRef.current.slice());
+    }, FLUSH_INTERVAL_MS);
+  };
+
+  const flushNow = () => {
+    if (flushTimer.current != null) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    if (dirtyRef.current) {
+      dirtyRef.current = false;
+      setBlocks(blocksRef.current.slice());
+    }
+  };
+
+  useEffect(() => () => {
+    if (flushTimer.current != null) clearTimeout(flushTimer.current);
+  }, []);
+
+  // Structural changes (new block boundary) must be visible immediately
+  // so the next delta lands on the right row.
+  const append = (b: ChatBlock) => {
+    blocksRef.current = [...blocksRef.current, b];
+    dirtyRef.current = true;
+    flushNow();
+  };
+
+  // Delta updates are mutated in place on the ref and flushed on a timer.
   const updateLast = (role: ChatRole, mut: (b: ChatBlock) => ChatBlock) => {
-    setBlocks((prev) => {
-      for (let i = prev.length - 1; i >= 0; i--) {
-        if (prev[i]!.role === role) {
-          const next = [...prev];
-          next[i] = mut(next[i]!);
-          return next;
-        }
+    const arr = blocksRef.current;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i]!.role === role) {
+        arr[i] = mut(arr[i]!);
+        dirtyRef.current = true;
+        scheduleFlush();
+        return;
       }
-      return prev;
-    });
+    }
   };
 
   const send = useCallback(async (prompt: string) => {
@@ -133,6 +174,7 @@ export function useAgentStream(): AgentStreamState {
     } catch (err) {
       append({ id: nextId(), role: "error", text: (err as Error).message });
     } finally {
+      flushNow();
       setStreaming(false);
       currentRole = null;
     }
@@ -145,6 +187,12 @@ export function useAgentStream(): AgentStreamState {
   const reset = useCallback(() => {
     abortRef.current = true;
     resetSession();
+    blocksRef.current = [];
+    dirtyRef.current = false;
+    if (flushTimer.current != null) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
     setBlocks([]);
     setCumulative({ inTokens: 0, outTokens: 0, costUsd: 0 });
   }, []);
