@@ -7,7 +7,7 @@
  *
  *   pnpm tsx src/cli/backtest.ts [--days=180] [--rsi-buy=30] [--rsi-sell=70] [--lots=2]
  */
-import "dotenv/config";
+import "../runtime/bootstrap.js";
 import { RSI } from "technicalindicators";
 import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";

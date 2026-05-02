@@ -7,6 +7,7 @@ import { Sparkline } from "../components/Sparkline.js";
 import { runBacktestSession, type EquityPayload, type SummaryPayload, type TurnResultPayload } from "../../agent/backtestRunner.js";
 import { formatBigVnd, formatDate, formatPct, formatPrice, truncate } from "../lib/format.js";
 import { pctColor } from "../lib/colors.js";
+import { theme } from "../lib/theme.js";
 
 type Phase = "form" | "running" | "done" | "error";
 
@@ -88,14 +89,14 @@ export function BacktestScreen() {
   if (phase === "form") {
     return (
       <Box flexDirection="column" flexGrow={1} padding={1}>
-        <Text bold color="cyan">CONFIGURE BACKTEST</Text>
-        <Text dimColor>↑↓ to move · ←→ on persona · Enter to launch · F1–F4 to switch modes</Text>
+        <Text bold color={theme.accent}>CONFIGURE BACKTEST</Text>
+        <Text dimColor>↑↓ to move · ←→ on persona · Enter to launch · Tab to switch screens</Text>
         <Box marginTop={1} flexDirection="column">
           {FIELDS.map((f, i) => (
             <Box key={f.key} marginY={0}>
-              <Text color={i === active ? "cyan" : "gray"}>{i === active ? "▶ " : "  "}{f.label.padEnd(22)}</Text>
+              <Text color={i === active ? theme.accent : theme.muted}>{i === active ? "▌ " : "  "}{f.label.padEnd(22)}</Text>
               {f.key === "persona" ? (
-                <Text color="magenta">{persona}</Text>
+                <Text color={theme.persona}>{persona}</Text>
               ) : f.key === "start" ? (
                 i === active ? <TextInput value={start} onChange={setStart} onSubmit={launch} /> : <Text>{start}</Text>
               ) : f.key === "end" ? (
@@ -117,25 +118,25 @@ export function BacktestScreen() {
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Box flexDirection="row">
-        <Panel title="EQUITY" flex={2} borderColor="green">
-          <Sparkline values={mtmSeries} color="green" label="strat" />
-          <Sparkline values={benchSeries} color="cyan" label="VNINDEX" />
+        <Panel title="EQUITY" flex={2} borderColor={theme.up}>
+          <Sparkline values={mtmSeries} color={theme.up} label="strat" />
+          <Sparkline values={benchSeries} color={theme.accent} label="VNINDEX" />
           {last ? (
             <Text>
               <Text dimColor>last </Text><Text>{formatDate(last.asOf)}</Text>
-              <Text dimColor>  mtm </Text><Text color="green">{formatBigVnd(last.mtmVnd)}</Text>
+              <Text dimColor>  mtm </Text><Text color={theme.up}>{formatBigVnd(last.mtmVnd)}</Text>
               <Text dimColor>  cash </Text><Text>{formatBigVnd(last.cashVnd)}</Text>
-              <Text dimColor>  bench </Text><Text color="cyan">{formatBigVnd(last.benchmarkMtmVnd)}</Text>
+              <Text dimColor>  bench </Text><Text color={theme.accent}>{formatBigVnd(last.benchmarkMtmVnd)}</Text>
             </Text>
           ) : null}
         </Panel>
-        <Panel title="STREAM" flex={1} borderColor="yellow" badge={phase === "running" ? "live" : phase}>
-          {phase === "running" ? <Text color="yellow"><Spinner type="dots" /> {currentDate}</Text> : null}
+        <Panel title="STREAM" flex={1} borderColor={theme.flat} badge={phase === "running" ? "live" : phase}>
+          {phase === "running" ? <Text color={theme.flat}><Spinner type="dots" /> {currentDate}</Text> : null}
           {streamLog.slice(-10).map((l, i) => <Text key={i} dimColor>{l}</Text>)}
         </Panel>
       </Box>
       <Box flexDirection="row" flexGrow={1}>
-        <Panel title="WEEKLY TURNS" flex={1} borderColor="cyan">
+        <Panel title="WEEKLY TURNS" flex={1} borderColor={theme.accent}>
           {turns.slice(-15).map((t) => (
             <Text key={t.asOf}>
               <Text>{t.dateIso}</Text>
@@ -145,21 +146,21 @@ export function BacktestScreen() {
             </Text>
           ))}
         </Panel>
-        <Panel title="SUMMARY" flex={1} borderColor="magenta">
+        <Panel title="SUMMARY" flex={1} borderColor={theme.persona}>
           {summary ? (
             <>
               <Text>weeks <Text color="white">{summary.weeks}</Text>  trades <Text color="white">{summary.trades}</Text></Text>
-              <Text>final mtm <Text color="green">{formatBigVnd(summary.finalMtm)}</Text></Text>
-              <Text>vnindex <Text color="cyan">{formatBigVnd(summary.finalBench)}</Text></Text>
+              <Text>final mtm <Text color={theme.up}>{formatBigVnd(summary.finalMtm)}</Text></Text>
+              <Text>vnindex <Text color={theme.accent}>{formatBigVnd(summary.finalBench)}</Text></Text>
               <Text>return <Text color={pctColor(summary.totalReturn)}>{formatPct(summary.totalReturn)}</Text></Text>
               <Text>bench <Text color={pctColor(summary.benchReturn)}>{formatPct(summary.benchReturn)}</Text></Text>
               <Text>alpha <Text color={pctColor(summary.totalReturn - summary.benchReturn)}>{formatPct(summary.totalReturn - summary.benchReturn)}</Text></Text>
-              <Text>maxDD <Text color="red">{formatPct(summary.maxDD * 100)}</Text></Text>
+              <Text>maxDD <Text color={theme.down}>{formatPct(summary.maxDD * 100)}</Text></Text>
               <Text>cost <Text>${summary.totalCost.toFixed(4)}</Text></Text>
               <Text dimColor>r: re-run</Text>
             </>
           ) : error ? (
-            <><Text color="red">{error}</Text><Text dimColor>r: retry</Text></>
+            <><Text color={theme.down}>{error}</Text><Text dimColor>r: retry</Text></>
           ) : (
             <Text dimColor>running… ESC to abort</Text>
           )}

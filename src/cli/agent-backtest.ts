@@ -3,17 +3,18 @@
  * Phase 6 agent-driven backtest. Replays the watchlist week-by-week (Friday
  * closes), letting the LLM agent decide BUY/SELL/HOLD each week using a
  * lookahead-clamped tool subset. Records turns, equity, and trades to SQLite
- * and writes a JSON report to ./out/.
+ * and writes a JSON report under ~/.azoth/logs/backtests/.
  *
  *   pnpm tsx src/cli/agent-backtest.ts \
  *     --start=2025-01-01 --end=2025-04-30 \
  *     --persona=balanced [--initial-cash=1000000000]
  */
-import "dotenv/config";
+import "../runtime/bootstrap.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runBacktestSession, type BacktestOptions } from "../agent/backtestRunner.js";
 import { getDb } from "../storage/db.js";
+import { azothPaths } from "../runtime/paths.js";
 
 function parseArgs(argv: string[]): BacktestOptions {
   const out: BacktestOptions = {
@@ -135,7 +136,7 @@ async function main() {
     .prepare("SELECT * FROM broker_orders WHERE status = 'FILLED' AND broker LIKE ? ORDER BY created_at")
     .all(`paper-bt-${summary.runId.slice(0, 8)}`);
 
-  const outDir = resolve("out");
+  const outDir = resolve(azothPaths().logs, "backtests");
   mkdirSync(outDir, { recursive: true });
   const reportPath = resolve(outDir, `backtest-${summary.runId}.json`);
   writeFileSync(

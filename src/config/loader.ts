@@ -1,7 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { DEFAULT_CONFIG_YAML } from "../runtime/defaultConfig.js";
+import { azothPaths, ensureAzothDirs } from "../runtime/paths.js";
 
 const ConfigSchema = z.object({
   autonomy: z.enum(["advisory", "confirm", "auto"]),
@@ -23,11 +25,19 @@ let cached: Config | null = null;
 
 export function loadConfig(): Config {
   if (cached) return cached;
-  const path = resolve(
-    process.env.VNSTOCK_CONFIG ?? "src/config/config.yaml",
-  );
+  const path = resolve(process.env.VNSTOCK_CONFIG ?? azothPaths().config);
+  if (!process.env.VNSTOCK_CONFIG) {
+    ensureAzothDirs();
+    if (!existsSync(path)) {
+      writeFileSync(path, DEFAULT_CONFIG_YAML, { encoding: "utf8", mode: 0o600 });
+    }
+  }
   const raw = readFileSync(path, "utf8");
   const parsed = parseYaml(raw);
   cached = ConfigSchema.parse(parsed);
   return cached;
+}
+
+export function resetConfigCacheForTests(): void {
+  cached = null;
 }

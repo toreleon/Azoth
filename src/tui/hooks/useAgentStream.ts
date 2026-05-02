@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { runTurn, resetSession } from "../../agent/orchestrator.js";
+import {
+  readActiveSessionRecords,
+  recentSessions,
+  resetSession,
+  resumeLatestSession,
+  resumeSession,
+  runTurn,
+  startNewSession,
+} from "../../agent/orchestrator.js";
+import type { SessionIndexEntry, SessionRecord } from "../../runtime/sessionStore.js";
 
 const FLUSH_INTERVAL_MS = 80; // ~12fps; halves Ink tree-diff rate vs 50ms while still feeling live
 
@@ -28,12 +37,61 @@ export interface AgentStreamState {
   send: (prompt: string) => Promise<void>;
   abort: () => void;
   reset: () => void;
+  newSession: () => void;
+  resumeLatest: () => void;
+  resumeById: (id: string) => void;
+  listSessions: () => SessionIndexEntry[];
+  systemMessage: (text: string) => void;
 }
 
 let blockSeq = 0;
 function nextId() {
   blockSeq += 1;
   return `b${blockSeq}`;
+}
+
+function blocksFromRecords(records: SessionRecord[]): ChatBlock[] {
+  const blocks: ChatBlock[] = [];
+  for (const r of records) {
+    if (r.type === "user" && r.text) {
+      blocks.push({ id: nextId(), role: "user", text: r.text });
+    } else if (r.type === "assistant" && r.text) {
+      blocks.push({ id: nextId(), role: "text", text: r.text });
+    } else if (r.type === "thinking" && r.text) {
+      blocks.push({ id: nextId(), role: "thinking", text: r.text });
+    } else if (r.type === "tool_use") {
+      blocks.push({
+        id: nextId(),
+        role: "tool_use",
+        text: "",
+        toolName: r.toolName,
+        toolUseId: r.toolUseId,
+        toolInput: r.toolInput,
+      });
+    } else if (r.type === "tool_result") {
+      blocks.push({
+        id: nextId(),
+        role: "tool_result",
+        text: r.text ?? "",
+        toolUseId: r.toolUseId,
+      });
+    } else if (r.type === "system" && r.text) {
+      blocks.push({ id: nextId(), role: "system", text: r.text });
+    }
+  }
+  return blocks;
+}
+
+function statsFromRecords(records: SessionRecord[]): TurnStats {
+  return records.reduce<TurnStats>((acc, r) => {
+    if (r.type !== "result") return acc;
+    return {
+      inTokens: acc.inTokens + (r.usage?.inputTokens ?? 0),
+      outTokens: acc.outTokens + (r.usage?.outputTokens ?? 0),
+      costUsd: acc.costUsd + (r.costUsd ?? 0),
+      sessionId: r.sdkSessionId ?? acc.sessionId,
+    };
+  }, { inTokens: 0, outTokens: 0, costUsd: 0 });
 }
 
 export function useAgentStream(): AgentStreamState {
@@ -72,6 +130,15 @@ export function useAgentStream(): AgentStreamState {
 
   useEffect(() => () => {
     if (flushTimer.current != null) clearTimeout(flushTimer.current);
+  }, []);
+
+  useEffect(() => {
+    const records = readActiveSessionRecords();
+    if (records.length === 0) return;
+    const restored = blocksFromRecords(records);
+    blocksRef.current = restored;
+    setBlocks(restored);
+    setCumulative(statsFromRecords(records));
   }, []);
 
   // Structural changes (new block boundary) must be visible immediately
@@ -197,5 +264,51 @@ export function useAgentStream(): AgentStreamState {
     setCumulative({ inTokens: 0, outTokens: 0, costUsd: 0 });
   }, []);
 
-  return { blocks, streaming, cumulative, send, abort, reset };
+  const addSystem = useCallback((text: string) => {
+    append({ id: nextId(), role: "system", text });
+  }, []);
+
+  const newSession = useCallback(() => {
+    abortRef.current = true;
+    const session = startNewSession();
+    blocksRef.current = [];
+    dirtyRef.current = false;
+    setBlocks([]);
+    setCumulative({ inTokens: 0, outTokens: 0, costUsd: 0 });
+    addSystem(`Started new session ${session.id.slice(0, 8)}.`);
+  }, [addSystem]);
+
+  const resumeLatest = useCallback(() => {
+    abortRef.current = true;
+    const session = resumeLatestSession();
+    if (!session) {
+      addSystem("No previous sessions found.");
+      return;
+    }
+    const records = readActiveSessionRecords();
+    const restored = blocksFromRecords(records);
+    blocksRef.current = restored;
+    setBlocks(restored);
+    setCumulative(statsFromRecords(records));
+    addSystem(`Resumed session ${session.id.slice(0, 8)}.`);
+  }, [addSystem]);
+
+  const resumeById = useCallback((id: string) => {
+    abortRef.current = true;
+    const session = resumeSession(id);
+    if (!session) {
+      addSystem(`Session not found: ${id}`);
+      return;
+    }
+    const records = readActiveSessionRecords();
+    const restored = blocksFromRecords(records);
+    blocksRef.current = restored;
+    setBlocks(restored);
+    setCumulative(statsFromRecords(records));
+    addSystem(`Resumed session ${session.id.slice(0, 8)}.`);
+  }, [addSystem]);
+
+  const listSessions = useCallback(() => recentSessions(10), []);
+
+  return { blocks, streaming, cumulative, send, abort, reset, newSession, resumeLatest, resumeById, listSessions, systemMessage: addSystem };
 }

@@ -14,8 +14,9 @@ All five phases of the original plan are now in:
 
 ```bash
 pnpm install        # or: npm install
-cp .env.example .env
-# edit .env and set ANTHROPIC_API_KEY
+pnpm azoth:init
+cp ~/.azoth/.env.example ~/.azoth/.env
+# edit ~/.azoth/.env and set ANTHROPIC_API_KEY
 pnpm dev
 ```
 
@@ -29,7 +30,17 @@ you> What's the bollinger band situation on VNINDEX (kind=index)?
 
 ## Configuration
 
-Edit `src/config/config.yaml`:
+Azoth stores runtime state in `~/.azoth` by default. A fresh install creates:
+
+- `~/.azoth/config.yaml` — user configuration
+- `~/.azoth/.env.example` — environment template
+- `~/.azoth/azoth.db` — SQLite data/cache/journal/broker database
+- `~/.azoth/projects/<encoded-cwd>/*.jsonl` — per-project chat sessions
+
+Set `AZOTH_HOME` to use a different root. `VNSTOCK_CONFIG` and `VNSTOCK_DB`
+still override the config and database paths for tests or advanced setups.
+
+Edit `~/.azoth/config.yaml`:
 
 - `autonomy`: only `advisory` is wired in Phase 1.
 - `model`: any Claude model id (default `claude-sonnet-4-6`).
@@ -41,7 +52,7 @@ Edit `src/config/config.yaml`:
 - **OHLCV (stocks + indices)**: DNSE Entrade public API (`services.entrade.com.vn/chart-api/v2/ohlcs/...`), no auth.
 - **Quote / ref / ceiling / floor / company info**: SSI iBoard public (`iboard-query.ssi.com.vn/stock/...`), no auth.
 
-Responses are cached in SQLite (`vnstock.db`) with short TTLs.
+Responses are cached in SQLite (`~/.azoth/azoth.db`) with short TTLs.
 
 ## Layout
 
@@ -54,6 +65,7 @@ src/
   data/cache.ts            # SQLite TTL cache
   storage/                 # better-sqlite3 + schema
   config/                  # YAML config + zod loader
+  runtime/                 # ~/.azoth paths, bootstrap, sessions
 ```
 
 ## Live trading (DNSE Entrade X)
@@ -62,12 +74,12 @@ src/
 a real account.
 
 1. Open a DNSE account and enable Entrade X / LightSpeed API access.
-2. Fill `DNSE_USERNAME`, `DNSE_PASSWORD`, `DNSE_ACCOUNT_NO` in `.env`.
+2. Fill `DNSE_USERNAME`, `DNSE_PASSWORD`, `DNSE_ACCOUNT_NO` in `~/.azoth/.env`.
 3. **Find your `DNSE_LOAN_PACKAGE_ID`**: this is account-specific. After
    logging in once, hit `GET https://api.dnse.com.vn/margin-service/loan-products`
    with the JWT and pick an `id` for your equity sub-account. Community values
    like `1372` are NOT yours.
-4. Set `broker: dnse` in `src/config/config.yaml`.
+4. Set `broker: dnse` in `~/.azoth/config.yaml`.
 5. Set `autonomy: confirm` (recommended) — every order will prompt y/N in the
    CLI before submission.
 6. Run `pnpm test` and `pnpm dev` with `DNSE_TEST_LIVE=1` set, but **leave

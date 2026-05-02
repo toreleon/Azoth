@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import "dotenv/config";
+import "./runtime/bootstrap.js";
 import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { runTurn } from "./agent/orchestrator.js";
@@ -61,7 +61,7 @@ function handleStreamEvent(state: StreamState, ev: any) {
 
 async function main() {
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("ANTHROPIC_API_KEY is not set. Copy .env.example to .env and fill it in.");
+    console.error("ANTHROPIC_API_KEY is not set. Copy ~/.azoth/.env.example to ~/.azoth/.env and fill it in.");
     process.exit(1);
   }
   const cfg = loadConfig();

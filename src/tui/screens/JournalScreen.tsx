@@ -69,7 +69,8 @@ export function JournalScreen() {
   }, [tab]);
 
   useInput((inp, key) => {
-    if (key.tab) setTab((t) => (t + 1) % TABS.length);
+    if (key.leftArrow) setTab((t) => (t - 1 + TABS.length) % TABS.length);
+    else if (key.rightArrow) setTab((t) => (t + 1) % TABS.length);
     else if (key.upArrow) setSel((s) => Math.max(0, s - 1));
     else if (key.downArrow) setSel((s) => Math.min(rows.length - 1, s + 1));
     else if (inp === "r") setRows(loadRows(tab));
@@ -96,7 +97,7 @@ export function JournalScreen() {
           {current ? current.detail.split("\n").map((l, i) => <Text key={i}>{l}</Text>) : <Text dimColor>—</Text>}
         </Box>
       </Box>
-      <Box paddingX={1}><Text dimColor>Tab: switch · ↑↓: select · r: refresh</Text></Box>
+      <Box paddingX={1}><Text dimColor>←→: tab · ↑↓: select · r: refresh</Text></Box>
     </Box>
   );
 }

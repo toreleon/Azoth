@@ -1,12 +1,14 @@
 import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { ensureAzothDirs } from "../runtime/paths.js";
 
 let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (db) return db;
-  const path = process.env.VNSTOCK_DB ?? "./vnstock.db";
+  const paths = ensureAzothDirs();
+  const path = process.env.VNSTOCK_DB ?? paths.db;
   db = new Database(path);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");

@@ -1,4 +1,6 @@
-import "dotenv/config";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import React from "react";
 import { describe, it, expect, beforeAll } from "vitest";
 import { render } from "ink-testing-library";
@@ -10,6 +12,8 @@ import { formatBigVnd, formatPct, formatPrice } from "../src/tui/lib/format.js";
 import { getDb } from "../src/storage/db.js";
 
 beforeAll(() => {
+  process.env.AZOTH_HOME = mkdtempSync(join(tmpdir(), "azoth-tui-"));
+  process.env.VNSTOCK_DB = join(process.env.AZOTH_HOME, "test.db");
   process.env.ANTHROPIC_API_KEY ??= "test-key";
   getDb();
 });
@@ -34,9 +38,9 @@ describe("Azoth TUI", () => {
     const { lastFrame, unmount } = render(<App />);
     await tick();
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("[CHAT]");
+    expect(out).toContain("AZOTH  chat");
     expect(out).toContain("PORTFOLIO");
-    expect(out).toContain("VN MARKET TERMINAL");
+    expect(out).toContain("agent · VN equities");
     unmount();
   });
 
@@ -45,13 +49,13 @@ describe("Azoth TUI", () => {
     await tick();
     await type(stdin, "/dashboard");
     const dash = strip(lastFrame() ?? "");
-    expect(dash).toContain("[DASHBOARD]");
+    expect(dash).toContain("AZOTH  dashboard");
     expect(dash).toMatch(/INDICES|WATCHLIST|TOP GAINERS/);
 
     stdin.write("\x1b");
     await tick();
     const back = strip(lastFrame() ?? "");
-    expect(back).toContain("[CHAT]");
+    expect(back).toContain("AZOTH  chat");
     unmount();
   });
 
@@ -60,7 +64,7 @@ describe("Azoth TUI", () => {
     await tick();
     await type(stdin, "/journal");
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("[JOURNAL]");
+    expect(out).toContain("AZOTH  journal");
     expect(out).toContain("Decisions");
     expect(out).toContain("Orders");
     expect(out).toContain("Fills");
@@ -73,7 +77,7 @@ describe("Azoth TUI", () => {
     await tick();
     await type(stdin, "/backtest");
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("[BACKTEST]");
+    expect(out).toContain("AZOTH  backtest");
     expect(out).toContain("CONFIGURE BACKTEST");
     unmount();
   });

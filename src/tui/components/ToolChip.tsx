@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { truncate } from "../lib/format.js";
+import { theme, glyph } from "../lib/theme.js";
+import { summarizeToolInput, summarizeToolResult } from "../lib/toolSummary.js";
 
 export interface ToolChipProps {
   name: string;
@@ -10,16 +11,24 @@ export interface ToolChipProps {
 }
 
 export function ToolChip({ name, input, result, failed }: ToolChipProps) {
-  const color = failed ? "red" : result ? "green" : "yellow";
+  const status = failed ? "fail" : result ? "done" : "running";
+  const color = status === "fail" ? theme.down : status === "done" ? theme.up : theme.accent;
+  const icon = status === "running" ? glyph.toolRunning : glyph.toolDone;
+  const pill = status === "fail" ? glyph.fail : status === "done" ? glyph.ok : "…";
+  const argSummary = summarizeToolInput(name, input);
+  const resultSummary = result ? summarizeToolResult(name, result) : null;
   return (
     <Box flexDirection="column">
-      <Text color={color}>
-        ▸ tool: <Text bold>{name}</Text>
-        {input ? <Text dimColor>  {truncate(input.replace(/\s+/g, " "), 80)}</Text> : null}
-      </Text>
-      {result ? (
+      <Box>
+        <Text color={color}>{icon} </Text>
+        <Text color={color} bold>{name}</Text>
+        {argSummary ? <Text dimColor>({argSummary})</Text> : null}
+        <Text>  </Text>
+        <Text color={color}>{pill}</Text>
+      </Box>
+      {resultSummary ? (
         <Box marginLeft={2}>
-          <Text dimColor>↳ {truncate(result.replace(/\s+/g, " "), 200)}</Text>
+          <Text dimColor>↳ {resultSummary}</Text>
         </Box>
       ) : null}
     </Box>

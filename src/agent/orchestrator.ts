@@ -24,6 +24,19 @@ import {
 import { loadConfig } from "../config/loader.js";
 import { asOfClock, setActiveAsOf, type AsOfStore } from "./clock.js";
 import type { AgentPersona } from "./personas.js";
+import {
+  activateSession,
+  appendSessionRecord,
+  createSession,
+  findSession,
+  getActiveSession,
+  latestSession,
+  listSessions,
+  readSessionRecords,
+  touchSession,
+  type SessionIndexEntry,
+  type SessionRecord,
+} from "../runtime/sessionStore.js";
 
 export function buildSystemPrompt(): string {
   const cfg = loadConfig();
@@ -136,26 +149,222 @@ export function buildOptions(opts: { resume?: string } = {}): Options {
 }
 
 let activeSessionId: string | undefined;
+let activeLocalSessionId: string | undefined;
 
 export function resetSession() {
+  const cfg = loadConfig();
+  const session = createSession({
+    model: cfg.model,
+    autonomy: cfg.autonomy,
+  });
+  activeLocalSessionId = session.id;
   activeSessionId = undefined;
 }
 
+export function startNewSession(title?: string): SessionIndexEntry {
+  const cfg = loadConfig();
+  const session = createSession({
+    title,
+    model: cfg.model,
+    autonomy: cfg.autonomy,
+  });
+  activeLocalSessionId = session.id;
+  activeSessionId = undefined;
+  return session;
+}
+
+export function resumeLatestSession(): SessionIndexEntry | undefined {
+  const active = getActiveSession();
+  const session = active ? findSession(active.id) : latestSession();
+  if (!session) return undefined;
+  activeLocalSessionId = session.id;
+  activeSessionId = session.sdkSessionId;
+  activateSession(session.id);
+  return session;
+}
+
+export function resumeSession(id: string): SessionIndexEntry | undefined {
+  const session = activateSession(id);
+  if (!session) return undefined;
+  activeLocalSessionId = session.id;
+  activeSessionId = session.sdkSessionId;
+  return session;
+}
+
+export function recentSessions(limit = 10): SessionIndexEntry[] {
+  return listSessions().slice(0, limit);
+}
+
+export function readActiveSessionRecords(): SessionRecord[] {
+  const session = resumeLatestSession();
+  return session ? readSessionRecords(session.id) : [];
+}
+
+function ensureActiveChatSession(prompt: string): SessionIndexEntry {
+  const existing = activeLocalSessionId ? findSession(activeLocalSessionId) : resumeLatestSession();
+  if (existing) return existing;
+  return startNewSession(prompt.slice(0, 80) || "Untitled session");
+}
+
+function recordSessionId(sdkSessionId: string, cfg: ReturnType<typeof loadConfig>) {
+  if (!activeLocalSessionId) return;
+  activeSessionId = sdkSessionId;
+  touchSession(activeLocalSessionId, { sdkSessionId, model: cfg.model, autonomy: cfg.autonomy });
+  appendSessionRecord(activeLocalSessionId, {
+    type: "system",
+    timestamp: Date.now(),
+    sessionId: activeLocalSessionId,
+    cwd: process.cwd(),
+    sdkSessionId,
+    model: cfg.model,
+    autonomy: cfg.autonomy,
+  });
+}
+
 export async function* runTurn(prompt: string) {
+  const cfg = loadConfig();
+  const session = ensureActiveChatSession(prompt);
+  activeLocalSessionId = session.id;
+  activeSessionId = session.sdkSessionId;
+  appendSessionRecord(session.id, {
+    type: "user",
+    timestamp: Date.now(),
+    sessionId: session.id,
+    cwd: process.cwd(),
+    text: prompt,
+    model: cfg.model,
+    autonomy: cfg.autonomy,
+  });
+
   const stream = query({
     prompt,
     options: buildOptions({ resume: activeSessionId }),
   });
+  type TextBlock = { type: "assistant" | "thinking"; text: string };
+  type ToolBlock = { type: "tool_use"; toolName?: string; toolUseId?: string; toolInput: string };
+  let currentBlock: TextBlock | ToolBlock | null = null;
+
+  const flushCurrentBlock = () => {
+    if (!currentBlock || !activeLocalSessionId) return;
+    const base = {
+      timestamp: Date.now(),
+      sessionId: activeLocalSessionId,
+      cwd: process.cwd(),
+      model: cfg.model,
+      autonomy: cfg.autonomy,
+    };
+    if (currentBlock.type === "assistant" || currentBlock.type === "thinking") {
+      if (currentBlock.text) {
+        appendSessionRecord(activeLocalSessionId, {
+          ...base,
+          type: currentBlock.type,
+          text: currentBlock.text,
+        });
+      }
+    } else if (currentBlock.type === "tool_use") {
+      appendSessionRecord(activeLocalSessionId, {
+        ...base,
+        type: "tool_use",
+        toolName: currentBlock.toolName,
+        toolUseId: currentBlock.toolUseId,
+        toolInput: currentBlock.toolInput,
+      });
+    }
+    currentBlock = null;
+  };
+
   for await (const message of stream) {
+    if (message.type === "stream_event") {
+      const ev = (message as { event: any }).event;
+      if (ev?.type === "content_block_start") {
+        flushCurrentBlock();
+        const cb = ev.content_block;
+        if (cb?.type === "thinking") {
+          currentBlock = { type: "thinking", text: "" };
+        } else if (cb?.type === "text") {
+          currentBlock = { type: "assistant", text: "" };
+        } else if (cb?.type === "tool_use") {
+          currentBlock = {
+            type: "tool_use",
+            toolName: cb.name,
+            toolUseId: cb.id,
+            toolInput: "",
+          };
+        }
+      } else if (ev?.type === "content_block_delta") {
+        const d = ev.delta;
+        if (d?.type === "thinking_delta" && d.thinking && currentBlock?.type === "thinking") {
+          currentBlock.text += d.thinking;
+        } else if (d?.type === "text_delta" && d.text && currentBlock?.type === "assistant") {
+          currentBlock.text += d.text;
+        } else if (d?.type === "input_json_delta" && d.partial_json && currentBlock?.type === "tool_use") {
+          currentBlock.toolInput += d.partial_json;
+        }
+      } else if (ev?.type === "content_block_stop" || ev?.type === "message_stop") {
+        flushCurrentBlock();
+      }
+    } else if (message.type === "user") {
+      const content = (message as any).message?.content;
+      if (Array.isArray(content) && activeLocalSessionId) {
+        for (const c of content) {
+          if (c?.type === "tool_result") {
+            const text = typeof c.content === "string"
+              ? c.content
+              : Array.isArray(c.content)
+                ? c.content.map((x: any) => x?.text ?? "").join("")
+                : JSON.stringify(c.content);
+            appendSessionRecord(activeLocalSessionId, {
+              type: "tool_result",
+              timestamp: Date.now(),
+              sessionId: activeLocalSessionId,
+              cwd: process.cwd(),
+              text: text.slice(0, 4000),
+              toolUseId: c.tool_use_id,
+              model: cfg.model,
+              autonomy: cfg.autonomy,
+            });
+          }
+        }
+      }
+    }
     if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
       const sid = (message as { session_id?: string }).session_id;
-      if (sid) activeSessionId = sid;
+      if (sid) recordSessionId(sid, cfg);
     } else if (message.type === "result") {
-      const sid = (message as { session_id?: string }).session_id;
-      if (sid) activeSessionId = sid;
+      flushCurrentBlock();
+      const r = message as unknown as {
+        session_id?: string;
+        total_cost_usd?: number;
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_input_tokens?: number;
+          cache_creation_input_tokens?: number;
+        };
+      };
+      if (r.session_id) recordSessionId(r.session_id, cfg);
+      if (activeLocalSessionId) {
+        appendSessionRecord(activeLocalSessionId, {
+          type: "result",
+          timestamp: Date.now(),
+          sessionId: activeLocalSessionId,
+          cwd: process.cwd(),
+          sdkSessionId: r.session_id,
+          usage: {
+            inputTokens: r.usage?.input_tokens,
+            outputTokens: r.usage?.output_tokens,
+            cacheReadTokens: r.usage?.cache_read_input_tokens,
+            cacheCreationTokens: r.usage?.cache_creation_input_tokens,
+          },
+          costUsd: r.total_cost_usd,
+          model: cfg.model,
+          autonomy: cfg.autonomy,
+        });
+      }
     }
     yield message;
   }
+  flushCurrentBlock();
 }
 
 // ---------- Backtest mode ---------------------------------------------------

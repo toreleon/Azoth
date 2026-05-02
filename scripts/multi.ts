@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../src/runtime/bootstrap.js";
 import { runTurn } from "../src/agent/orchestrator.js";
 
 async function ask(prompt: string) {
