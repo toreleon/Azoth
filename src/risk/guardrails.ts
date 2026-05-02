@@ -1,5 +1,6 @@
 import { loadConfig } from "../config/loader.js";
 import type { Broker, PlaceOrderInput } from "../broker/types.js";
+import { currentBrokerName } from "../agent/clock.js";
 
 export interface GuardrailResult {
   ok: boolean;
@@ -51,6 +52,13 @@ export async function checkOrder(
         `projected ${ticker} position ${(projectedPct * 100).toFixed(1)}% would exceed max_position_pct ${(cfg.risk.max_position_pct * 100).toFixed(1)}%`,
       );
     }
+  }
+
+  // Backtest mode (per-run broker pinned via ALS): skip wall-clock checks.
+  // The harness only fires on simulated Friday closes, which by definition
+  // sit outside live trading hours of the real wall clock.
+  if (currentBrokerName()) {
+    return { ok: reasons.length === 0, reasons };
   }
 
   // Vietnamese market hours: Mon–Fri, 09:00–15:00 ICT (UTC+7).

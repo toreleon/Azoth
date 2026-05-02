@@ -12,5 +12,24 @@ export function getDb(): Database.Database {
   db.pragma("foreign_keys = ON");
   const schema = readFileSync(resolve("src/storage/schema.sql"), "utf8");
   db.exec(schema);
+  migrate(db);
   return db;
+}
+
+function migrate(d: Database.Database) {
+  const cols = d.prepare("PRAGMA table_info(backtest_turns)").all() as { name: string }[];
+  const have = new Set(cols.map((c) => c.name));
+  if (!have.has("cache_read_tokens")) {
+    d.exec("ALTER TABLE backtest_turns ADD COLUMN cache_read_tokens INTEGER DEFAULT 0");
+  }
+  if (!have.has("cache_creation_tokens")) {
+    d.exec("ALTER TABLE backtest_turns ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0");
+  }
+}
+
+export function closeDb(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
 }

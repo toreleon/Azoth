@@ -5,7 +5,7 @@ const HEADERS = {
   accept: "application/json, text/plain, */*",
   referer: "https://cafef.vn/",
   "user-agent":
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) VNStockAgent/0.1",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Azoth/0.1",
 };
 
 async function getJson<T>(url: string): Promise<T> {

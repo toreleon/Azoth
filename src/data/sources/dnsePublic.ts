@@ -1,4 +1,5 @@
 import { request } from "undici";
+import { asOfClock, nowSec, isAsOfOverridden } from "../../agent/clock.js";
 
 const DNSE_BASE = "https://services.entrade.com.vn";
 
@@ -60,6 +61,16 @@ export function seriesToBars(s: OhlcvSeries): Bar[] {
   return out;
 }
 
+function clipBars(bars: Bar[]): Bar[] {
+  // Clip when an as-of clock is active (ALS or module override). When neither
+  // is set, fall through unchanged — DNSE only returns historical data anyway.
+  const hasOverride =
+    asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
+  if (!hasOverride) return bars;
+  const asOf = nowSec();
+  return bars.filter((b) => b.time <= asOf);
+}
+
 export async function getStockOhlcv(
   symbol: string,
   resolution: Resolution,
@@ -67,7 +78,7 @@ export async function getStockOhlcv(
   to: number,
 ): Promise<Bar[]> {
   const series = await fetchOhlcs("stock", symbol.toUpperCase(), resolution, from, to);
-  return seriesToBars(series);
+  return clipBars(seriesToBars(series));
 }
 
 export async function getIndexOhlcv(
@@ -77,5 +88,5 @@ export async function getIndexOhlcv(
   to: number,
 ): Promise<Bar[]> {
   const series = await fetchOhlcs("index", symbol.toUpperCase(), resolution, from, to);
-  return seriesToBars(series);
+  return clipBars(seriesToBars(series));
 }

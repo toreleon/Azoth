@@ -8,6 +8,7 @@ import {
   type Resolution,
 } from "../data/sources/dnsePublic.js";
 import { getQuote } from "../data/sources/ssiIboard.js";
+import { nowSec } from "../agent/clock.js";
 
 const RESOLUTIONS = ["1", "5", "15", "30", "1H", "1D", "1W", "1M"] as const;
 
@@ -31,7 +32,7 @@ export const ohlcvTool = tool(
       .describe("How many recent bars to return"),
   },
   async ({ symbol, kind, resolution, bars }) => {
-    const to = Math.floor(Date.now() / 1000);
+    const to = nowSec();
     // Wide window so we definitely get `bars` back; clipped after fetch.
     const lookbackDays =
       resolution === "1D" ? bars * 2 :
@@ -39,8 +40,13 @@ export const ohlcvTool = tool(
       resolution === "1M" ? bars * 60 :
       Math.max(7, Math.ceil(bars / 50));
     const from = to - lookbackDays * 86400;
-    const ttl = resolution === "1D" || resolution === "1W" || resolution === "1M" ? 600 : 60;
-    const key = `ohlcv:${kind}:${symbol}:${resolution}:${bars}:${Math.floor(to / ttl)}`;
+    const isDailyBucket =
+      resolution === "1D" || resolution === "1W" || resolution === "1M";
+    const ttl = isDailyBucket ? 600 : 60;
+    const bucket = isDailyBucket
+      ? `date=${new Date(to * 1000).toISOString().slice(0, 10)}`
+      : `bucket=${Math.floor(to / ttl)}`;
+    const key = `ohlcv:${kind}:${symbol}:${resolution}:${bars}:${bucket}`;
     const result = await cached(key, ttl, async () => {
       const fn = kind === "index" ? getIndexOhlcv : getStockOhlcv;
       const all: Bar[] = await fn(symbol, resolution as Resolution, from, to);
@@ -57,8 +63,10 @@ export const quoteTool = tool(
     symbol: z.string().describe("Ticker, e.g. HPG, VCB"),
   },
   async ({ symbol }) => {
-    const q = await cached(`ssi-quote:${symbol}:${Math.floor(Date.now() / 60000)}`, 60, () =>
-      getQuote(symbol),
+    const q = await cached(
+      `ssi-quote:${symbol}:bucket=${Math.floor(nowSec() / 60)}`,
+      60,
+      () => getQuote(symbol),
     );
     return asText({
       ticker: q.ticker,

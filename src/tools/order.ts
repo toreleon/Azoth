@@ -6,13 +6,14 @@ import { loadConfig } from "../config/loader.js";
 import { checkOrder } from "../risk/guardrails.js";
 import { getStockOhlcv } from "../data/sources/dnsePublic.js";
 import type { OrderStatus, PlaceOrderInput } from "../broker/types.js";
+import { nowSec, currentBrokerName } from "../agent/clock.js";
 
 function asText(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj) }] };
 }
 
 async function lastClose(ticker: string): Promise<number | null> {
-  const to = Math.floor(Date.now() / 1000);
+  const to = nowSec();
   const from = to - 14 * 86400;
   const bars = await getStockOhlcv(ticker, "1D", from, to).catch(() => []);
   return bars.length ? bars[bars.length - 1]!.close : null;
@@ -44,7 +45,8 @@ export const placeOrderTool = tool(
   },
   async ({ ticker, side, type, quantity, limit_price, notes }) => {
     const cfg = loadConfig();
-    if (cfg.autonomy === "advisory") {
+    const inBacktest = currentBrokerName() != null;
+    if (!inBacktest && cfg.autonomy === "advisory") {
       return asText({
         ok: false,
         error: "autonomy=advisory; place_order is disabled. Recommend manually instead.",
@@ -63,7 +65,7 @@ export const placeOrderTool = tool(
 
     const refPrice = (await lastClose(input.ticker)) ?? input.limitPrice ?? null;
 
-    if (cfg.autonomy === "auto") {
+    if (inBacktest || cfg.autonomy === "auto") {
       if (refPrice == null) {
         return asText({ ok: false, error: `no reference price for ${input.ticker}` });
       }

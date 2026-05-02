@@ -1,0 +1,67 @@
+{
+  "runId": "efee8206-431c-489e-98cd-04e5a9f40739",
+  "persona": "momentum",
+  "universe": [
+    "VCB",
+    "BID",
+    "CTG",
+    "TCB",
+    "MBB",
+    "ACB",
+    "VPB",
+    "STB",
+    "HDB",
+    "VHM",
+    "VIC",
+    "NVL",
+    "DXG",
+    "KDH",
+    "HPG",
+    "GAS",
+    "PLX",
+    "POW",
+    "GVR",
+    "VNM",
+    "MWG",
+    "MSN",
+    "SAB",
+    "PNJ",
+    "SSI",
+    "VND",
+    "VCI",
+    "FPT",
+    "DGC"
+  ],
+  "start": "2025-03-01",
+  "end": "2025-04-01",
+  "initialCash": 1000000000,
+  "finalMtm": 1000000000,
+  "finalBench": 993522114.5507334,
+  "totalReturn": 0,
+  "benchReturn": -0.6477885449266529,
+  "maxDD": 0,
+  "totalCost": 1.2340022999999998,
+  "equity": [
+    {
+      "as_of": 1741313700,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 1000000000
+    },
+    {
+      "as_of": 1741918500,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 1000075411.9377098
+    },
+    {
+      "as_of": 1742523300,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 996855322.1975039
+    },
+    {
+      "as_of": 1743128100,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 993522114.5507334
+    }
+  ],
+  "trades": []
+}

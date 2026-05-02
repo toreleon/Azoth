@@ -63,6 +63,52 @@ CREATE TABLE IF NOT EXISTS broker_orders (
 CREATE INDEX IF NOT EXISTS broker_orders_ticker_idx ON broker_orders(broker, ticker, created_at);
 CREATE INDEX IF NOT EXISTS broker_orders_status_idx ON broker_orders(broker, status);
 
+-- Backtest harness (Phase 6)
+
+CREATE TABLE IF NOT EXISTS backtest_runs (
+  id              TEXT PRIMARY KEY,
+  persona         TEXT NOT NULL,
+  start_date      INTEGER NOT NULL,
+  end_date        INTEGER NOT NULL,
+  cadence         TEXT NOT NULL,         -- "weekly"
+  initial_cash_vnd INTEGER NOT NULL,
+  config_json     TEXT NOT NULL,
+  created_at      INTEGER NOT NULL,
+  finished_at     INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS backtest_turns (
+  run_id              TEXT NOT NULL,
+  as_of               INTEGER NOT NULL,
+  session_id          TEXT,
+  prompt              TEXT,
+  response            TEXT,
+  in_tokens           INTEGER,
+  out_tokens          INTEGER,
+  cost_usd            REAL,
+  cache_read_tokens   INTEGER DEFAULT 0,
+  cache_creation_tokens INTEGER DEFAULT 0,
+  PRIMARY KEY (run_id, as_of)
+);
+
+CREATE TABLE IF NOT EXISTS llm_response_cache (
+  key            TEXT PRIMARY KEY,
+  model          TEXT NOT NULL,
+  request_json   TEXT NOT NULL,
+  response_json  TEXT NOT NULL,
+  created_at     INTEGER NOT NULL,
+  hit_count      INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS backtest_equity (
+  run_id            TEXT NOT NULL,
+  as_of             INTEGER NOT NULL,
+  cash_vnd          REAL NOT NULL,
+  mtm_vnd           REAL NOT NULL,
+  benchmark_mtm_vnd REAL NOT NULL,
+  PRIMARY KEY (run_id, as_of)
+);
+
 CREATE TABLE IF NOT EXISTS alerts (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at  INTEGER NOT NULL,

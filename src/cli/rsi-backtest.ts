@@ -58,7 +58,7 @@ async function main() {
   const cfg = loadConfig();
   getDb();
 
-  console.log("VNStockAgent backtest");
+  console.log("Azoth backtest");
   console.log(`  watchlist: ${cfg.watchlist.join(", ")}`);
   console.log(
     `  days=${args.days}  rsi_buy=${args.rsiBuy}  rsi_sell=${args.rsiSell}  qty/trade=${args.lots * 100}  init_cash=${(args.initialCash / 1e6).toFixed(0)}M VND`,

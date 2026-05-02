@@ -1,0 +1,43 @@
+{
+  "runId": "b1cead57-8125-4b84-9824-ec10fc557e46",
+  "persona": "balanced",
+  "watchlist": [
+    "HPG",
+    "VCB",
+    "FPT",
+    "VNM",
+    "MWG"
+  ],
+  "start": "2026-03-01",
+  "end": "2026-04-01",
+  "initialCash": 1000000000,
+  "finalMtm": 1000000000,
+  "finalBench": 946239478.6858538,
+  "totalReturn": 0,
+  "benchReturn": -5.376052131414621,
+  "maxDD": 0,
+  "totalCost": 1.5266790000000001,
+  "equity": [
+    {
+      "as_of": 1772762400,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 1000000000
+    },
+    {
+      "as_of": 1773367200,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 959498597.158114
+    },
+    {
+      "as_of": 1773972000,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 932103584.0347543
+    },
+    {
+      "as_of": 1774576800,
+      "mtm_vnd": 1000000000,
+      "benchmark_mtm_vnd": 946239478.6858538
+    }
+  ],
+  "trades": []
+}

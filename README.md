@@ -1,4 +1,4 @@
-# VNStockAgent
+# Azoth
 
 CLI agent platform for Vietnam stock investment decisions, built on the Claude Agent SDK (TypeScript).
 

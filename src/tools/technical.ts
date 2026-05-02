@@ -8,6 +8,7 @@ import {
   type Bar,
   type Resolution,
 } from "../data/sources/dnsePublic.js";
+import { nowSec } from "../agent/clock.js";
 
 const RESOLUTIONS = ["1", "5", "15", "30", "1H", "1D", "1W", "1M"] as const;
 
@@ -21,15 +22,20 @@ async function loadCloses(
   resolution: Resolution,
   bars: number,
 ): Promise<Bar[]> {
-  const to = Math.floor(Date.now() / 1000);
+  const to = nowSec();
   const lookbackDays =
     resolution === "1D" ? bars * 2 :
     resolution === "1W" ? bars * 14 :
     resolution === "1M" ? bars * 60 :
     Math.max(7, Math.ceil(bars / 50));
   const from = to - lookbackDays * 86400;
-  const ttl = resolution === "1D" || resolution === "1W" || resolution === "1M" ? 600 : 60;
-  const key = `ohlcv:${kind}:${symbol}:${resolution}:${bars + 200}:${Math.floor(to / ttl)}`;
+  const isDailyBucket =
+    resolution === "1D" || resolution === "1W" || resolution === "1M";
+  const ttl = isDailyBucket ? 600 : 60;
+  const bucket = isDailyBucket
+    ? `date=${new Date(to * 1000).toISOString().slice(0, 10)}`
+    : `bucket=${Math.floor(to / ttl)}`;
+  const key = `ohlcv:${kind}:${symbol}:${resolution}:${bars + 200}:${bucket}`;
   return cached(key, ttl, async () => {
     const fn = kind === "index" ? getIndexOhlcv : getStockOhlcv;
     const all = await fn(symbol, resolution, from, to);

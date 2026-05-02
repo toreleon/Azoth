@@ -3,6 +3,7 @@ import { z } from "zod";
 import { cached } from "../data/cache.js";
 import { getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
 import { getRatio } from "../data/sources/vndirectFinfo.js";
+import { nowSec } from "../agent/clock.js";
 
 function asText(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj) }] };
@@ -25,8 +26,10 @@ function pctChange(now: number, prev?: number) {
   return ((now - prev) / prev) * 100;
 }
 
-async function snapshotIndex(symbol: IndexCode): Promise<IndexSnapshot | null> {
-  const to = Math.floor(Date.now() / 1000);
+export type { IndexCode, IndexSnapshot };
+
+export async function snapshotIndex(symbol: IndexCode): Promise<IndexSnapshot | null> {
+  const to = nowSec();
   const from = to - 60 * 86400;
   const bars: Bar[] = await getIndexOhlcv(symbol, "1D", from, to).catch(() => []);
   if (!bars.length) return null;
@@ -44,6 +47,62 @@ async function snapshotIndex(symbol: IndexCode): Promise<IndexSnapshot | null> {
   };
 }
 
+export async function getMacroIndices(
+  indices: readonly IndexCode[] = ["VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX"],
+): Promise<IndexSnapshot[]> {
+  const out = await cached(
+    `macro:indices:${[...indices].sort().join(",")}:bucket=${Math.floor(nowSec() / 300)}`,
+    300,
+    async () => Promise.all(indices.map(snapshotIndex)),
+  );
+  return out.filter((s): s is IndexSnapshot => s != null);
+}
+
+export interface ForeignFlow {
+  ticker: string;
+  foreign_buy_value_vnd_wtd: number | null;
+  foreign_sell_value_vnd_wtd: number | null;
+  foreign_net_value_vnd_wtd: number | null;
+  foreign_buy_volume_wtd: number | null;
+  foreign_sell_volume_wtd: number | null;
+  foreign_ownership_pct: number | null;
+  report_date: string | null;
+}
+
+export async function getForeignFlow(symbol: string): Promise<ForeignFlow> {
+  const ticker = symbol.toUpperCase();
+  return cached(
+    `macro:foreign:${ticker}:bucket=${Math.floor(nowSec() / 300)}`,
+    300,
+    async () => {
+      const codes = [
+        "FOREIGN_BUY_VALUE_CR_WTD",
+        "FOREIGN_SELL_VALUE_CR_WTD",
+        "FOREIGN_BUY_VOLUME_CR_WTD",
+        "FOREIGN_SELL_VOLUME_CR_WTD",
+        "FOREIGN_OWNERSHIP",
+      ];
+      const results = await Promise.all(
+        codes.map((c) => getRatio(ticker, c, 1).catch(() => [])),
+      );
+      const [buyVal, sellVal, buyVol, sellVol, ownership] = results;
+      const get = (a: { value: number }[]) => (a[0] ? a[0].value : null);
+      const bv = get(buyVal);
+      const sv = get(sellVal);
+      return {
+        ticker,
+        foreign_buy_value_vnd_wtd: bv,
+        foreign_sell_value_vnd_wtd: sv,
+        foreign_net_value_vnd_wtd: bv != null && sv != null ? bv - sv : null,
+        foreign_buy_volume_wtd: get(buyVol),
+        foreign_sell_volume_wtd: get(sellVol),
+        foreign_ownership_pct: get(ownership),
+        report_date: buyVal[0]?.reportDate ?? null,
+      };
+    },
+  );
+}
+
 export const indicesTool = tool(
   "macro_indices",
   "Snapshot of major Vietnamese indices (VNINDEX, VN30, HNXINDEX, HNX30, UPCOMINDEX): latest close + 1-day / 1-week / 1-month % change. Use this to gauge overall market regime before recommending action on individual tickers.",
@@ -53,12 +112,8 @@ export const indicesTool = tool(
       .default(["VNINDEX", "VN30", "HNXINDEX", "UPCOMINDEX"]),
   },
   async ({ indices }) => {
-    const out = await cached(
-      `macro:indices:${indices.sort().join(",")}:${Math.floor(Date.now() / 60000 / 5)}`,
-      300,
-      async () => Promise.all(indices.map(snapshotIndex)),
-    );
-    return asText({ snapshots: out.filter(Boolean) });
+    const snapshots = await getMacroIndices(indices);
+    return asText({ snapshots });
   },
 );
 
@@ -69,37 +124,7 @@ export const foreignFlowTool = tool(
     symbol: z.string().describe("Ticker, e.g. HPG"),
   },
   async ({ symbol }) => {
-    const ticker = symbol.toUpperCase();
-    const out = await cached(
-      `macro:foreign:${ticker}:${Math.floor(Date.now() / 60000 / 5)}`,
-      300,
-      async () => {
-        const codes = [
-          "FOREIGN_BUY_VALUE_CR_WTD",
-          "FOREIGN_SELL_VALUE_CR_WTD",
-          "FOREIGN_BUY_VOLUME_CR_WTD",
-          "FOREIGN_SELL_VOLUME_CR_WTD",
-          "FOREIGN_OWNERSHIP",
-        ];
-        const results = await Promise.all(
-          codes.map((c) => getRatio(ticker, c, 1).catch(() => [])),
-        );
-        const [buyVal, sellVal, buyVol, sellVol, ownership] = results;
-        const get = (a: { value: number }[]) => (a[0] ? a[0].value : null);
-        const bv = get(buyVal);
-        const sv = get(sellVal);
-        return {
-          ticker,
-          foreign_buy_value_vnd_wtd: bv,
-          foreign_sell_value_vnd_wtd: sv,
-          foreign_net_value_vnd_wtd: bv != null && sv != null ? bv - sv : null,
-          foreign_buy_volume_wtd: get(buyVol),
-          foreign_sell_volume_wtd: get(sellVol),
-          foreign_ownership_pct: get(ownership),
-          report_date: buyVal[0]?.reportDate ?? null,
-        };
-      },
-    );
+    const out = await getForeignFlow(symbol);
     return asText(out);
   },
 );
