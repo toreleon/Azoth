@@ -39,9 +39,9 @@ describe("Azoth TUI", () => {
     const { lastFrame, unmount } = render(<App />);
     await tick();
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("agent · VN equities");
-    expect(out).toContain("Try one");
-    expect(out).toContain("advisory autonomy");
+    expect(out).toContain("VN-stock copilot");
+    expect(out).toContain("Tips for getting started");
+    expect(out).toContain("advisory");
     unmount();
   });
 
@@ -59,45 +59,34 @@ describe("Azoth TUI", () => {
     await tick();
     const out = strip(lastFrame() ?? "");
     expect(out).not.toContain("old session text should not appear");
-    expect(out).toContain("Try one");
+    expect(out).toContain("Tips for getting started");
     unmount();
   });
 
-  it("/dashboard switches to dashboard, ESC returns to chat", async () => {
-    const { lastFrame, stdin, unmount } = render(<App />);
+  it("does not pin a dashboard grid above chat", async () => {
+    const { lastFrame, unmount } = render(<App />);
     await tick();
-    await type(stdin, "/dashboard");
-    const dash = strip(lastFrame() ?? "");
-    expect(dash).toContain("AZOTH  dashboard");
-    expect(dash).toMatch(/INDICES|WATCHLIST|TOP GAINERS/);
-
-    stdin.write("\x1b");
-    await tick();
-    const back = strip(lastFrame() ?? "");
-    expect(back).toContain("Try one");
-    unmount();
-  });
-
-  it("/journal shows tabs", async () => {
-    const { lastFrame, stdin, unmount } = render(<App />);
-    await tick();
-    await type(stdin, "/journal");
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("AZOTH  journal");
-    expect(out).toContain("Decisions");
-    expect(out).toContain("Orders");
-    expect(out).toContain("Fills");
-    expect(out).toContain("Alerts");
+    expect(out).not.toMatch(/INDICES|TOP GAINERS|TOP LOSERS|FOREIGN FLOW/);
     unmount();
   });
 
-  it("/backtest shows form", async () => {
+  it("/journal prints rows inline in chat", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
-    await type(stdin, "/backtest");
+    await type(stdin, "/journal decisions 5");
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("AZOTH  backtest");
-    expect(out).toContain("CONFIGURE BACKTEST");
+    expect(out).toContain("DECISIONS");
+    unmount();
+  });
+
+  it("/backtest help prints usage in chat", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/backtest help");
+    const out = strip(lastFrame() ?? "");
+    expect(out).toContain("/backtest");
+    expect(out).toContain("[persona]");
     unmount();
   });
 
@@ -107,7 +96,6 @@ describe("Azoth TUI", () => {
     stdin.write("/");
     await tick();
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("/dashboard");
     expect(out).toContain("/backtest");
     expect(out).toContain("/journal");
     expect(out).toContain("Tab to complete");
@@ -121,19 +109,29 @@ describe("Azoth TUI", () => {
     await tick();
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("/persona");
-    expect(out).not.toContain("/dashboard");
+    expect(out).toContain("balanced · momentum · value · bluechip");
     unmount();
   });
 
-  it("bottom status only shows autonomy", async () => {
+  it("/journal renders as a bordered card", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/journal decisions 5");
+    const out = strip(lastFrame() ?? "");
+    expect(out).toContain("DECISIONS");
+    // Panel uses round borders; assert at least one border glyph appears with the card.
+    expect(out).toMatch(/[╭╮╰╯─│]/);
+    unmount();
+  });
+
+  it("bottom status shows persona, autonomy, hint", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
     await type(stdin, "/persona momentum");
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("advisory autonomy");
-    expect(out).not.toContain("broker");
-    expect(out).not.toContain("in/out");
-    expect(out).not.toContain("sid");
+    expect(out).toContain("advisory");
+    expect(out).toContain("momentum");
+    expect(out).toMatch(/Ctrl\+A|Ctrl\+C|\/backtest/);
     unmount();
   });
 });

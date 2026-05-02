@@ -9,20 +9,21 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: "dashboard", description: "Market dashboard (indices, watchlist, flow, movers)" },
-  { name: "backtest", description: "Run an agent-driven weekly backtest" },
-  { name: "journal", description: "Browse decisions, orders, fills, alerts" },
+  { name: "backtest", args: "[persona] [start] [end] [cash]", description: "Run a weekly backtest, results inline" },
+  { name: "journal", args: "[decisions|orders|fills|alerts] [N]", description: "Print latest journal rows inline" },
+  { name: "decisions", args: "[N]", description: "Latest decisions" },
+  { name: "orders", args: "[N]", description: "Latest broker orders" },
+  { name: "fills", args: "[N]", description: "Latest filled orders" },
   { name: "quote", args: "<ticker>", description: "Quick quote for a ticker" },
   { name: "chart", args: "<ticker>", description: "ASCII chart for a ticker" },
   { name: "positions", description: "Show current portfolio positions" },
-  { name: "alerts", description: "Show active price alerts" },
+  { name: "alerts", description: "Ask the agent about active alerts" },
   { name: "persona", args: "<id>", description: "balanced · momentum · value · bluechip" },
   { name: "new", description: "Start a fresh resumable session" },
   { name: "resume", args: "[id]", description: "Resume latest or a specific session" },
   { name: "sessions", description: "List recent project sessions" },
   { name: "clear", description: "Clear conversation and start a fresh session" },
   { name: "help", description: "Show available commands" },
-  { name: "chat", description: "Return to chat" },
 ];
 
 export function matchSlash(input: string): SlashCommand[] {

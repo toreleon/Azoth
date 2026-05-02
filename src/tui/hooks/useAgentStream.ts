@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   readActiveSessionRecords,
   recentSessions,
@@ -12,7 +12,7 @@ import type { SessionIndexEntry, SessionRecord } from "../../runtime/sessionStor
 
 const FLUSH_INTERVAL_MS = 33; // ~30fps active-block coalescing; committed blocks bypass this and go straight to <Static>.
 
-export type ChatRole = "user" | "thinking" | "text" | "tool_use" | "tool_result" | "system" | "error";
+export type ChatRole = "user" | "thinking" | "text" | "tool_use" | "tool_result" | "system" | "error" | "card";
 
 export interface ChatBlock {
   id: string;
@@ -21,6 +21,7 @@ export interface ChatBlock {
   toolName?: string;
   toolInput?: string;
   toolUseId?: string;
+  node?: ReactNode;
 }
 
 export interface TurnStats {
@@ -47,6 +48,7 @@ export interface AgentStreamState {
   resumeById: (id: string) => void;
   listSessions: () => SessionIndexEntry[];
   systemMessage: (text: string) => void;
+  appendCard: (node: ReactNode) => void;
 }
 
 let blockSeq = 0;
@@ -292,6 +294,10 @@ export function useAgentStream(): AgentStreamState {
     appendCommitted({ id: nextId(), role: "system", text });
   }, []);
 
+  const addCard = useCallback((node: ReactNode) => {
+    appendCommitted({ id: nextId(), role: "card", text: "", node });
+  }, []);
+
   const newSession = useCallback(() => {
     abortRef.current = true;
     const session = startNewSession();
@@ -347,5 +353,6 @@ export function useAgentStream(): AgentStreamState {
     resumeById,
     listSessions,
     systemMessage: addSystem,
+    appendCard: addCard,
   };
 }
