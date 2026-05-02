@@ -236,10 +236,11 @@ export async function* runTurn(prompt: string) {
     autonomy: cfg.autonomy,
   });
 
-  const stream = query({
-    prompt,
-    options: buildOptions({ resume: activeSessionId }),
-  });
+  // Attempt to resume the prior SDK session. If Claude Code can no longer
+  // find that conversation (subprocess exits with code 1 on startup), drop
+  // the stale id and retry once with a fresh session.
+  const startStream = (resume: string | undefined) =>
+    query({ prompt, options: buildOptions({ resume }) });
   type TextBlock = { type: "assistant" | "thinking"; text: string };
   type ToolBlock = { type: "tool_use"; toolName?: string; toolUseId?: string; toolInput: string };
   let currentBlock: TextBlock | ToolBlock | null = null;
@@ -273,7 +274,17 @@ export async function* runTurn(prompt: string) {
     currentBlock = null;
   };
 
-  for await (const message of stream) {
+  const consume = async function* (resume: string | undefined) {
+    const stream = startStream(resume);
+    for await (const message of stream) yield message;
+  };
+
+  let attempt: AsyncGenerator<any, void, void> = consume(activeSessionId);
+  let triedFreshRetry = activeSessionId == null;
+
+  while (true) {
+    try {
+      for await (const message of attempt) {
     if (message.type === "stream_event") {
       const ev = (message as { event: any }).event;
       if (ev?.type === "content_block_start") {
@@ -363,6 +374,19 @@ export async function* runTurn(prompt: string) {
       }
     }
     yield message;
+      }
+      break;
+    } catch (err) {
+      const msg = (err as Error)?.message ?? "";
+      if (!triedFreshRetry && /exited with code 1|No conversation found/i.test(msg)) {
+        triedFreshRetry = true;
+        activeSessionId = undefined;
+        currentBlock = null;
+        attempt = consume(undefined);
+        continue;
+      }
+      throw err;
+    }
   }
   flushCurrentBlock();
 }

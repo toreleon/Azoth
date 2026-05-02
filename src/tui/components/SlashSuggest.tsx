@@ -43,7 +43,7 @@ export function SlashSuggest({ input, selected }: { input: string; selected: num
         const active = i === sel;
         return (
           <Box key={c.name}>
-            <Text color={active ? theme.brand : theme.muted}>{active ? "▌" : " "} </Text>
+            <Text color={active ? theme.accent : theme.muted}>{active ? "› " : "  "}</Text>
             <Text color={active ? theme.accent : "white"} bold={active}>{head}</Text>
             <Text dimColor>{c.description}</Text>
           </Box>

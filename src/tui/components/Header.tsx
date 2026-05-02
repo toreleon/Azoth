@@ -16,7 +16,7 @@ interface IndexLite { symbol: string; close: number; chgPct: number | null }
 export function Header({ mode }: { mode: string }) {
   const cfg = loadConfig();
   const watchlist = cfg.watchlist.slice(0, 3);
-  const now = useNow(1000);
+  const now = useNow(30_000);
   const session = classifySession(now);
   const { stdout } = useStdout();
   const cols = stdout?.columns ?? 120;
@@ -60,7 +60,6 @@ export function Header({ mode }: { mode: string }) {
   return (
     <Box borderStyle="single" borderColor={theme.muted} paddingX={1} justifyContent="space-between">
       <Box>
-        <Text color={theme.brand} bold>{glyph.bar} </Text>
         <Text color={theme.accent} bold>AZOTH</Text>
         <Text color={theme.muted}>  {mode}</Text>
         {showIndex && vnIndex ? (

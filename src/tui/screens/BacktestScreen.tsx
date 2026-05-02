@@ -94,7 +94,7 @@ export function BacktestScreen() {
         <Box marginTop={1} flexDirection="column">
           {FIELDS.map((f, i) => (
             <Box key={f.key} marginY={0}>
-              <Text color={i === active ? theme.accent : theme.muted}>{i === active ? "▌ " : "  "}{f.label.padEnd(22)}</Text>
+              <Text color={i === active ? theme.accent : theme.muted}>{i === active ? "› " : "  "}{f.label.padEnd(22)}</Text>
               {f.key === "persona" ? (
                 <Text color={theme.persona}>{persona}</Text>
               ) : f.key === "start" ? (

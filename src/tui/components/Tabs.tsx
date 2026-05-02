@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { theme, glyph } from "../lib/theme.js";
+import { theme } from "../lib/theme.js";
 
 export interface TabsProps {
   tabs: string[];
@@ -16,9 +16,9 @@ export function Tabs({ tabs, active, hint }: TabsProps) {
           const isActive = i === active;
           return (
             <React.Fragment key={t}>
-              {i > 0 ? <Text color={theme.muted}> {glyph.pipe} </Text> : null}
+              {i > 0 ? <Text color={theme.muted}> │ </Text> : null}
               <Text bold={isActive} color={isActive ? theme.accent : theme.muted}>
-                {isActive ? `${glyph.bar}${t}` : ` ${t}`}
+                {t}
               </Text>
             </React.Fragment>
           );

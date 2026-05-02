@@ -10,7 +10,7 @@ import {
 } from "../../agent/orchestrator.js";
 import type { SessionIndexEntry, SessionRecord } from "../../runtime/sessionStore.js";
 
-const FLUSH_INTERVAL_MS = 80; // ~12fps; halves Ink tree-diff rate vs 50ms while still feeling live
+const FLUSH_INTERVAL_MS = 33; // ~30fps active-block coalescing; committed blocks bypass this and go straight to <Static>.
 
 export type ChatRole = "user" | "thinking" | "text" | "tool_use" | "tool_result" | "system" | "error";
 
@@ -31,7 +31,12 @@ export interface TurnStats {
 }
 
 export interface AgentStreamState {
-  blocks: ChatBlock[];
+  // Committed blocks: append-only. Render via Ink's <Static> to write each
+  // block to terminal scrollback exactly once and avoid full-region repaints.
+  committed: ChatBlock[];
+  // The in-flight streaming block (thinking/text/tool_use). Mutates rapidly;
+  // render in the dynamic region only. Null between blocks and when idle.
+  active: ChatBlock | null;
   streaming: boolean;
   cumulative: TurnStats;
   send: (prompt: string) => Promise<void>;
@@ -94,81 +99,102 @@ function statsFromRecords(records: SessionRecord[]): TurnStats {
   }, { inTokens: 0, outTokens: 0, costUsd: 0 });
 }
 
+interface View {
+  committed: ChatBlock[];
+  active: ChatBlock | null;
+}
+
 export function useAgentStream(): AgentStreamState {
-  const [blocks, setBlocks] = useState<ChatBlock[]>([]);
+  // Single state object so transitions like "finalize active → committed"
+  // are one setState instead of three. Multiple setStates per microtask
+  // were causing Ink's reconciler to throw "Should not already be working".
+  const [view, setView] = useState<View>({ committed: [], active: null });
   const [streaming, setStreaming] = useState(false);
   const [cumulative, setCumulative] = useState<TurnStats>({ inTokens: 0, outTokens: 0, costUsd: 0 });
   const abortRef = useRef(false);
 
-  // Coalesce stream-delta writes: write to a ref-mirror of the blocks array
-  // and flush to React state on a fixed cadence so per-token deltas don't
-  // each trigger a full Ink re-render.
-  const blocksRef = useRef<ChatBlock[]>([]);
-  const dirtyRef = useRef(false);
+  // Coalesce active-block delta writes: mutate a ref mirror and flush to
+  // React state on a fixed cadence so per-token deltas don't each trigger a
+  // re-render. Committed blocks bypass this — they're appended synchronously
+  // and rendered via <Static>, which writes them to scrollback exactly once.
+  const activeRef = useRef<ChatBlock | null>(null);
+  const activeDirty = useRef(false);
   const flushTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const flushActiveState = () => {
+    activeDirty.current = false;
+    const snap = activeRef.current ? { ...activeRef.current } : null;
+    setView((v) => (v.active === snap ? v : { ...v, active: snap }));
+  };
 
   const scheduleFlush = () => {
     if (flushTimer.current != null) return;
     flushTimer.current = setTimeout(() => {
       flushTimer.current = null;
-      if (!dirtyRef.current) return;
-      dirtyRef.current = false;
-      setBlocks(blocksRef.current.slice());
+      if (!activeDirty.current) return;
+      flushActiveState();
     }, FLUSH_INTERVAL_MS);
   };
 
-  const flushNow = () => {
+  const cancelFlushTimer = () => {
     if (flushTimer.current != null) {
       clearTimeout(flushTimer.current);
       flushTimer.current = null;
     }
-    if (dirtyRef.current) {
-      dirtyRef.current = false;
-      setBlocks(blocksRef.current.slice());
-    }
   };
 
-  useEffect(() => () => {
-    if (flushTimer.current != null) clearTimeout(flushTimer.current);
-  }, []);
+  useEffect(() => () => cancelFlushTimer(), []);
 
   useEffect(() => {
-    const records = readActiveSessionRecords();
-    if (records.length === 0) return;
-    const restored = blocksFromRecords(records);
-    blocksRef.current = restored;
-    setBlocks(restored);
-    setCumulative(statsFromRecords(records));
+    startNewSession();
   }, []);
 
-  // Structural changes (new block boundary) must be visible immediately
-  // so the next delta lands on the right row.
-  const append = (b: ChatBlock) => {
-    blocksRef.current = [...blocksRef.current, b];
-    dirtyRef.current = true;
-    flushNow();
+  // Append a finalized block straight to the committed list. <Static> in the
+  // consumer renders and forgets it — no further repaints for this block.
+  const appendCommitted = (b: ChatBlock) => {
+    setView((v) => ({ ...v, committed: [...v.committed, b] }));
   };
 
-  // Delta updates are mutated in place on the ref and flushed on a timer.
-  const updateLast = (role: ChatRole, mut: (b: ChatBlock) => ChatBlock) => {
-    const arr = blocksRef.current;
-    for (let i = arr.length - 1; i >= 0; i--) {
-      if (arr[i]!.role === role) {
-        arr[i] = mut(arr[i]!);
-        dirtyRef.current = true;
-        scheduleFlush();
-        return;
-      }
+  // Move whatever is in `active` into the committed list and clear active —
+  // single setState so Ink commits both transitions in one render.
+  const finalizeActive = () => {
+    cancelFlushTimer();
+    const cur = activeRef.current;
+    if (!cur) {
+      activeDirty.current = false;
+      return;
     }
+    activeRef.current = null;
+    activeDirty.current = false;
+    setView((v) => ({ committed: [...v.committed, cur], active: null }));
+  };
+
+  // Start a new active block. Any prior active block is finalized first so it
+  // commits to scrollback before the next one begins.
+  const startActive = (b: ChatBlock) => {
+    cancelFlushTimer();
+    const prior = activeRef.current;
+    activeRef.current = b;
+    activeDirty.current = false;
+    setView((v) => ({
+      committed: prior ? [...v.committed, prior] : v.committed,
+      active: b,
+    }));
+  };
+
+  // Delta update on the active block. Mutates the ref and flushes on a timer.
+  const updateActive = (mut: (b: ChatBlock) => ChatBlock) => {
+    if (!activeRef.current) return;
+    activeRef.current = mut(activeRef.current);
+    activeDirty.current = true;
+    scheduleFlush();
   };
 
   const send = useCallback(async (prompt: string) => {
     if (!prompt.trim()) return;
     abortRef.current = false;
     setStreaming(true);
-    append({ id: nextId(), role: "user", text: prompt });
-
-    let currentRole: "thinking" | "text" | null = null;
+    appendCommitted({ id: nextId(), role: "user", text: prompt });
 
     try {
       for await (const m of runTurn(prompt)) {
@@ -178,14 +204,11 @@ export function useAgentStream(): AgentStreamState {
           if (ev?.type === "content_block_start") {
             const cb = ev.content_block;
             if (cb?.type === "thinking") {
-              currentRole = "thinking";
-              append({ id: nextId(), role: "thinking", text: "" });
+              startActive({ id: nextId(), role: "thinking", text: "" });
             } else if (cb?.type === "text") {
-              currentRole = "text";
-              append({ id: nextId(), role: "text", text: "" });
+              startActive({ id: nextId(), role: "text", text: "" });
             } else if (cb?.type === "tool_use") {
-              currentRole = null;
-              append({
+              startActive({
                 id: nextId(),
                 role: "tool_use",
                 text: "",
@@ -196,14 +219,14 @@ export function useAgentStream(): AgentStreamState {
           } else if (ev?.type === "content_block_delta") {
             const d = ev.delta;
             if (d?.type === "thinking_delta" && d.thinking) {
-              updateLast("thinking", (b) => ({ ...b, text: b.text + d.thinking }));
+              updateActive((b) => (b.role === "thinking" ? { ...b, text: b.text + d.thinking } : b));
             } else if (d?.type === "text_delta" && d.text) {
-              updateLast("text", (b) => ({ ...b, text: b.text + d.text }));
+              updateActive((b) => (b.role === "text" ? { ...b, text: b.text + d.text } : b));
             } else if (d?.type === "input_json_delta" && d.partial_json) {
-              updateLast("tool_use", (b) => ({ ...b, toolInput: (b.toolInput ?? "") + d.partial_json }));
+              updateActive((b) => (b.role === "tool_use" ? { ...b, toolInput: (b.toolInput ?? "") + d.partial_json } : b));
             }
           } else if (ev?.type === "content_block_stop") {
-            currentRole = null;
+            finalizeActive();
           }
         } else if (m.type === "user") {
           const content = (m as any).message?.content;
@@ -215,7 +238,7 @@ export function useAgentStream(): AgentStreamState {
                   : Array.isArray(c.content)
                     ? c.content.map((x: any) => x?.text ?? "").join("")
                     : JSON.stringify(c.content);
-                append({
+                appendCommitted({
                   id: nextId(),
                   role: "tool_result",
                   text: text.slice(0, 800),
@@ -239,11 +262,11 @@ export function useAgentStream(): AgentStreamState {
         }
       }
     } catch (err) {
-      append({ id: nextId(), role: "error", text: (err as Error).message });
+      finalizeActive();
+      appendCommitted({ id: nextId(), role: "error", text: (err as Error).message });
     } finally {
-      flushNow();
+      finalizeActive();
       setStreaming(false);
-      currentRole = null;
     }
   }, []);
 
@@ -251,29 +274,28 @@ export function useAgentStream(): AgentStreamState {
     abortRef.current = true;
   }, []);
 
+  const clearAll = () => {
+    activeRef.current = null;
+    activeDirty.current = false;
+    cancelFlushTimer();
+    setView({ committed: [], active: null });
+  };
+
   const reset = useCallback(() => {
     abortRef.current = true;
     resetSession();
-    blocksRef.current = [];
-    dirtyRef.current = false;
-    if (flushTimer.current != null) {
-      clearTimeout(flushTimer.current);
-      flushTimer.current = null;
-    }
-    setBlocks([]);
+    clearAll();
     setCumulative({ inTokens: 0, outTokens: 0, costUsd: 0 });
   }, []);
 
   const addSystem = useCallback((text: string) => {
-    append({ id: nextId(), role: "system", text });
+    appendCommitted({ id: nextId(), role: "system", text });
   }, []);
 
   const newSession = useCallback(() => {
     abortRef.current = true;
     const session = startNewSession();
-    blocksRef.current = [];
-    dirtyRef.current = false;
-    setBlocks([]);
+    clearAll();
     setCumulative({ inTokens: 0, outTokens: 0, costUsd: 0 });
     addSystem(`Started new session ${session.id.slice(0, 8)}.`);
   }, [addSystem]);
@@ -286,9 +308,10 @@ export function useAgentStream(): AgentStreamState {
       return;
     }
     const records = readActiveSessionRecords();
-    const restored = blocksFromRecords(records);
-    blocksRef.current = restored;
-    setBlocks(restored);
+    activeRef.current = null;
+    activeDirty.current = false;
+    cancelFlushTimer();
+    setView({ committed: blocksFromRecords(records), active: null });
     setCumulative(statsFromRecords(records));
     addSystem(`Resumed session ${session.id.slice(0, 8)}.`);
   }, [addSystem]);
@@ -301,14 +324,28 @@ export function useAgentStream(): AgentStreamState {
       return;
     }
     const records = readActiveSessionRecords();
-    const restored = blocksFromRecords(records);
-    blocksRef.current = restored;
-    setBlocks(restored);
+    activeRef.current = null;
+    activeDirty.current = false;
+    cancelFlushTimer();
+    setView({ committed: blocksFromRecords(records), active: null });
     setCumulative(statsFromRecords(records));
     addSystem(`Resumed session ${session.id.slice(0, 8)}.`);
   }, [addSystem]);
 
   const listSessions = useCallback(() => recentSessions(10), []);
 
-  return { blocks, streaming, cumulative, send, abort, reset, newSession, resumeLatest, resumeById, listSessions, systemMessage: addSystem };
+  return {
+    committed: view.committed,
+    active: view.active,
+    streaming,
+    cumulative,
+    send,
+    abort,
+    reset,
+    newSession,
+    resumeLatest,
+    resumeById,
+    listSessions,
+    systemMessage: addSystem,
+  };
 }

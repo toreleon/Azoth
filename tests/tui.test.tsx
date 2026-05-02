@@ -10,6 +10,7 @@ import { vnColor, pctColor } from "../src/tui/lib/colors.js";
 import { classifySession } from "../src/tui/lib/marketSession.js";
 import { formatBigVnd, formatPct, formatPrice } from "../src/tui/lib/format.js";
 import { getDb } from "../src/storage/db.js";
+import { appendSessionRecord, createSession } from "../src/runtime/sessionStore.js";
 
 beforeAll(() => {
   process.env.AZOTH_HOME = mkdtempSync(join(tmpdir(), "azoth-tui-"));
@@ -38,9 +39,27 @@ describe("Azoth TUI", () => {
     const { lastFrame, unmount } = render(<App />);
     await tick();
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("AZOTH  chat");
-    expect(out).toContain("PORTFOLIO");
     expect(out).toContain("agent · VN equities");
+    expect(out).toContain("Try one");
+    expect(out).toContain("advisory autonomy");
+    unmount();
+  });
+
+  it("opens with a fresh chat session", async () => {
+    const previous = createSession({ title: "previous" });
+    appendSessionRecord(previous.id, {
+      type: "user",
+      timestamp: Date.now(),
+      sessionId: previous.id,
+      cwd: process.cwd(),
+      text: "old session text should not appear",
+    });
+
+    const { lastFrame, unmount } = render(<App />);
+    await tick();
+    const out = strip(lastFrame() ?? "");
+    expect(out).not.toContain("old session text should not appear");
+    expect(out).toContain("Try one");
     unmount();
   });
 
@@ -55,7 +74,7 @@ describe("Azoth TUI", () => {
     stdin.write("\x1b");
     await tick();
     const back = strip(lastFrame() ?? "");
-    expect(back).toContain("AZOTH  chat");
+    expect(back).toContain("Try one");
     unmount();
   });
 
@@ -106,12 +125,15 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("/persona updates status bar", async () => {
+  it("bottom status only shows autonomy", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
     await type(stdin, "/persona momentum");
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("persona momentum");
+    expect(out).toContain("advisory autonomy");
+    expect(out).not.toContain("broker");
+    expect(out).not.toContain("in/out");
+    expect(out).not.toContain("sid");
     unmount();
   });
 });

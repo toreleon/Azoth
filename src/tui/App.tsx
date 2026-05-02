@@ -24,7 +24,7 @@ export function App() {
   const [persona, setPersona] = useState("balanced");
   const [autonomy, setAutonomy] = useState<Autonomy>(cfg.autonomy);
   const [stats, setStats] = useState({ inTokens: 0, outTokens: 0, costUsd: 0, sessionId: undefined as string | undefined });
-  const now = useNow(5000);
+  const now = useNow(30_000);
   const session = classifySession(now);
 
   // Tab/Shift+Tab cycle screens, but skip when in chat — Tab there is reserved
@@ -51,31 +51,44 @@ export function App() {
     ? "/dash /backtest /journal · Ctrl+A autonomy"
     : "ESC to chat · Tab next · Shift+Tab prev";
 
+  // In chat mode the screen owns the full viewport: <Static> commits
+  // finalized messages to scrollback and the input lives at the bottom of
+  // the dynamic region. Persistent ticker/Tabs chrome above would push the
+  // live region down and create gaps, so we render them only on the
+  // dashboard-style screens.
+  const isChat = mode === "chat";
+
   return (
     <Box flexDirection="column" minHeight={24}>
-      <Header mode={mode} />
-      <Tabs tabs={TAB_ORDER as unknown as string[]} active={activeIdx} hint={hint} />
-      <Box flexGrow={1}>
+      {!isChat ? <Header mode={mode} /> : null}
+      {!isChat ? (
+        <Tabs tabs={TAB_ORDER as unknown as string[]} active={activeIdx} hint={hint} />
+      ) : null}
+      {isChat ? (
         <ErrorBoundary>
-          {mode === "chat" ? (
-            <ChatScreen
-              persona={persona}
-              setPersona={setPersona}
-              autonomy={autonomy}
-              setAutonomy={(a: string) => setAutonomy(a as Autonomy)}
-              onStats={(s) => setStats((prev) => ({ ...prev, ...s }))}
-              setMode={setMode}
-              onQuit={() => exit()}
-            />
-          ) : mode === "dashboard" ? (
-            <DashboardScreen />
-          ) : mode === "backtest" ? (
-            <BacktestScreen />
-          ) : (
-            <JournalScreen />
-          )}
+          <ChatScreen
+            persona={persona}
+            setPersona={setPersona}
+            autonomy={autonomy}
+            setAutonomy={(a: string) => setAutonomy(a as Autonomy)}
+            onStats={(s) => setStats((prev) => ({ ...prev, ...s }))}
+            setMode={setMode}
+            onQuit={() => exit()}
+          />
         </ErrorBoundary>
-      </Box>
+      ) : (
+        <Box flexGrow={1}>
+          <ErrorBoundary>
+            {mode === "dashboard" ? (
+              <DashboardScreen />
+            ) : mode === "backtest" ? (
+              <BacktestScreen />
+            ) : (
+              <JournalScreen />
+            )}
+          </ErrorBoundary>
+        </Box>
+      )}
       <StatusBar
         mode={mode}
         broker={cfg.broker}

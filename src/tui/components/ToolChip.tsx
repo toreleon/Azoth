@@ -13,14 +13,13 @@ export interface ToolChipProps {
 export function ToolChip({ name, input, result, failed }: ToolChipProps) {
   const status = failed ? "fail" : result ? "done" : "running";
   const color = status === "fail" ? theme.down : status === "done" ? theme.up : theme.accent;
-  const icon = status === "running" ? glyph.toolRunning : glyph.toolDone;
   const pill = status === "fail" ? glyph.fail : status === "done" ? glyph.ok : "…";
   const argSummary = summarizeToolInput(name, input);
   const resultSummary = result ? summarizeToolResult(name, result) : null;
   return (
     <Box flexDirection="column">
       <Box>
-        <Text color={color}>{icon} </Text>
+        <Text color={color}>{"● "}</Text>
         <Text color={color} bold>{name}</Text>
         {argSummary ? <Text dimColor>({argSummary})</Text> : null}
         <Text>  </Text>
