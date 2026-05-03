@@ -21,12 +21,22 @@ interface RawResult {
   sessionId?: string;
 }
 
-function buildOptions(role: RoleName, systemPrompt: string, modelOverride?: string): Options {
+const DEEP_THINK_ROLES: ReadonlySet<RoleName> = new Set(["researchManager", "portfolio"]);
+
+function modelForRole(role: RoleName, modelOverride?: string): string {
   const cfg = loadConfig();
+  if (modelOverride) return modelOverride;
+  if (DEEP_THINK_ROLES.has(role)) {
+    return cfg.team.deep_model ?? cfg.model;
+  }
+  return cfg.team.quick_model ?? cfg.model;
+}
+
+function buildOptions(role: RoleName, systemPrompt: string, modelOverride?: string): Options {
   const mcpName = `azoth-${role}`;
   const allowed = allowedToolIds(role);
   const opts: Options = {
-    model: modelOverride ?? cfg.model,
+    model: modelForRole(role, modelOverride),
     systemPrompt,
     includePartialMessages: true,
     mcpServers: { [mcpName]: buildRoleMcpServer(role) },

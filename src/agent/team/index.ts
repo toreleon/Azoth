@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
   AnalystOutputSchema,
+  ResearchPlanOutputSchema,
   ResearchOutputSchema,
   RiskOutputSchema,
+  RATINGS,
   TraderOutputSchema,
   type AnalystReport,
   type FinalDecision,
@@ -20,6 +22,7 @@ import {
   fundamentalsPrompt,
   newsPrompt,
   portfolioPrompt,
+  researchManagerPrompt,
   riskPrompt,
   sentimentPrompt,
   technicalPrompt,
@@ -56,7 +59,7 @@ export interface RunTeamOptions {
 }
 
 const PortfolioOutputSchema = z.object({
-  action: z.enum(["BUY", "SELL", "HOLD", "WATCH"]),
+  rating: z.enum(RATINGS),
   sizingPct: z.number().min(0).max(1),
   exitPlan: z.string().optional(),
   rationale: z.string().min(20),
@@ -149,17 +152,34 @@ export async function runTeamAnalysis(
     recordRoleOutput(runId, "bear", round, bearReport, bearRaw.usage);
   }
 
-  // Phase 3: trader.
+  // Phase 3: research manager synthesis.
+  const { output: researchPlanOut, raw: researchPlanRaw } = await runRole({
+    role: "researchManager",
+    systemPrompt: SYSTEM_OPERATING_RULES,
+    userPrompt: researchManagerPrompt(ticker, asOfDateIso, state.analysts, state.research),
+    schema: ResearchPlanOutputSchema,
+    emit,
+    modelOverride: opts.modelOverride,
+  });
+  const researchPlan = {
+    recommendation: researchPlanOut.recommendation,
+    rationale: researchPlanOut.rationale,
+    strategic_actions: researchPlanOut.strategic_actions,
+  };
+  state.researchPlan = researchPlan;
+  recordRoleOutput(runId, "researchManager", 0, researchPlan, researchPlanRaw.usage);
+
+  // Phase 4: trader.
   const { output: traderOut, raw: traderRaw } = await runRole({
     role: "trader",
     systemPrompt: SYSTEM_OPERATING_RULES,
-    userPrompt: traderPrompt(ticker, asOfDateIso, state.analysts, state.research),
+    userPrompt: traderPrompt(ticker, asOfDateIso, state.analysts, researchPlan),
     schema: TraderOutputSchema,
     emit,
     modelOverride: opts.modelOverride,
   });
   const trader: TraderDecision = {
-    action: traderOut.action,
+    rating: traderOut.rating,
     sizingPct: traderOut.sizingPct,
     entryBand: traderOut.entryBand,
     exitPlan: traderOut.exitPlan,
@@ -168,7 +188,7 @@ export async function runTeamAnalysis(
   state.trader = trader;
   recordRoleOutput(runId, "trader", 0, trader, traderRaw.usage);
 
-  // Phase 4: risk.
+  // Phase 5: risk.
   const { output: riskOut, raw: riskRaw } = await runRole({
     role: "risk",
     systemPrompt: SYSTEM_OPERATING_RULES,
@@ -186,7 +206,7 @@ export async function runTeamAnalysis(
   state.risk = risk;
   recordRoleOutput(runId, "risk", 0, risk, riskRaw.usage);
 
-  // Phase 5: portfolio manager (synthesis only, no tools).
+  // Phase 6: portfolio manager (synthesis only, no tools).
   const { output: pmOut, raw: pmRaw } = await runRole({
     role: "portfolio",
     systemPrompt: SYSTEM_OPERATING_RULES,
@@ -204,10 +224,10 @@ export async function runTeamAnalysis(
   });
   recordRoleOutput(runId, "portfolio", 0, pmOut, pmRaw.usage);
 
-  // Enforce risk veto: if risk rejected, downgrade to HOLD/WATCH.
-  let finalAction = pmOut.action;
-  if (!risk.approved && (finalAction === "BUY" || finalAction === "SELL")) {
-    finalAction = "HOLD";
+  // Enforce risk veto: if risk rejected, downgrade directional ratings to Hold.
+  let finalRating = pmOut.rating;
+  if (!risk.approved && finalRating !== "Hold") {
+    finalRating = "Hold";
   }
 
   const decision = finalizeTeamRun({
@@ -219,7 +239,7 @@ export async function runTeamAnalysis(
     trader,
     risk,
     final: {
-      action: finalAction,
+      rating: finalRating,
       sizingPct: risk.adjustedSizingPct,
       rationale: pmOut.rationale,
       exitPlan: pmOut.exitPlan,

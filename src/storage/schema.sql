@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS decisions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at  INTEGER NOT NULL,
   ticker      TEXT NOT NULL,
-  action      TEXT NOT NULL,         -- BUY | SELL | HOLD | WATCH
+  action      TEXT NOT NULL,         -- legacy BUY | SELL | HOLD
+  rating      TEXT,                  -- Buy | Overweight | Hold | Underweight | Sell
   rationale   TEXT NOT NULL,         -- 4-dimension synthesis
   exit_plan   TEXT,                  -- thresholds for stop/take-profit
   source_run  TEXT                   -- session id, optional

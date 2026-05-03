@@ -6,6 +6,13 @@ autonomy: advisory
 # Default model for the orchestrator.
 model: glm-5.1
 
+# Multi-agent team model tiers. Research Manager and Portfolio Manager use
+# deep_model; analysts, researchers, trader, and risk use quick_model.
+team:
+  quick_model: glm-5.1
+  deep_model: glm-5.1
+  output_language: en
+
 # Tickers the agent should track by default.
 watchlist:
   - HPG

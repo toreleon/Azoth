@@ -6,6 +6,7 @@ import type {
   RiskReview,
   RoleName,
   RoleUsage,
+  Rating,
   TraderDecision,
 } from "./state.js";
 
@@ -24,6 +25,7 @@ function ensureTeamTables(): void {
       created_at      INTEGER NOT NULL,
       finished_at     INTEGER,
       final_action    TEXT,
+      final_rating    TEXT,
       final_sizing    REAL,
       final_rationale TEXT,
       decision_id     INTEGER
@@ -45,6 +47,11 @@ function ensureTeamTables(): void {
 
     CREATE INDEX IF NOT EXISTS team_runs_ticker_idx ON team_runs(ticker, created_at);
   `);
+  const cols = db.prepare("PRAGMA table_info(team_runs)").all() as { name: string }[];
+  const have = new Set(cols.map((c) => c.name));
+  if (!have.has("final_rating")) {
+    db.exec("ALTER TABLE team_runs ADD COLUMN final_rating TEXT");
+  }
 }
 
 export function recordTeamRunStart(runId: string, ticker: string, asOfDateIso: string): void {
@@ -92,22 +99,30 @@ export interface FinalizeArgs {
   research: ResearchReport[];
   trader: TraderDecision;
   risk: RiskReview;
-  final: { action: FinalDecision["action"]; sizingPct: number; rationale: string; exitPlan?: string };
+  final: { rating: FinalDecision["rating"]; sizingPct: number; rationale: string; exitPlan?: string };
+}
+
+function legacyActionFromRating(rating: Rating): "BUY" | "SELL" | "HOLD" {
+  if (rating === "Buy" || rating === "Overweight") return "BUY";
+  if (rating === "Sell" || rating === "Underweight") return "SELL";
+  return "HOLD";
 }
 
 export function finalizeTeamRun(args: FinalizeArgs): FinalDecision {
   ensureTeamTables();
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
+  const legacyAction = legacyActionFromRating(args.final.rating);
   const info = db
     .prepare(
-      `INSERT INTO decisions (created_at, ticker, action, rationale, exit_plan, source_run)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO decisions (created_at, ticker, action, rating, rationale, exit_plan, source_run)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       now,
       args.ticker.toUpperCase(),
-      args.final.action,
+      legacyAction,
+      args.final.rating,
       args.final.rationale,
       args.final.exitPlan ?? null,
       args.runId,
@@ -117,14 +132,23 @@ export function finalizeTeamRun(args: FinalizeArgs): FinalDecision {
     `UPDATE team_runs
        SET finished_at = ?,
            final_action = ?,
+           final_rating = ?,
            final_sizing = ?,
            final_rationale = ?,
            decision_id = ?
      WHERE id = ?`,
-  ).run(now, args.final.action, args.final.sizingPct, args.final.rationale, decisionId, args.runId);
+  ).run(
+    now,
+    legacyAction,
+    args.final.rating,
+    args.final.sizingPct,
+    args.final.rationale,
+    decisionId,
+    args.runId,
+  );
   return {
     ticker: args.ticker.toUpperCase(),
-    action: args.final.action,
+    rating: args.final.rating,
     sizingPct: args.final.sizingPct,
     rationale: args.final.rationale,
     exitPlan: args.final.exitPlan,

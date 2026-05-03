@@ -18,17 +18,25 @@ export function loadJournal(tab: JournalTab, limit = 10): JournalRow[] {
   if (tab === "decisions") {
     const rows = db
       .prepare(
-        "SELECT id, ticker, action, rationale, exit_plan, created_at FROM decisions ORDER BY created_at DESC LIMIT ?",
+        "SELECT id, ticker, action, rating, rationale, exit_plan, created_at FROM decisions ORDER BY created_at DESC LIMIT ?",
       )
-      .all(n) as Array<{ id: number; ticker: string; action: string; rationale: string; exit_plan: string; created_at: number }>;
-    return rows.map((r) => ({
-      id: r.id,
-      primary: `${r.action.padEnd(5)} ${r.ticker}`,
-      secondary: formatDate(r.created_at),
-      detail: `Action: ${r.action}\nTicker: ${r.ticker}\nDate: ${formatDate(r.created_at)}\n\nRationale:\n${r.rationale ?? "—"}\n\nExit plan:\n${r.exit_plan ?? "—"}`,
-      ts: r.created_at,
-      color: r.action === "BUY" ? "green" : r.action === "SELL" ? "red" : "yellow",
-    }));
+      .all(n) as Array<{ id: number; ticker: string; action: string; rating: string | null; rationale: string; exit_plan: string; created_at: number }>;
+    return rows.map((r) => {
+      const rating = r.rating ?? r.action;
+      return {
+        id: r.id,
+        primary: `${rating.padEnd(11)} ${r.ticker}`,
+        secondary: formatDate(r.created_at),
+        detail: `Rating: ${rating}\nLegacy action: ${r.action}\nTicker: ${r.ticker}\nDate: ${formatDate(r.created_at)}\n\nRationale:\n${r.rationale ?? "—"}\n\nExit plan:\n${r.exit_plan ?? "—"}`,
+        ts: r.created_at,
+        color:
+          rating === "Buy" || rating === "Overweight" || r.action === "BUY"
+            ? "green"
+            : rating === "Sell" || rating === "Underweight" || r.action === "SELL"
+              ? "red"
+              : "yellow",
+      };
+    });
   }
   if (tab === "orders") {
     const rows = db

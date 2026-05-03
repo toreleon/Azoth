@@ -173,8 +173,10 @@ function AppInner() {
               const desc =
                 "score" in o
                   ? `score=${Number(o.score).toFixed(2)} ${truncate(String(o.summary ?? ""), 60)}`
+                  : "rating" in o
+                  ? `${o.rating} size=${(Number(o.sizingPct) * 100).toFixed(1)}%`
                   : "action" in o
-                  ? `${o.action} size=${(Number(o.sizingPct) * 100).toFixed(1)}%`
+                  ? `${o.action} size=${(Number(o.sizingPct ?? 0) * 100).toFixed(1)}%`
                   : "approved" in o
                   ? `approved=${o.approved}`
                   : "thesis" in o

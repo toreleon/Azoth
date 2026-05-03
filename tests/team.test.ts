@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const TMP_DB = join(mkdtempSync(join(tmpdir(), "azoth-team-")), "azoth.db");
+
+vi.setConfig({ testTimeout: 15_000 });
 
 // Sequenced fake SDK responses, role by role.
 const ROLE_SCRIPTS: Array<{ role: string; payload: unknown }> = [];
@@ -24,12 +26,12 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async () => {
       __mcp: cfg.name,
       tools: cfg.tools,
     }),
-    query: ({ options }: { prompt: string; options: { systemPrompt?: string; allowedTools?: string[] } }) => {
+    query: ({ prompt, options }: { prompt: string; options: { systemPrompt?: string; allowedTools?: string[] } }) => {
       const next = ROLE_SCRIPTS.shift();
       if (!next) {
         throw new Error("no scripted response left for query()");
       }
-      observedRoleOrder.push({ role: next.role, allowedTools: options.allowedTools ?? [] });
+      observedRoleOrder.push({ role: next.role, allowedTools: options.allowedTools ?? [], prompt });
       const text = JSON.stringify(next.payload);
       const messages = [
         {
@@ -59,7 +61,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async () => {
   };
 });
 
-const observedRoleOrder: Array<{ role: string; allowedTools: string[] }> = [];
+const observedRoleOrder: Array<{ role: string; allowedTools: string[]; prompt: string }> = [];
 
 beforeEach(() => {
   process.env.VNSTOCK_DB = TMP_DB;
@@ -73,6 +75,50 @@ afterEach(() => {
 });
 
 describe("runTeamAnalysis", () => {
+  it("renders Vietnamese instructions for user-facing analyst and PM prompts", async () => {
+    const viConfig = join(mkdtempSync(join(tmpdir(), "azoth-team-vi-")), "config.yaml");
+    writeFileSync(
+      viConfig,
+      [
+        "autonomy: advisory",
+        "model: claude-sonnet-4-6",
+        "team:",
+        "  quick_model: claude-haiku-4-6",
+        "  deep_model: claude-sonnet-4-6",
+        "  output_language: vi",
+        "watchlist: [VCB]",
+        "broker: paper",
+        "risk:",
+        "  max_position_pct: 0.15",
+        "  max_daily_loss_pct: 0.03",
+        "  max_order_notional_vnd: 50000000",
+        "  ticker_whitelist: []",
+        "  allow_margin: false",
+        "",
+      ].join("\n"),
+    );
+    process.env.VNSTOCK_CONFIG = viConfig;
+    const { resetConfigCacheForTests } = await import("../src/config/loader.js");
+    resetConfigCacheForTests();
+    const { technicalPrompt, bullPrompt, portfolioPrompt } = await import("../src/agent/team/prompts.js");
+
+    const analyst = technicalPrompt("VCB", "2025-05-02");
+    expect(analyst).toContain("Write the user-facing summary, rationale, and narrative fields in Vietnamese");
+
+    const debate = bullPrompt("VCB", "2025-05-02", 1, [], []);
+    expect(debate).not.toContain("Vietnamese");
+
+    const pm = portfolioPrompt(
+      "VCB",
+      "2025-05-02",
+      [],
+      [],
+      { rating: "Hold", sizingPct: 0, rationale: "neutral" },
+      { approved: true, adjustedSizingPct: 0, concerns: [], notes: "" },
+    );
+    expect(pm).toContain("Write the user-facing summary, rationale, and narrative fields in Vietnamese");
+  });
+
   it("runs analysts → debate → trader → risk → portfolio in order and writes a journal entry", async () => {
     pushResponse("technical", { summary: "uptrend with RSI 62", score: 0.4, detail: { rsi: 62 } });
     pushResponse("fundamentals", { summary: "P/E 12, ROE 18", score: 0.3, detail: { pe: 12 } });
@@ -82,8 +128,13 @@ describe("runTeamAnalysis", () => {
     pushResponse("bear", { thesis: "wait for pullback", keyPoints: ["macro"] });
     pushResponse("bull", { thesis: "still buy", keyPoints: ["entry low"] });
     pushResponse("bear", { thesis: "still cautious", keyPoints: ["overhead"] });
+    pushResponse("researchManager", {
+      recommendation: "Overweight",
+      rationale: "Bull case is stronger but entry discipline matters.",
+      strategic_actions: "Build gradually around the proposed band and cap exposure.",
+    });
     pushResponse("trader", {
-      action: "BUY",
+      rating: "Buy",
       sizingPct: 0.05,
       entryBand: { low: 28, high: 30 },
       exitPlan: "stop 27, target 33",
@@ -96,7 +147,7 @@ describe("runTeamAnalysis", () => {
       notes: "trim 1pp",
     });
     pushResponse("portfolio", {
-      action: "BUY",
+      rating: "Overweight",
       sizingPct: 0.04,
       exitPlan: "stop 27, target 33",
       rationale:
@@ -124,30 +175,65 @@ describe("runTeamAnalysis", () => {
       "bear#1",
       "bull#2",
       "bear#2",
+      "researchManager#",
       "trader#",
       "risk#",
       "portfolio#",
     ]);
 
     // Final decision matches portfolio output, persisted to decisions.
-    expect(decision.action).toBe("BUY");
+    expect(decision.rating).toBe("Overweight");
     expect(decision.sizingPct).toBeCloseTo(0.04, 5);
     expect(decision.journalId).toBeTypeOf("number");
     expect(state.analysts).toHaveLength(4);
     expect(state.research).toHaveLength(4);
+    expect(state.researchPlan?.recommendation).toBe("Overweight");
 
     const db = getDb();
     const rows = db
-      .prepare("SELECT ticker, action, source_run FROM decisions WHERE source_run = ?")
-      .all(state.runId) as Array<{ ticker: string; action: string; source_run: string }>;
+      .prepare("SELECT ticker, action, rating, source_run FROM decisions WHERE source_run = ?")
+      .all(state.runId) as Array<{ ticker: string; action: string; rating: string; source_run: string }>;
     expect(rows).toHaveLength(1);
     expect(rows[0]!.ticker).toBe("FPT");
     expect(rows[0]!.action).toBe("BUY");
+    expect(rows[0]!.rating).toBe("Overweight");
 
     const roleRows = db
       .prepare("SELECT role FROM team_role_outputs WHERE run_id = ?")
       .all(state.runId) as Array<{ role: string }>;
-    expect(roleRows.length).toBe(4 + 2 * 2 + 3); // analysts + debate + trader/risk/portfolio
+    expect(roleRows.length).toBe(4 + 2 * 2 + 4); // analysts + debate + manager/trader/risk/portfolio
+  });
+
+  it("passes the Research Manager plan, not the raw debate transcript, to the trader", async () => {
+    pushResponse("technical", { summary: "uptrend", score: 0.2, detail: {} });
+    pushResponse("fundamentals", { summary: "quality", score: 0.2, detail: {} });
+    pushResponse("news", { summary: "quiet", score: 0, detail: {} });
+    pushResponse("sentiment", { summary: "stable", score: 0.1, detail: {} });
+    pushResponse("bull", { thesis: "raw bull debate marker", keyPoints: ["growth"] });
+    pushResponse("bear", { thesis: "raw bear debate marker", keyPoints: ["valuation"] });
+    pushResponse("researchManager", {
+      recommendation: "Hold",
+      rationale: "plan rationale marker",
+      strategic_actions: "plan action marker",
+    });
+    pushResponse("trader", { rating: "Hold", sizingPct: 0, rationale: "follow plan" });
+    pushResponse("risk", { approved: true, adjustedSizingPct: 0, concerns: [], notes: "" });
+    pushResponse("portfolio", {
+      rating: "Hold",
+      sizingPct: 0,
+      rationale: "All four dimensions neutral; research manager plan says hold.",
+    });
+
+    const { runTeamAnalysis } = await import("../src/agent/team/index.js");
+    await runTeamAnalysis({ ticker: "VCB", asOfDateIso: "2025-05-02", debateRounds: 1 });
+
+    const trader = observedRoleOrder.find((r) => r.role === "trader");
+    expect(trader?.prompt).toContain("Research Manager plan:");
+    expect(trader?.prompt).toContain("Recommendation: Hold");
+    expect(trader?.prompt).toContain("plan rationale marker");
+    expect(trader?.prompt).toContain("plan action marker");
+    expect(trader?.prompt).not.toContain("raw bull debate marker");
+    expect(trader?.prompt).not.toContain("raw bear debate marker");
   });
 
   it("scopes allowed tools per role (analysts cannot place orders, researchers have none)", async () => {
@@ -157,10 +243,15 @@ describe("runTeamAnalysis", () => {
     pushResponse("sentiment", { summary: "x", score: 0, detail: {} });
     pushResponse("bull", { thesis: "y", keyPoints: [] });
     pushResponse("bear", { thesis: "y", keyPoints: [] });
-    pushResponse("trader", { action: "HOLD", sizingPct: 0, rationale: "neutral consensus" });
+    pushResponse("researchManager", {
+      recommendation: "Hold",
+      rationale: "balanced",
+      strategic_actions: "wait",
+    });
+    pushResponse("trader", { rating: "Hold", sizingPct: 0, rationale: "neutral consensus" });
     pushResponse("risk", { approved: true, adjustedSizingPct: 0, concerns: [], notes: "" });
     pushResponse("portfolio", {
-      action: "HOLD",
+      rating: "Hold",
       sizingPct: 0,
       rationale: "All four dimensions neutral; bull/bear inconclusive. Hold.",
     });
@@ -176,19 +267,26 @@ describe("runTeamAnalysis", () => {
 
     const bull = observedRoleOrder.find((r) => r.role === "bull");
     expect(bull!.allowedTools).toEqual([]);
+    const researchManager = observedRoleOrder.find((r) => r.role === "researchManager");
+    expect(researchManager!.allowedTools).toEqual([]);
   });
 
-  it("downgrades BUY to HOLD when risk rejects", async () => {
+  it("downgrades bullish directional ratings to HOLD when risk rejects", async () => {
     pushResponse("technical", { summary: "x", score: 0, detail: {} });
     pushResponse("fundamentals", { summary: "x", score: 0, detail: {} });
     pushResponse("news", { summary: "x", score: 0, detail: {} });
     pushResponse("sentiment", { summary: "x", score: 0, detail: {} });
     pushResponse("bull", { thesis: "y", keyPoints: [] });
     pushResponse("bear", { thesis: "y", keyPoints: [] });
-    pushResponse("trader", { action: "BUY", sizingPct: 0.1, rationale: "bullish" });
+    pushResponse("researchManager", {
+      recommendation: "Buy",
+      rationale: "bull wins",
+      strategic_actions: "buy cautiously",
+    });
+    pushResponse("trader", { rating: "Buy", sizingPct: 0.1, rationale: "bullish" });
     pushResponse("risk", { approved: false, adjustedSizingPct: 0, concerns: ["over limit"], notes: "veto" });
     pushResponse("portfolio", {
-      action: "BUY",
+      rating: "Buy",
       sizingPct: 0.1,
       rationale:
         "Despite risk rejection the PM tries to ship — the runner must override this to HOLD.",
@@ -198,6 +296,33 @@ describe("runTeamAnalysis", () => {
     const { decision } = await runTeamAnalysis(
       { ticker: "HPG", asOfDateIso: "2025-05-02", debateRounds: 1 },
     );
-    expect(decision.action).toBe("HOLD");
+    expect(decision.rating).toBe("Hold");
+  });
+
+  it("downgrades bearish directional ratings to HOLD when risk rejects", async () => {
+    pushResponse("technical", { summary: "x", score: 0, detail: {} });
+    pushResponse("fundamentals", { summary: "x", score: 0, detail: {} });
+    pushResponse("news", { summary: "x", score: 0, detail: {} });
+    pushResponse("sentiment", { summary: "x", score: 0, detail: {} });
+    pushResponse("bull", { thesis: "y", keyPoints: [] });
+    pushResponse("bear", { thesis: "y", keyPoints: [] });
+    pushResponse("researchManager", {
+      recommendation: "Underweight",
+      rationale: "bear wins",
+      strategic_actions: "trim cautiously",
+    });
+    pushResponse("trader", { rating: "Underweight", sizingPct: 0.05, rationale: "cautious" });
+    pushResponse("risk", { approved: false, adjustedSizingPct: 0, concerns: ["illiquid"], notes: "veto" });
+    pushResponse("portfolio", {
+      rating: "Underweight",
+      sizingPct: 0.05,
+      rationale: "Runner must override rejected bearish directional ratings to Hold.",
+    });
+
+    const { runTeamAnalysis } = await import("../src/agent/team/index.js");
+    const { decision } = await runTeamAnalysis(
+      { ticker: "MSN", asOfDateIso: "2025-05-02", debateRounds: 1 },
+    );
+    expect(decision.rating).toBe("Hold");
   });
 });

@@ -104,24 +104,25 @@ export interface TeamDecisionCardInput {
   decision: FinalDecision;
 }
 
-const ACTION_COLOR: Record<string, string> = {
-  BUY: theme.up,
-  SELL: theme.down,
-  HOLD: theme.muted,
-  WATCH: theme.accent,
+const RATING_COLOR: Record<string, string> = {
+  Buy: theme.up,
+  Overweight: theme.up,
+  Hold: theme.muted,
+  Underweight: theme.accent,
+  Sell: theme.down,
 };
 
 export function TeamDecisionCard({ data }: { data: TeamDecisionCardInput }) {
   const { state, decision } = data;
-  const actionColor = ACTION_COLOR[decision.action] ?? "white";
+  const ratingColor = RATING_COLOR[decision.rating] ?? "white";
   return (
     <Panel
       title={`TEAM ${decision.ticker}  ${state.asOfDateIso}`}
-      borderColor={actionColor}
+      borderColor={ratingColor}
       badge={`#${decision.journalId ?? "?"}`}
     >
       <Box>
-        <Text bold color={actionColor}>{decision.action}</Text>
+        <Text bold color={ratingColor}>{decision.rating}</Text>
         <Text dimColor>   size </Text>
         <Text>{(decision.sizingPct * 100).toFixed(1)}%</Text>
         <Text dimColor>   run </Text>

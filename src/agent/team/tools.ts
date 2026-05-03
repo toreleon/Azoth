@@ -37,6 +37,7 @@ export const ROLE_TOOLS: Record<RoleName, string[]> = {
   sentiment: ["ticker_news", "foreign_flow"],
   bull: [],
   bear: [],
+  researchManager: [],
   trader: ["portfolio_list", "discover_tickers", "journal_read"],
   risk: ["portfolio_list", "macro_indices", "foreign_flow"],
   portfolio: [],

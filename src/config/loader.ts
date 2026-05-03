@@ -8,6 +8,14 @@ import { azothPaths, ensureAzothDirs } from "../runtime/paths.js";
 const ConfigSchema = z.object({
   autonomy: z.enum(["advisory", "confirm", "auto"]),
   model: z.string().min(1),
+  team: z
+    .object({
+      quick_model: z.string().min(1).optional(),
+      deep_model: z.string().min(1).optional(),
+      output_language: z.string().min(1).default("en"),
+    })
+    .optional()
+    .default({}),
   watchlist: z.array(z.string().regex(/^[A-Z0-9]{3,4}$/)).min(1),
   broker: z.enum(["paper", "dnse"]),
   risk: z.object({

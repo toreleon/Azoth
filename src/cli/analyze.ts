@@ -48,7 +48,7 @@ function emit(ev: TeamEvent): void {
     }
     case "final":
       process.stdout.write(
-        `\n=== FINAL: ${ev.decision.action} ${ev.decision.ticker} ` +
+        `\n=== FINAL: ${ev.decision.rating} ${ev.decision.ticker} ` +
           `size=${(ev.decision.sizingPct * 100).toFixed(1)}% ` +
           `(journal #${ev.decision.journalId}) ===\n` +
           `${ev.decision.rationale}\n` +
@@ -67,8 +67,8 @@ function summarize(output: unknown): string {
     if ("score" in o && "summary" in o) {
       return `score=${Number(o.score).toFixed(2)} — ${String(o.summary).slice(0, 80)}`;
     }
-    if ("action" in o && "sizingPct" in o) {
-      return `${o.action} size=${(Number(o.sizingPct) * 100).toFixed(1)}%`;
+    if ("rating" in o && "sizingPct" in o) {
+      return `${o.rating} size=${(Number(o.sizingPct) * 100).toFixed(1)}%`;
     }
     if ("approved" in o) {
       return `approved=${o.approved} adj=${(Number(o.adjustedSizingPct) * 100).toFixed(1)}%`;
@@ -87,7 +87,7 @@ async function main() {
       { ticker, debateRounds: rounds, asOfDateIso: asOf },
       { emit },
     );
-    process.exit(decision.action === "BUY" || decision.action === "SELL" ? 0 : 0);
+    process.exit(decision.rating === "Buy" || decision.rating === "Sell" ? 0 : 0);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(`error: ${msg}\n`);

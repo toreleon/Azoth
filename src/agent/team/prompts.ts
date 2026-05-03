@@ -1,9 +1,11 @@
 import type {
   AnalystReport,
+  ResearchPlan,
   ResearchReport,
   TraderDecision,
   RiskReview,
 } from "./state.js";
+import { loadConfig } from "../../config/loader.js";
 
 const PRICE_NOTE =
   "VN stock prices are quoted in thousand VND on DNSE/SSI (e.g. 28.5 means 28,500 VND). Tickers are uppercase 3 letters (4 for derivatives).";
@@ -19,6 +21,14 @@ function header(role: string, ticker: string, asOfDateIso: string) {
   ].join("\n");
 }
 
+function userFacingLanguageInstruction(): string {
+  const lang = loadConfig().team.output_language.toLowerCase();
+  if (lang === "vi" || lang.startsWith("vi-") || lang.includes("vietnamese")) {
+    return "Write the user-facing summary, rationale, and narrative fields in Vietnamese. Keep JSON keys and enum values exactly as specified.";
+  }
+  return "Write the user-facing summary, rationale, and narrative fields in English. Keep JSON keys and enum values exactly as specified.";
+}
+
 export function technicalPrompt(ticker: string, asOfDateIso: string): string {
   return [
     header("Technical Analyst", ticker, asOfDateIso),
@@ -27,6 +37,7 @@ export function technicalPrompt(ticker: string, asOfDateIso: string): string {
     "Cite at least RSI(14), MACD, and a moving-average view (SMA20/50). Note any divergence or breakout/breakdown levels.",
     "",
     "Score the technical setup on -1..1 (bearish to bullish). 0 = neutral.",
+    userFacingLanguageInstruction(),
     JSON_NOTE,
     'Schema: {"summary": string, "score": number, "detail": {"rsi": number, "macd": string, "trend": string, "support": number, "resistance": number}}',
   ].join("\n");
@@ -40,6 +51,7 @@ export function fundamentalsPrompt(ticker: string, asOfDateIso: string): string 
     "Cite P/E, P/B, ROE, EPS, market cap. Compare against the latest available quarterly trend.",
     "",
     "Score valuation+quality on -1..1 (overvalued/weak to undervalued/strong).",
+    userFacingLanguageInstruction(),
     JSON_NOTE,
     'Schema: {"summary": string, "score": number, "detail": {"pe": number, "pb": number, "roe": number, "marketCapBn": number}}',
   ].join("\n");
@@ -53,6 +65,7 @@ export function newsPrompt(ticker: string, asOfDateIso: string): string {
     "Identify catalysts (earnings, dividends, regulation, sector). Cite headline + URL + publish date for each.",
     "",
     "Score newsflow impact on -1..1 (negative to positive).",
+    userFacingLanguageInstruction(),
     JSON_NOTE,
     'Schema: {"summary": string, "score": number, "detail": {"headlines": [{"title": string, "url": string, "date": string}], "catalysts": [string]}}',
   ].join("\n");
@@ -67,6 +80,7 @@ export function sentimentPrompt(ticker: string, asOfDateIso: string): string {
     " 2. foreign_flow (institutional buy/sell pressure week-to-date and ownership %).",
     "",
     "Score overall positioning on -1..1 (negative tone + foreign selling to positive tone + foreign buying).",
+    userFacingLanguageInstruction(),
     JSON_NOTE,
     'Schema: {"summary": string, "score": number, "detail": {"tone": "pos"|"neg"|"mixed", "foreignNetVnd": number, "ownershipPct": number}}',
   ].join("\n");
@@ -141,16 +155,67 @@ export function bearPrompt(
   ].join("\n");
 }
 
-export function traderPrompt(
+function renderDebateTranscript(research: ResearchReport[]): string {
+  return (
+    research
+      .map(
+        (r) =>
+          `[${r.role} r${r.round}] ${r.thesis} — ${r.keyPoints.join("; ")}`,
+      )
+      .join("\n") || "(none)"
+  );
+}
+
+function renderResearchPlan(plan: ResearchPlan): string {
+  return [
+    `Recommendation: ${plan.recommendation}`,
+    `Rationale: ${plan.rationale}`,
+    `Strategic actions: ${plan.strategic_actions}`,
+  ].join("\n");
+}
+
+export function researchManagerPrompt(
   ticker: string,
   asOfDateIso: string,
   analysts: AnalystReport[],
   research: ResearchReport[],
 ): string {
   return [
+    header("Research Manager", ticker, asOfDateIso),
+    "",
+    "Critically evaluate the bull/bear debate and deliver a clear, actionable investment plan for the trader.",
+    "",
+    "Rating Scale (use exactly one):",
+    "- Buy: Strong conviction in the bull thesis; recommend taking or growing the position.",
+    "- Overweight: Constructive view; recommend gradually increasing exposure.",
+    "- Hold: Balanced view; recommend maintaining the current position.",
+    "- Underweight: Cautious view; recommend trimming exposure.",
+    "- Sell: Strong conviction in the bear thesis; recommend exiting or avoiding the position.",
+    "",
+    "Commit to a clear stance whenever the debate's strongest arguments warrant one; reserve Hold for situations where the evidence on both sides is genuinely balanced.",
+    "",
+    "Analyst reports:",
+    renderAnalysts(analysts),
+    "",
+    "Debate transcript:",
+    renderDebateTranscript(research),
+    "",
+    "You have NO tools — synthesize only the evidence above.",
+    JSON_NOTE,
+    'Schema: {"recommendation": "Buy"|"Overweight"|"Hold"|"Underweight"|"Sell", "rationale": string, "strategic_actions": string}',
+  ].join("\n");
+}
+
+export function traderPrompt(
+  ticker: string,
+  asOfDateIso: string,
+  analysts: AnalystReport[],
+  researchPlan: ResearchPlan,
+): string {
+  return [
     header("Head Trader", ticker, asOfDateIso),
     "",
-    "You translate the analyst + bull/bear debate into an actionable, sized recommendation.",
+    "You translate the Research Manager's investment plan into an actionable, sized recommendation.",
     "Tools:",
     "- portfolio_list (see existing exposure)",
     "- journal_read (recent decisions on this name)",
@@ -159,17 +224,12 @@ export function traderPrompt(
     "Analyst reports:",
     renderAnalysts(analysts),
     "",
-    "Debate transcript:",
-    research
-      .map(
-        (r) =>
-          `[${r.role} r${r.round}] ${r.thesis} — ${r.keyPoints.join("; ")}`,
-      )
-      .join("\n") || "(none)",
+    "Research Manager plan:",
+    renderResearchPlan(researchPlan),
     "",
-    "Decide: BUY, SELL, HOLD, or WATCH. Size as a fraction of portfolio NAV (0..1). Provide an entry band in thousand VND when proposing BUY/SELL, and a one-line exit plan.",
+    "Decide on the 5-tier rating: Buy, Overweight, Hold, Underweight, or Sell. Reserve Hold for genuinely balanced evidence. Size as a fraction of portfolio NAV (0..1). Provide an entry band in thousand VND when proposing directional exposure changes, and a one-line exit plan.",
     JSON_NOTE,
-    'Schema: {"action": "BUY"|"SELL"|"HOLD"|"WATCH", "sizingPct": number, "entryBand": {"low": number, "high": number}, "exitPlan": string, "rationale": string}',
+    'Schema: {"rating": "Buy"|"Overweight"|"Hold"|"Underweight"|"Sell", "sizingPct": number, "entryBand": {"low": number, "high": number}, "exitPlan": string, "rationale": string}',
   ].join("\n");
 }
 
@@ -211,17 +271,27 @@ export function portfolioPrompt(
     "",
     "Synthesize the entire team's work into ONE final, journal-ready decision. The journal entry is the audit trail.",
     "",
+    "Rating Scale (use exactly one):",
+    "- Buy: Strong conviction to enter or add to position.",
+    "- Overweight: Favorable outlook, gradually increase exposure.",
+    "- Hold: Maintain current position, no action needed.",
+    "- Underweight: Reduce exposure or take partial profits.",
+    "- Sell: Exit position or avoid entry.",
+    "",
+    "Reserve Hold for genuinely balanced evidence.",
+    "",
     `Trader: ${JSON.stringify(trader)}`,
     `Risk: ${JSON.stringify(risk)}`,
     `Analyst scores: ${analysts.map((a) => `${a.role}=${a.score.toFixed(2)}`).join(", ")}`,
     `Debate rounds: ${research.length}`,
     "",
     "Rules:",
-    " - If risk.approved is false, you MUST output HOLD or WATCH (no BUY/SELL).",
+    " - If risk.approved is false, you MUST output Hold.",
     " - Final sizingPct = risk.adjustedSizingPct.",
     " - Rationale must cite the four analyst dimensions (technical / fundamentals / news / sentiment) and the bull-vs-bear conclusion.",
     " - This is advisory: do NOT mention placing or having placed orders.",
+    userFacingLanguageInstruction(),
     JSON_NOTE,
-    'Schema: {"action": "BUY"|"SELL"|"HOLD"|"WATCH", "sizingPct": number, "exitPlan": string, "rationale": string}',
+    'Schema: {"rating": "Buy"|"Overweight"|"Hold"|"Underweight"|"Sell", "sizingPct": number, "exitPlan": string, "rationale": string}',
   ].join("\n");
 }

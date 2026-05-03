@@ -19,13 +19,25 @@ export function getDb(): Database.Database {
 }
 
 function migrate(d: Database.Database) {
-  const cols = d.prepare("PRAGMA table_info(backtest_turns)").all() as { name: string }[];
-  const have = new Set(cols.map((c) => c.name));
-  if (!have.has("cache_read_tokens")) {
+  const backtestCols = d.prepare("PRAGMA table_info(backtest_turns)").all() as { name: string }[];
+  const haveBacktest = new Set(backtestCols.map((c) => c.name));
+  if (!haveBacktest.has("cache_read_tokens")) {
     d.exec("ALTER TABLE backtest_turns ADD COLUMN cache_read_tokens INTEGER DEFAULT 0");
   }
-  if (!have.has("cache_creation_tokens")) {
+  if (!haveBacktest.has("cache_creation_tokens")) {
     d.exec("ALTER TABLE backtest_turns ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0");
+  }
+
+  const decisionCols = d.prepare("PRAGMA table_info(decisions)").all() as { name: string }[];
+  const haveDecisions = new Set(decisionCols.map((c) => c.name));
+  if (!haveDecisions.has("rating")) {
+    d.exec("ALTER TABLE decisions ADD COLUMN rating TEXT");
+  }
+
+  const teamRunCols = d.prepare("PRAGMA table_info(team_runs)").all() as { name: string }[];
+  const haveTeamRuns = new Set(teamRunCols.map((c) => c.name));
+  if (teamRunCols.length > 0 && !haveTeamRuns.has("final_rating")) {
+    d.exec("ALTER TABLE team_runs ADD COLUMN final_rating TEXT");
   }
 }
 

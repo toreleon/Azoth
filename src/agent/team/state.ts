@@ -7,14 +7,15 @@ export const ROLE_NAMES = [
   "sentiment",
   "bull",
   "bear",
+  "researchManager",
   "trader",
   "risk",
   "portfolio",
 ] as const;
 export type RoleName = (typeof ROLE_NAMES)[number];
 
-export const ACTIONS = ["BUY", "SELL", "HOLD", "WATCH"] as const;
-export type Action = (typeof ACTIONS)[number];
+export const RATINGS = ["Buy", "Overweight", "Hold", "Underweight", "Sell"] as const;
+export type Rating = (typeof RATINGS)[number];
 
 export interface AnalystReport {
   role: "technical" | "fundamentals" | "news" | "sentiment";
@@ -30,8 +31,14 @@ export interface ResearchReport {
   keyPoints: string[];
 }
 
+export interface ResearchPlan {
+  recommendation: Rating;
+  rationale: string;
+  strategic_actions: string;
+}
+
 export interface TraderDecision {
-  action: Action;
+  rating: Rating;
   sizingPct: number;
   entryBand?: { low: number; high: number };
   exitPlan?: string;
@@ -47,7 +54,7 @@ export interface RiskReview {
 
 export interface FinalDecision {
   ticker: string;
-  action: Action;
+  rating: Rating;
   sizingPct: number;
   rationale: string;
   exitPlan?: string;
@@ -67,6 +74,7 @@ export interface TeamState {
   asOfDateIso: string;
   analysts: AnalystReport[];
   research: ResearchReport[];
+  researchPlan?: ResearchPlan;
   trader?: TraderDecision;
   risk?: RiskReview;
   final?: FinalDecision;
@@ -104,8 +112,15 @@ export const ResearchOutputSchema = z.object({
 });
 export type ResearchOutput = z.infer<typeof ResearchOutputSchema>;
 
+export const ResearchPlanOutputSchema = z.object({
+  recommendation: z.enum(RATINGS),
+  rationale: z.string().min(1),
+  strategic_actions: z.string().min(1),
+});
+export type ResearchPlanOutput = z.infer<typeof ResearchPlanOutputSchema>;
+
 export const TraderOutputSchema = z.object({
-  action: z.enum(ACTIONS),
+  rating: z.enum(RATINGS),
   sizingPct: z.number().min(0).max(1),
   entryBand: z
     .object({ low: z.number(), high: z.number() })
