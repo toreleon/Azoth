@@ -63,7 +63,7 @@ export function ChartCard({ data }: { data: ChartCardData }) {
 }
 
 export interface BacktestCardInput {
-  persona: string;
+  profileRef: string;
   start: string;
   end: string;
   initialCash: number;
@@ -73,7 +73,7 @@ export interface BacktestCardInput {
 export function BacktestCard({ data }: { data: BacktestCardInput }) {
   const alpha = data.summary.totalReturn - data.summary.benchReturn;
   return (
-    <Panel title={`BACKTEST  ${data.persona}  ${data.start} → ${data.end}`} borderColor={theme.persona}>
+    <Panel title={`BACKTEST  ${data.profileRef}  ${data.start} → ${data.end}`} borderColor={theme.persona}>
       <Box>
         <Text dimColor>cash </Text><Text>{formatBigVnd(data.initialCash)}</Text>
         <Text dimColor>   weeks </Text><Text>{data.summary.weeks}</Text>

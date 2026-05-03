@@ -89,7 +89,7 @@ function AppInner() {
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
 
-  const [persona, setPersona] = useState("balanced");
+  const [profileRef, setProfileRef] = useState("vn-equity@v0");
   const [autonomy, setAutonomy] = useState<Autonomy>(cfg.autonomy);
   const [stats, setStats] = useState<{ inTokens: number; outTokens: number; costUsd: number; sessionId?: string }>({ inTokens: 0, outTokens: 0, costUsd: 0 });
   const [input, setInput] = useState("");
@@ -155,22 +155,22 @@ function AppInner() {
 
   const runBacktest = async (args: string[]) => {
     if (args[0] === "help") {
-      stream.systemMessage("/backtest [persona] [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND]");
+      stream.systemMessage("/backtest [profile@vN] [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND]");
       return;
     }
     if (backtestRef.current?.running) {
       stream.systemMessage("a backtest is already running — Ctrl+B to abort");
       return;
     }
-    const personaArg = args.find((a) => /^[a-z]+$/i.test(a) && !/^\d/.test(a));
+    const profileArg = args.find((a) => /^[a-z][a-z0-9_-]*@v\d+$/i.test(a));
     const dates = args.filter((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
     const cashArg = args.find((a) => /^\d{4,}$/.test(a));
-    const btPersona = personaArg ?? persona;
+    const btProfileRef = profileArg ?? profileRef;
     const start = dates[0] ?? BT_DEFAULTS.start;
     const end = dates[1] ?? BT_DEFAULTS.end;
     const initialCash = cashArg ? Number.parseInt(cashArg, 10) : BT_DEFAULTS.cash;
 
-    stream.systemMessage(`─ /backtest ${btPersona} ${start} → ${end} cash ${formatBigVnd(initialCash)}`);
+    stream.systemMessage(`─ /backtest ${btProfileRef} ${start} → ${end} cash ${formatBigVnd(initialCash)}`);
     stream.systemMessage(`  fetching market data… (Ctrl+B to abort)`);
 
     const ctrl = new AbortController();
@@ -180,7 +180,7 @@ function AppInner() {
 
     try {
       const summary = await runBacktestSession(
-        { persona: btPersona, start, end, initialCash },
+        { profileRef: btProfileRef, start, end, initialCash },
         {
           signal: ctrl.signal,
           onStart: ({ fridays, universe }) => {
@@ -199,7 +199,7 @@ function AppInner() {
         },
       );
       stream.appendCard(
-        <BacktestCard data={{ persona: btPersona, start, end, initialCash, summary }} />,
+        <BacktestCard data={{ profileRef: btProfileRef, start, end, initialCash, summary }} />,
       );
     } catch (e) {
       const msg = (e as Error).message;
@@ -256,7 +256,7 @@ function AppInner() {
             }).join("\n");
         stream.systemMessage(text);
       }
-      else if (cmd === "persona" && arg) setPersona(arg);
+      else if (cmd === "profile" && arg) setProfileRef(arg);
       else if (cmd === "backtest" || cmd === "bt") void runBacktest(rest);
       else if (cmd === "journal") runJournal(rest);
       else if (cmd === "decisions") runJournal(["decisions", ...rest]);
@@ -285,7 +285,7 @@ function AppInner() {
             {it.kind === "welcome" ? (
               <Welcome
                 version="0.1.0"
-                persona={persona}
+                profileRef={profileRef}
                 autonomy={autonomy}
                 broker={cfg.broker}
                 watchlist={cfg.watchlist}
@@ -318,7 +318,7 @@ function AppInner() {
       <StatusBar
         broker={cfg.broker}
         autonomy={autonomy}
-        persona={persona}
+        profileRef={profileRef}
         sessionId={stats.sessionId}
         inTokens={stats.inTokens}
         outTokens={stats.outTokens}

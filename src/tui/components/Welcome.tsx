@@ -14,20 +14,20 @@ const LOGO = [
 const TIPS = [
   ["/quote <TICKER>", "price · technicals · news"],
   ["/positions", "portfolio · PnL · exposures"],
-  ["/backtest", "weekly persona simulation"],
+  ["/backtest", "weekly profile simulation"],
   ["/journal", "decisions · orders · fills · alerts"],
 ];
 
 export interface WelcomeProps {
   version: string;
-  persona: string;
+  profileRef: string;
   autonomy: string;
   broker: string;
   watchlist: string[];
   cwd: string;
 }
 
-export function Welcome({ version, persona, autonomy, broker, watchlist, cwd }: WelcomeProps) {
+export function Welcome({ version, profileRef, autonomy, broker, watchlist, cwd }: WelcomeProps) {
   return (
     <Box
       borderStyle="round"
@@ -44,8 +44,8 @@ export function Welcome({ version, persona, autonomy, broker, watchlist, cwd }: 
         </Box>
         <Box marginTop={1} flexDirection="column">
           <Text>
-            <Text dimColor>persona  </Text>
-            <Text>{persona}</Text>
+            <Text dimColor>profile  </Text>
+            <Text>{profileRef}</Text>
             <Text dimColor>  ·  autonomy  </Text>
             <Text>{autonomy}</Text>
           </Text>

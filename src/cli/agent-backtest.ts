@@ -7,7 +7,7 @@
  *
  *   pnpm tsx src/cli/agent-backtest.ts \
  *     --start=2025-01-01 --end=2025-04-30 \
- *     --persona=balanced [--initial-cash=1000000000]
+ *     --profile=vn-equity@v0 [--initial-cash=1000000000]
  */
 import "../runtime/bootstrap.js";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -15,21 +15,32 @@ import { resolve } from "node:path";
 import { runBacktestSession, type BacktestOptions } from "../agent/backtestRunner.js";
 import { getDb } from "../storage/db.js";
 import { azothPaths } from "../runtime/paths.js";
+import { loadProfile } from "../agent/profileStore.js";
+import { reflectOnRun } from "../agent/reflector.js";
 
-function parseArgs(argv: string[]): BacktestOptions {
-  const out: BacktestOptions = {
+interface CliArgs extends BacktestOptions {
+  reflect: boolean;
+}
+
+function parseArgs(argv: string[]): CliArgs {
+  const out: CliArgs = {
     start: "",
     end: "",
-    persona: "balanced",
+    profileRef: "vn-equity@v0",
     initialCash: 1_000_000_000,
+    reflect: false,
   };
   for (const a of argv) {
+    if (a === "--reflect") {
+      out.reflect = true;
+      continue;
+    }
     const m = /^--([\w-]+)=(.+)$/.exec(a);
     if (!m) continue;
     const [, k, v] = m;
     if (k === "start") out.start = v!;
     if (k === "end") out.end = v!;
-    if (k === "persona") out.persona = v!;
+    if (k === "profile") out.profileRef = v!;
     if (k === "initial-cash") out.initialCash = Number(v);
   }
   if (!out.start || !out.end) {
@@ -68,9 +79,9 @@ async function main() {
   const state = { mode: "idle" as StreamMode, thinkingHeaderShown: false };
 
   const summary = await runBacktestSession(args, {
-    onStart: ({ runId, persona, brokerName, fridays, universe }) => {
+    onStart: ({ runId, profile, brokerName, fridays, universe }) => {
       console.log(`Azoth backtest (agent-driven, dynamic watchlist)`);
-      console.log(`  run_id=${runId}  persona=${persona.id}  broker=${brokerName}`);
+      console.log(`  run_id=${runId}  profile=${profile.id}@v${profile.version}  broker=${brokerName}`);
       console.log(`  ${args.start} → ${args.end}`);
       console.log(`  discovery universe: ${universe.length} tickers (agent picks 5–10/week)`);
       console.log(`  initial cash: ${(args.initialCash / 1e6).toFixed(0)}M VND\n`);
@@ -144,6 +155,33 @@ async function main() {
     JSON.stringify({ ...summary, equity: equityRows, trades: tradeRows }, null, 2),
   );
   console.log(`  report: ${reportPath}`);
+
+  if (args.reflect) {
+    console.log("");
+    console.log("=== Reflection ===");
+    try {
+      const parent = loadProfile(args.profileRef);
+      const result = await reflectOnRun(parent, summary.runId, {
+        initialCash: summary.initialCash,
+        finalMtm: summary.finalMtm,
+        finalBench: summary.finalBench,
+        totalReturn: summary.totalReturn,
+        benchReturn: summary.benchReturn,
+        alpha: summary.totalReturn - summary.benchReturn,
+        maxDD: summary.maxDD,
+        weeks: summary.weeks,
+        trades: summary.trades,
+      });
+      if (result.changed) {
+        console.log(`  ${result.parentRef} → ${result.childRef}`);
+        console.log(`  diff: ${JSON.stringify(result.diff)}`);
+      } else {
+        console.log(`  no change (parent ${result.parentRef} kept)`);
+      }
+    } catch (err) {
+      console.error(`  reflection failed: ${(err as Error).message}`);
+    }
+  }
 }
 
 main().catch((err) => {

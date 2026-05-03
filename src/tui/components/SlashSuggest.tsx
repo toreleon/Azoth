@@ -9,7 +9,7 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: "backtest", args: "[persona] [start] [end] [cash]", description: "Run a weekly backtest, results inline" },
+  { name: "backtest", args: "[profile@vN] [start] [end] [cash]", description: "Run a weekly backtest, results inline" },
   { name: "journal", args: "[decisions|orders|fills|alerts] [N]", description: "Print latest journal rows inline" },
   { name: "decisions", args: "[N]", description: "Latest decisions" },
   { name: "orders", args: "[N]", description: "Latest broker orders" },
@@ -18,7 +18,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "chart", args: "<ticker>", description: "ASCII chart for a ticker" },
   { name: "positions", description: "Show current portfolio positions" },
   { name: "alerts", description: "Ask the agent about active alerts" },
-  { name: "persona", args: "<id>", description: "balanced · momentum · value · bluechip" },
+  { name: "profile", args: "<id>@v<n>", description: "Switch active agent profile (e.g. vn-equity@v0)" },
   { name: "new", description: "Start a fresh resumable session" },
   { name: "resume", args: "[id]", description: "Resume latest or a specific session" },
   { name: "sessions", description: "List recent project sessions" },

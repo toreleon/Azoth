@@ -14,12 +14,11 @@ function main() {
   loadConfig();
   getDb();
 
-  // Enter the terminal's alternate screen buffer. Ink's log-update can't do
-  // in-place line patching when its dynamic frame exceeds the visible rows
-  // (it ends up re-clearing/re-emitting the frame, which the user sees as
-  // flicker). The alt buffer gives Ink a clean fixed canvas + clears
-  // scrollback on exit so the user's prior shell history is preserved.
-  const enteredAlt = process.stdout.isTTY;
+  // Keep the app in the main screen buffer by default so Ink's <Static>
+  // history is available in normal terminal scrollback. The alternate screen
+  // can still be useful for demos or constrained terminals, but it hides old
+  // messages from the user's scrollback in many terminal emulators.
+  const enteredAlt = process.stdout.isTTY && process.env.AZOTH_ALT_SCREEN === "1";
   if (enteredAlt) process.stdout.write("\x1b[?1049h\x1b[H");
 
   const exitAlt = () => {

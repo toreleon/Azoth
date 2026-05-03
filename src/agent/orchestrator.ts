@@ -23,7 +23,8 @@ import {
 } from "../tools/order.js";
 import { loadConfig } from "../config/loader.js";
 import { asOfClock, setActiveAsOf, type AsOfStore } from "./clock.js";
-import type { AgentPersona } from "./personas.js";
+import { type AgentProfile, profileRef, renderProfilePrompt } from "./profile.js";
+import { type RenderedMemory, renderMemoryPrompt } from "./memory.js";
 import {
   activateSession,
   appendSessionRecord,
@@ -393,10 +394,24 @@ export async function* runTurn(prompt: string) {
 
 // ---------- Backtest mode ---------------------------------------------------
 
+export interface BacktestPromptExtras {
+  memory?: RenderedMemory;
+  /** True if max-drawdown floor was breached on the previous turn. */
+  defensiveFreeze?: boolean;
+}
+
 export function buildBacktestSystemPrompt(
-  persona: AgentPersona,
+  profile: AgentProfile,
   asOfDateIso: string,
+  extras: BacktestPromptExtras = {},
 ): string {
+  const memorySection = extras.memory ? renderMemoryPrompt(extras.memory) : "";
+  const freezeSection = extras.defensiveFreeze
+    ? [
+        "",
+        "DEFENSIVE FREEZE: drawdown breached the profile's maxDrawdownFloor on the prior turn. The harness will reject new BUY orders this turn. You may HOLD or SELL to reduce exposure, and journal a recovery plan.",
+      ].join("\n")
+    : "";
   return [
     "You are Azoth running in BACKTEST MODE.",
     "Treat the simulated current date provided at the end of this prompt as 'today' — every tool call returns data as of that date. Do NOT mention or assume access to information beyond it.",
@@ -415,25 +430,28 @@ export function buildBacktestSystemPrompt(
     "1. Each turn represents one Friday close. You decide what to do for the coming week.",
     "2. Start with broker_state, then discover_tickers (criterion of your choice), then technical_indicators on the top 3–5 candidates.",
     "3. For every ticker you act on or explicitly skip, call journal_append with action ∈ {BUY,SELL,HOLD,WATCH} and a short rationale.",
-    "4. Place trades via place_order. MARKET orders fill at this Friday's close ± slippage. Position size: keep any single name ≤15% of equity.",
+    "4. Place trades via place_order. MARKET orders fill at this Friday's close ± slippage.",
     "5. VN settlement is T+2.5 (HOSE/HNX/UPCOM): you cannot sell shares the same day you buy them. Weekly cadence makes this a non-issue, but plan exits ≥1 week from entry.",
     "6. Be decisive. Brief output. The harness only cares about your tool calls.",
     "",
-    persona.systemPromptAppend,
+    renderProfilePrompt(profile),
+    memorySection ? `\n${memorySection}` : "",
+    freezeSection,
     "",
     `Simulated today: ${asOfDateIso}.`,
-  ].join("\n");
+  ].filter((s) => s !== "").join("\n");
 }
 
 export function buildBacktestOptions(opts: {
-  persona: AgentPersona;
+  profile: AgentProfile;
   asOfDateIso: string;
   resume?: string;
+  extras?: BacktestPromptExtras;
 }): Options {
   const cfg = loadConfig();
   return {
     model: cfg.model,
-    systemPrompt: buildBacktestSystemPrompt(opts.persona, opts.asOfDateIso),
+    systemPrompt: buildBacktestSystemPrompt(opts.profile, opts.asOfDateIso, opts.extras),
     ...(opts.resume ? { resume: opts.resume } : {}),
     mcpServers: {
       vnstock: buildMcpServer(),
@@ -458,11 +476,12 @@ export function buildBacktestOptions(opts: {
 }
 
 export interface BacktestTurnContext {
-  persona: AgentPersona;
+  profile: AgentProfile;
   asOfStore: AsOfStore;
   asOfDateIso: string;
   /** Resume token from the previous week of the same run. */
   resume?: string;
+  extras?: BacktestPromptExtras;
 }
 
 /**
@@ -477,9 +496,10 @@ export async function* runBacktestTurn(
   // We need an async generator that runs *inside* asOfClock.run. ALS preserves
   // the store across awaits, so wrapping the generator body works.
   const opts = buildBacktestOptions({
-    persona: ctx.persona,
+    profile: ctx.profile,
     asOfDateIso: ctx.asOfDateIso,
     resume: ctx.resume,
+    extras: ctx.extras,
   });
   // Set module-level override so tool handlers dispatched from the SDK's
   // MCP bridge (which loses ALS context) still see the simulated date and

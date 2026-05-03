@@ -3,6 +3,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export interface AsOfStore {
   asOfSec: number;
   brokerName?: string;
+  /** When set, BUY orders are rejected by the risk guardrail (drawdown freeze). */
+  freezeBuys?: boolean;
 }
 
 // ALS keeps in-process call-chains (e.g. pre-fetch loops) clean,
@@ -27,6 +29,11 @@ export function nowSec(): number {
 export function currentBrokerName(): string | undefined {
   if (override) return override.brokerName;
   return asOfClock.getStore()?.brokerName;
+}
+
+export function currentFreezeBuys(): boolean {
+  if (override) return override.freezeBuys === true;
+  return asOfClock.getStore()?.freezeBuys === true;
 }
 
 export function isAsOfOverridden(): boolean {

@@ -1,6 +1,6 @@
 import { loadConfig } from "../config/loader.js";
 import type { Broker, PlaceOrderInput } from "../broker/types.js";
-import { currentBrokerName } from "../agent/clock.js";
+import { currentBrokerName, currentFreezeBuys } from "../agent/clock.js";
 
 export interface GuardrailResult {
   ok: boolean;
@@ -33,6 +33,10 @@ export async function checkOrder(
       : cfg.watchlist;
   if (!allowed.map((t) => t.toUpperCase()).includes(ticker)) {
     reasons.push(`ticker ${ticker} is not in watchlist/whitelist`);
+  }
+
+  if (input.side === "BUY" && currentFreezeBuys()) {
+    reasons.push("drawdown circuit breaker active: BUY orders are frozen this turn");
   }
 
   if (input.side === "BUY") {

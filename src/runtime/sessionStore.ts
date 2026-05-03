@@ -33,7 +33,7 @@ export interface SessionRecord {
   costUsd?: number;
   model?: string;
   autonomy?: string;
-  persona?: string;
+  profileRef?: string;
   title?: string;
 }
 
@@ -46,7 +46,7 @@ export interface SessionIndexEntry {
   updatedAt: number;
   model?: string;
   autonomy?: string;
-  persona?: string;
+  profileRef?: string;
 }
 
 export interface ActiveSession {
@@ -118,7 +118,7 @@ export function createSession(meta: {
   title?: string;
   model?: string;
   autonomy?: string;
-  persona?: string;
+  profileRef?: string;
 } = {}): SessionIndexEntry {
   const cwd = meta.cwd ?? process.cwd();
   const id = randomUUID();
@@ -131,7 +131,7 @@ export function createSession(meta: {
     updatedAt: createdAt,
     model: meta.model,
     autonomy: meta.autonomy,
-    persona: meta.persona,
+    profileRef: meta.profileRef,
   };
   mkdirSync(sessionPaths(cwd).dir, { recursive: true });
   writeFileSync(sessionFile(id, cwd), "", { encoding: "utf8", flag: "wx" });
@@ -145,7 +145,7 @@ export function createSession(meta: {
     title: entry.title,
     model: meta.model,
     autonomy: meta.autonomy,
-    persona: meta.persona,
+    profileRef: meta.profileRef,
   }, cwd);
   return entry;
 }
@@ -163,7 +163,7 @@ export function setActiveSession(active: ActiveSession, cwd = process.cwd()): vo
 
 export function touchSession(
   id: string,
-  updates: Partial<Pick<SessionIndexEntry, "sdkSessionId" | "title" | "model" | "autonomy" | "persona">> = {},
+  updates: Partial<Pick<SessionIndexEntry, "sdkSessionId" | "title" | "model" | "autonomy" | "profileRef">> = {},
   cwd = process.cwd(),
 ): void {
   const sessions = listSessions(cwd);

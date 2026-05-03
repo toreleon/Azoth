@@ -17,6 +17,7 @@
     "azoth:init": "tsx src/cli/azoth-init.ts",
     "backtest": "tsx src/cli/agent-backtest.ts",
     "backtest:rsi": "tsx src/cli/rsi-backtest.ts",
+    "evolve": "tsx src/cli/evolve.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/cli.js",
     "test": "vitest run",

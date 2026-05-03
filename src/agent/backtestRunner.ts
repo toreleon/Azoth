@@ -4,7 +4,9 @@ import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
 import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
 import { runBacktestTurn } from "./orchestrator.js";
-import { getPersona, type AgentPersona } from "./personas.js";
+import { type AgentProfile, profileRef } from "./profile.js";
+import { loadProfile } from "./profileStore.js";
+import { loadTurnMemory } from "./memory.js";
 import { DISCOVERY_UNIVERSE } from "../tools/discover.js";
 import { getCacheStats, resetCacheStats } from "../data/cache.js";
 import { replayOrRecord } from "./llmReplayCache.js";
@@ -12,7 +14,8 @@ import { replayOrRecord } from "./llmReplayCache.js";
 export interface BacktestOptions {
   start: string;
   end: string;
-  persona: string;
+  /** Profile reference in `<id>@v<n>` form, e.g. "vn-equity@v0". */
+  profileRef: string;
   initialCash: number;
 }
 
@@ -44,7 +47,7 @@ export interface EquityPayload {
 
 export interface SummaryPayload {
   runId: string;
-  persona: string;
+  profileRef: string;
   start: string;
   end: string;
   initialCash: number;
@@ -62,7 +65,7 @@ export interface SummaryPayload {
 }
 
 export interface BacktestCallbacks {
-  onStart?: (info: { runId: string; persona: AgentPersona; brokerName: string; fridays: number[]; universe: string[] }) => void;
+  onStart?: (info: { runId: string; profile: AgentProfile; brokerName: string; fridays: number[]; universe: string[] }) => void;
   onTurnStart?: (info: { asOf: number; dateIso: string }) => void;
   onStreamEvent?: (ev: unknown) => void;
   onTurnEnd?: (turn: TurnResultPayload) => void;
@@ -111,7 +114,8 @@ export async function runBacktestSession(
   cb: BacktestCallbacks = {},
 ): Promise<SummaryPayload> {
   const cfg = loadConfig();
-  const persona = getPersona(opts.persona);
+  const profile = loadProfile(opts.profileRef);
+  const ref = profileRef(profile);
   const universe = [...DISCOVERY_UNIVERSE];
   const db = getDb();
 
@@ -136,7 +140,7 @@ export async function runBacktestSession(
   const fridays = fridayCloses(vnindex, startSec, endSec);
   if (fridays.length === 0) throw new Error("no Friday trading days in range");
 
-  cb.onStart?.({ runId, persona, brokerName, fridays, universe });
+  cb.onStart?.({ runId, profile, brokerName, fridays, universe });
 
   db.prepare(
     `INSERT INTO backtest_runs
@@ -144,11 +148,11 @@ export async function runBacktestSession(
      VALUES (?, ?, ?, ?, 'weekly', ?, ?, ?)`,
   ).run(
     runId,
-    persona.id,
+    ref,
     startSec,
     endSec,
     opts.initialCash,
-    JSON.stringify({ universe, model: cfg.model, broker: brokerName }),
+    JSON.stringify({ universe, model: cfg.model, broker: brokerName, profileRef: ref }),
     Math.floor(Date.now() / 1000),
   );
 
@@ -160,6 +164,8 @@ export async function runBacktestSession(
   if (vnindexBaseline == null) throw new Error("no VNINDEX data at first Friday");
 
   let resume: string | undefined;
+  let peakMtm = opts.initialCash;
+  let freezeBuys = false;
 
   for (const asOf of fridays) {
     if (cb.signal?.aborted) break;
@@ -190,13 +196,17 @@ export async function runBacktestSession(
     let cacheCreationTokens = 0;
 
     resetCacheStats();
-    const replayKey = `bt|${cfg.model}|${persona.id}|${dateIso}|${resume ?? "0"}|${prompt}`;
+    const memory = loadTurnMemory(profile.id, asOf, [profile.params.discoveryCriterion]);
+    const extras = { memory, defensiveFreeze: freezeBuys };
+    const memHash = memory.long.length + memory.mid.length;
+    const replayKey = `bt|${cfg.model}|${ref}|${dateIso}|${resume ?? "0"}|${freezeBuys ? "F" : "_"}|${memHash}|${prompt}`;
     const stream = replayOrRecord(replayKey, cfg.model, prompt, () =>
       runBacktestTurn(prompt, {
-        persona,
-        asOfStore: { asOfSec: asOf, brokerName },
+        profile,
+        asOfStore: { asOfSec: asOf, brokerName, freezeBuys },
         asOfDateIso: dateIso,
         resume,
+        extras,
       }),
     );
 
@@ -284,6 +294,10 @@ export async function runBacktestSession(
     ).run(runId, asOf, snap.cashVnd, mtm, benchmarkMtm);
 
     cb.onEquity?.({ asOf, dateIso, cashVnd: snap.cashVnd, mtmVnd: mtm, benchmarkMtmVnd: benchmarkMtm });
+
+    peakMtm = Math.max(peakMtm, mtm);
+    const drawdown = 1 - mtm / peakMtm;
+    freezeBuys = drawdown > profile.params.maxDrawdownFloor;
   }
 
   broker.setPriceOverride(null);
@@ -318,7 +332,7 @@ export async function runBacktestSession(
 
   const summary: SummaryPayload = {
     runId,
-    persona: persona.id,
+    profileRef: ref,
     start: opts.start,
     end: opts.end,
     initialCash: opts.initialCash,

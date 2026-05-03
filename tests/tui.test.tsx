@@ -86,7 +86,7 @@ describe("Azoth TUI", () => {
     await type(stdin, "/backtest help");
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("/backtest");
-    expect(out).toContain("[persona]");
+    expect(out).toContain("[profile@vN]");
     unmount();
   });
 
@@ -102,14 +102,14 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("typing /per filters to /persona", async () => {
+  it("typing /pro filters to /profile", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
-    stdin.write("/per");
+    stdin.write("/pro");
     await tick();
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("/persona");
-    expect(out).toContain("balanced · momentum · value · bluechip");
+    expect(out).toContain("/profile");
+    expect(out).toContain("Switch active agent profile");
     unmount();
   });
 
@@ -124,13 +124,13 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("bottom status shows persona, autonomy, hint", async () => {
+  it("bottom status shows profile ref, autonomy, hint", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
-    await type(stdin, "/persona momentum");
+    await type(stdin, "/profile vn-equity@v1");
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("advisory");
-    expect(out).toContain("momentum");
+    expect(out).toContain("vn-equity@v1");
     expect(out).toMatch(/Ctrl\+A|Ctrl\+C|\/backtest/);
     unmount();
   });

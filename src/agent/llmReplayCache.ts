@@ -5,7 +5,7 @@ import { getDb } from "../storage/db.js";
  * Replay-mode LLM cache for backtest re-runs.
  *
  * When VNSTOCK_LLM_REPLAY=1 is set, every turn's full SDK message stream is
- * keyed (sha256 of model + persona + as-of + prompt + resume id) and stored
+ * keyed (sha256 of model + profile ref + as-of + prompt + resume id) and stored
  * in `llm_response_cache`. Subsequent runs with the same key replay the
  * cached message stream verbatim — no LLM call, no broker mutation, no tool
  * dispatch happens. Use this only for analytics/metrics iteration; the
