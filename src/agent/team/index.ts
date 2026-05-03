@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   AnalystOutputSchema,
+  NavFractionSchema,
   ResearchPlanOutputSchema,
   ResearchOutputSchema,
   RiskOutputSchema,
@@ -25,6 +26,10 @@ import {
   researchManagerPrompt,
   riskPrompt,
   sentimentPrompt,
+  teamBearQuestionPrompt,
+  teamBullQuestionPrompt,
+  teamPortfolioQuestionPrompt,
+  teamRiskQuestionPrompt,
   technicalPrompt,
   traderPrompt,
 } from "./prompts.js";
@@ -39,6 +44,7 @@ import { z } from "zod";
 const SYSTEM_OPERATING_RULES = [
   "You are part of Azoth's multi-agent VN-equity desk.",
   "Always ground claims in tool output; do not invent figures.",
+  "Use WebSearch for current open-web context when Azoth's market/news tools are insufficient. Cite URLs and dates for web-sourced claims.",
   "Cite tickers in uppercase. Prices are in thousand VND on DNSE/SSI.",
   "Settlement is T+2.5 — never propose same-day round-trips.",
 ].join("\n");
@@ -56,14 +62,38 @@ const ANALYST_DEFINITIONS: Array<{
 export interface RunTeamOptions {
   emit?: (ev: TeamEvent) => void;
   modelOverride?: string;
+  allowWebSearch?: boolean;
 }
 
 const PortfolioOutputSchema = z.object({
   rating: z.enum(RATINGS),
-  sizingPct: z.number().min(0).max(1),
+  sizingPct: NavFractionSchema,
   exitPlan: z.string().optional(),
   rationale: z.string().min(20),
 });
+
+const TeamQuestionOutputSchema = z.object({
+  answer: z.string().min(1),
+  recommendation: z.string().min(1),
+  keyReasons: z.array(z.string()).default([]),
+  risks: z.array(z.string()).default([]),
+  nextActions: z.array(z.string()).default([]),
+});
+
+export type TeamQuestionDecision = z.infer<typeof TeamQuestionOutputSchema> & {
+  question: string;
+  asOfDateIso: string;
+  teamRunId: string;
+};
+
+export interface TeamQuestionState {
+  runId: string;
+  question: string;
+  asOfDateIso: string;
+  research: ResearchReport[];
+  risk?: RiskReview;
+  final?: TeamQuestionDecision;
+}
 
 export async function runTeamAnalysis(
   input: TeamInput,
@@ -100,6 +130,7 @@ export async function runTeamAnalysis(
         schema: AnalystOutputSchema,
         emit,
         modelOverride: opts.modelOverride,
+        allowWebSearch: opts.allowWebSearch,
       });
       const report: AnalystReport = {
         role: def.role,
@@ -123,6 +154,7 @@ export async function runTeamAnalysis(
       round,
       emit,
       modelOverride: opts.modelOverride,
+      allowWebSearch: opts.allowWebSearch,
     });
     const bullReport: ResearchReport = {
       role: "bull",
@@ -141,6 +173,7 @@ export async function runTeamAnalysis(
       round,
       emit,
       modelOverride: opts.modelOverride,
+      allowWebSearch: opts.allowWebSearch,
     });
     const bearReport: ResearchReport = {
       role: "bear",
@@ -160,6 +193,7 @@ export async function runTeamAnalysis(
     schema: ResearchPlanOutputSchema,
     emit,
     modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
   });
   const researchPlan = {
     recommendation: researchPlanOut.recommendation,
@@ -177,11 +211,12 @@ export async function runTeamAnalysis(
     schema: TraderOutputSchema,
     emit,
     modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
   });
   const trader: TraderDecision = {
     rating: traderOut.rating,
     sizingPct: traderOut.sizingPct,
-    entryBand: traderOut.entryBand,
+    entryBand: traderOut.entryBand as TraderDecision["entryBand"],
     exitPlan: traderOut.exitPlan,
     rationale: traderOut.rationale,
   };
@@ -196,6 +231,7 @@ export async function runTeamAnalysis(
     schema: RiskOutputSchema,
     emit,
     modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
   });
   const risk: RiskReview = {
     approved: riskOut.approved,
@@ -221,6 +257,7 @@ export async function runTeamAnalysis(
     schema: PortfolioOutputSchema,
     emit,
     modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
   });
   recordRoleOutput(runId, "portfolio", 0, pmOut, pmRaw.usage);
 
@@ -247,6 +284,112 @@ export async function runTeamAnalysis(
   });
   state.final = decision;
   emit({ type: "final", decision });
+
+  return { state, decision };
+}
+
+export async function runTeamQuestion(
+  question: string,
+  opts: RunTeamOptions = {},
+): Promise<{ state: TeamQuestionState; decision: TeamQuestionDecision }> {
+  const trimmed = question.trim();
+  if (!trimmed) throw new Error("team question is required");
+
+  const asOfDateIso = new Date().toISOString().slice(0, 10);
+  const runId = randomUUID();
+  const events: TeamEvent[] = [];
+  const emit = (ev: TeamEvent) => {
+    events.push(ev);
+    opts.emit?.(ev);
+  };
+
+  recordTeamRunStart(runId, "TEAM", asOfDateIso);
+  emit({ type: "run_start", runId, ticker: "TEAM" });
+
+  const state: TeamQuestionState = {
+    runId,
+    question: trimmed,
+    asOfDateIso,
+    research: [],
+  };
+
+  const { output: bullOut, raw: bullRaw } = await runRole({
+    role: "bull",
+    systemPrompt: SYSTEM_OPERATING_RULES,
+    userPrompt: teamBullQuestionPrompt(trimmed, asOfDateIso),
+    schema: ResearchOutputSchema,
+    round: 1,
+    emit,
+    modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
+  });
+  const bullReport: ResearchReport = {
+    role: "bull",
+    round: 1,
+    thesis: bullOut.thesis,
+    keyPoints: bullOut.keyPoints ?? [],
+  };
+  state.research.push(bullReport);
+  recordRoleOutput(runId, "bull", 1, bullReport, bullRaw.usage);
+
+  const { output: bearOut, raw: bearRaw } = await runRole({
+    role: "bear",
+    systemPrompt: SYSTEM_OPERATING_RULES,
+    userPrompt: teamBearQuestionPrompt(trimmed, asOfDateIso, state.research),
+    schema: ResearchOutputSchema,
+    round: 1,
+    emit,
+    modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
+  });
+  const bearReport: ResearchReport = {
+    role: "bear",
+    round: 1,
+    thesis: bearOut.thesis,
+    keyPoints: bearOut.keyPoints ?? [],
+  };
+  state.research.push(bearReport);
+  recordRoleOutput(runId, "bear", 1, bearReport, bearRaw.usage);
+
+  const { output: riskOut, raw: riskRaw } = await runRole({
+    role: "risk",
+    systemPrompt: SYSTEM_OPERATING_RULES,
+    userPrompt: teamRiskQuestionPrompt(trimmed, asOfDateIso, state.research),
+    schema: RiskOutputSchema,
+    emit,
+    modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
+  });
+  const risk: RiskReview = {
+    approved: riskOut.approved,
+    adjustedSizingPct: riskOut.adjustedSizingPct,
+    concerns: riskOut.concerns ?? [],
+    notes: riskOut.notes ?? "",
+  };
+  state.risk = risk;
+  recordRoleOutput(runId, "risk", 0, risk, riskRaw.usage);
+
+  const { output: finalOut, raw: finalRaw } = await runRole({
+    role: "portfolio",
+    systemPrompt: SYSTEM_OPERATING_RULES,
+    userPrompt: teamPortfolioQuestionPrompt(trimmed, asOfDateIso, state.research, risk),
+    schema: TeamQuestionOutputSchema,
+    emit,
+    modelOverride: opts.modelOverride,
+    allowWebSearch: opts.allowWebSearch,
+  });
+  const decision: TeamQuestionDecision = {
+    answer: finalOut.answer,
+    recommendation: finalOut.recommendation,
+    keyReasons: finalOut.keyReasons ?? [],
+    risks: finalOut.risks ?? [],
+    nextActions: finalOut.nextActions ?? [],
+    question: trimmed,
+    asOfDateIso,
+    teamRunId: runId,
+  };
+  state.final = decision;
+  recordRoleOutput(runId, "portfolio", 0, decision, finalRaw.usage);
 
   return { state, decision };
 }

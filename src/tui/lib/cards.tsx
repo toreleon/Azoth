@@ -1,70 +1,13 @@
-import React from "react";
 import { Box, Text } from "ink";
 import { Panel } from "../components/Panel.js";
-import { theme, glyph } from "./theme.js";
-import { vnColor, pctColor, pnlColor } from "./colors.js";
-import { formatBigVnd, formatPct, formatPrice, truncate } from "./format.js";
+import { theme } from "./theme.js";
+import { pctColor, pnlColor } from "./colors.js";
+import { formatBigVnd, formatPct, truncate } from "./format.js";
 import type { JournalTab, JournalRow } from "./journal.js";
 import type { SummaryPayload } from "../../agent/backtestRunner.js";
 import type { FinalDecision, TeamState } from "../../agent/team/state.js";
 
-export interface QuoteCardData {
-  ticker: string;
-  last: number | null;
-  ref?: number | null;
-  ceiling?: number | null;
-  floor?: number | null;
-  chgPct?: number | null;
-  rsi14?: number | null;
-  macdSig?: string | null;
-  headline?: string | null;
-}
-
-export function QuoteCard({ data }: { data: QuoteCardData }) {
-  const arrow = data.chgPct == null ? glyph.flat : data.chgPct > 0 ? glyph.up : data.chgPct < 0 ? glyph.down : glyph.flat;
-  const border = vnColor(data.last, data.ref ?? null, data.ceiling ?? null, data.floor ?? null);
-  return (
-    <Panel title={`QUOTE  ${data.ticker}`} borderColor={border}>
-      <Box>
-        <Text bold>{formatPrice(data.last)}</Text>
-        <Text color={pctColor(data.chgPct ?? null)}>  {arrow} {formatPct(data.chgPct ?? null)}</Text>
-        {data.ref != null ? <Text dimColor>   ref {formatPrice(data.ref)}</Text> : null}
-        {data.ceiling != null ? <Text color={theme.ceiling}>   ceil {formatPrice(data.ceiling)}</Text> : null}
-        {data.floor != null ? <Text color={theme.floor}>   floor {formatPrice(data.floor)}</Text> : null}
-      </Box>
-      {(data.rsi14 != null || data.macdSig) ? (
-        <Box>
-          {data.rsi14 != null ? <Text dimColor>RSI {data.rsi14.toFixed(0)}</Text> : null}
-          {data.macdSig ? <Text dimColor>   MACD {data.macdSig}</Text> : null}
-        </Box>
-      ) : null}
-      {data.headline ? (
-        <Box marginTop={0}><Text color={theme.muted}>{truncate(data.headline, 80)}</Text></Box>
-      ) : null}
-    </Panel>
-  );
-}
-
-export interface ChartCardData {
-  ticker: string;
-  timeframe: string;
-  asciiBody: string;
-  levels?: string | null;
-}
-
-export function ChartCard({ data }: { data: ChartCardData }) {
-  return (
-    <Panel title={`CHART  ${data.ticker}  ${data.timeframe}`} borderColor={theme.accent}>
-      {data.asciiBody.split("\n").map((line, i) => (
-        <Text key={i}>{line}</Text>
-      ))}
-      {data.levels ? <Box marginTop={1}><Text color={theme.muted}>{data.levels}</Text></Box> : null}
-    </Panel>
-  );
-}
-
 export interface BacktestCardInput {
-  profileRef: string;
   start: string;
   end: string;
   initialCash: number;
@@ -74,11 +17,14 @@ export interface BacktestCardInput {
 export function BacktestCard({ data }: { data: BacktestCardInput }) {
   const alpha = data.summary.totalReturn - data.summary.benchReturn;
   return (
-    <Panel title={`BACKTEST  ${data.profileRef}  ${data.start} → ${data.end}`} borderColor={theme.persona}>
+    <Panel title={`BACKTEST  ${data.start} → ${data.end}`} borderColor={theme.persona}>
       <Box>
         <Text dimColor>cash </Text><Text>{formatBigVnd(data.initialCash)}</Text>
         <Text dimColor>   weeks </Text><Text>{data.summary.weeks}</Text>
         <Text dimColor>   trades </Text><Text>{data.summary.trades}</Text>
+        {data.summary.rejectedTrades ? (
+          <><Text dimColor>   rejected </Text><Text color={theme.down}>{data.summary.rejectedTrades}</Text></>
+        ) : null}
         <Text dimColor>   cost </Text><Text>${data.summary.totalCost.toFixed(4)}</Text>
       </Box>
       <Box>
@@ -155,6 +101,55 @@ export function TeamDecisionCard({ data }: { data: TeamDecisionCardInput }) {
         <Text>{truncate(decision.rationale, 240)}</Text>
         {decision.exitPlan ? (
           <Text dimColor>exit · {truncate(decision.exitPlan, 100)}</Text>
+        ) : null}
+      </Box>
+    </Panel>
+  );
+}
+
+export interface TeamQuestionCardInput {
+  question: string;
+  asOfDateIso: string;
+  teamRunId: string;
+  answer: string;
+  recommendation: string;
+  keyReasons: string[];
+  risks: string[];
+  nextActions: string[];
+}
+
+export function TeamQuestionCard({ data }: { data: TeamQuestionCardInput }) {
+  return (
+    <Panel title={`TEAM QUESTION  ${data.asOfDateIso}`} borderColor={theme.persona} badge={data.teamRunId.slice(0, 8)}>
+      <Box flexDirection="column">
+        <Text dimColor>{truncate(data.question, 96)}</Text>
+        <Box marginTop={1}>
+          <Text bold>{data.recommendation}</Text>
+        </Box>
+        <Text>{truncate(data.answer, 280)}</Text>
+        {data.keyReasons.length ? (
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>reasons</Text>
+            {data.keyReasons.slice(0, 4).map((r, i) => (
+              <Text key={i}>- {truncate(r, 120)}</Text>
+            ))}
+          </Box>
+        ) : null}
+        {data.risks.length ? (
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>risks</Text>
+            {data.risks.slice(0, 3).map((r, i) => (
+              <Text key={i}>- {truncate(r, 120)}</Text>
+            ))}
+          </Box>
+        ) : null}
+        {data.nextActions.length ? (
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>next</Text>
+            {data.nextActions.slice(0, 3).map((a, i) => (
+              <Text key={i}>- {truncate(a, 120)}</Text>
+            ))}
+          </Box>
         ) : null}
       </Box>
     </Panel>

@@ -94,6 +94,19 @@ describe("PaperBroker contract", () => {
     expect(o.rejectReason).toMatch(/insufficient/i);
   });
 
+  it("can persist guardrail-blocked backtest attempts as rejected orders", async () => {
+    const o = await broker.recordRejectedOrder!({
+      ticker: "BID",
+      side: "BUY",
+      type: "MARKET",
+      quantity: 2600,
+    }, "guardrail_blocked: order notional exceeds max");
+    expect(o.status).toBe("REJECTED");
+    expect(o.rejectReason).toContain("guardrail_blocked");
+    const rows = await broker.listOrders({ status: "REJECTED", limit: 10 });
+    expect(rows.some((r) => r.id === o.id)).toBe(true);
+  });
+
   it("listOrders returns recent orders most-recent first", async () => {
     const orders = await broker.listOrders({ limit: 10 });
     expect(orders.length).toBeGreaterThan(0);

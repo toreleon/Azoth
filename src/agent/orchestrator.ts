@@ -22,8 +22,6 @@ import {
   brokerStateTool,
 } from "../tools/order.js";
 import { loadConfig } from "../config/loader.js";
-import { asOfClock, setActiveAsOf, type AsOfStore } from "./clock.js";
-import { type AgentProfile, renderProfilePrompt } from "./profile.js";
 import {
   activateSession,
   appendSessionRecord,
@@ -42,7 +40,9 @@ export function buildSystemPrompt(): string {
   const cfg = loadConfig();
   return [
     "You are Azoth, an investment analyst for the Vietnamese stock market (HOSE / HNX / UPCOM).",
-    `Current autonomy mode: ${cfg.autonomy}. Phase 1 is advisory only — you have NO order-placement tools yet.`,
+    cfg.autonomy === "advisory"
+      ? "Current autonomy mode: advisory. Order-placement tools are unavailable."
+      : `Current autonomy mode: ${cfg.autonomy}. Order-placement tools are available through the configured ${cfg.broker} broker.`,
     `Default watchlist: ${cfg.watchlist.join(", ")}.`,
     "",
     "Tools available:",
@@ -51,6 +51,7 @@ export function buildSystemPrompt(): string {
     "- technical_indicators: compute RSI / MACD / SMA / EMA / Bollinger from DNSE bars.",
     "- fundamentals_snapshot: P/E, P/B, ROE, ROA, EPS, BVPS, market cap, recent quarterly ratios (VNDirect Finfo + CafeF).",
     "- ticker_news: recent news, industry news, and company disclosures from CafeF.",
+    "- WebSearch: open-web search for current context not covered by Azoth data tools. Cite URLs and dates; prefer Azoth market tools for prices, financials, and VN ticker news.",
     "- macro_indices: VNINDEX/VN30/HNXINDEX/UPCOMINDEX latest close + 1d/1w/1m % change.",
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
     "- portfolio_list / portfolio_record / portfolio_remove: read and update the user's positions in local SQLite. Avg cost is in thousand VND.",
@@ -119,10 +120,12 @@ export function buildOptions(opts: { resume?: string } = {}): Options {
       vnstock: buildMcpServer(),
     },
     includePartialMessages: true,
-    // Restrict to our MCP tools — the SDK's default toolset (Bash, Read, Edit,
-    // Task, …) is unnecessary for an analyst agent and can confuse non-Claude
-    // models like GLM into recursive subagent calls.
+    // Restrict Claude Code built-ins to WebSearch. Bash, Read, Edit, Task, …
+    // are unnecessary for an analyst agent and can confuse non-Claude models
+    // like GLM into recursive subagent calls.
+    tools: ["WebSearch"],
     allowedTools: [
+      "WebSearch",
       "mcp__vnstock__market_quote",
       "mcp__vnstock__market_ohlcv",
       "mcp__vnstock__technical_indicators",
@@ -389,126 +392,4 @@ export async function* runTurn(prompt: string) {
     }
   }
   flushCurrentBlock();
-}
-
-// ---------- Backtest mode ---------------------------------------------------
-
-export interface BacktestPromptExtras {
-  /** True if max-drawdown floor was breached on the previous turn. */
-  defensiveFreeze?: boolean;
-}
-
-export function buildBacktestSystemPrompt(
-  profile: AgentProfile,
-  asOfDateIso: string,
-  extras: BacktestPromptExtras = {},
-): string {
-  const freezeSection = extras.defensiveFreeze
-    ? [
-        "",
-        "DEFENSIVE FREEZE: drawdown breached the profile's maxDrawdownFloor on the prior turn. The harness will reject new BUY orders this turn. You may HOLD or SELL to reduce exposure, and journal a recovery plan.",
-      ].join("\n")
-    : "";
-  return [
-    "You are Azoth running in BACKTEST MODE.",
-    "Treat the simulated current date provided at the end of this prompt as 'today' — every tool call returns data as of that date. Do NOT mention or assume access to information beyond it.",
-    "",
-    "You are NOT given a fixed watchlist. Build your own each week using discover_tickers, choosing the criterion that matches your strategy. Aim for 5–10 candidates per turn, then narrow further with technical_indicators.",
-    "",
-    "Available tools (subset of live mode — fundamentals/news/macro/foreign-flow are intentionally disabled because point-in-time replay is not available for those sources):",
-    "- discover_tickers: scan ~28 liquid VN30+midcap names by criterion (momentum / breakout / oversold / low_volatility / high_volume / top_gainers / top_losers) and return 5–10 ranked candidates. CALL THIS FIRST.",
-    "- market_quote / market_ohlcv: price + bars up to today.",
-    "- technical_indicators: RSI / MACD / SMA / EMA / Bollinger from daily bars.",
-    "- portfolio_list / portfolio_record / portfolio_remove: read/write the positions ledger.",
-    "- journal_append / journal_read: persist and review your own decisions across weeks.",
-    "- place_order / cancel_order / list_orders / broker_state: trade through the per-run paper broker. Quantity must be a multiple of 100. Prices are in thousand VND.",
-    "",
-    "Operating rules:",
-    "1. Each turn represents one Friday close. You decide what to do for the coming week.",
-    "2. Start with broker_state, then discover_tickers (criterion of your choice), then technical_indicators on the top 3–5 candidates.",
-    "3. For every ticker you act on or explicitly skip, call journal_append with action ∈ {BUY,SELL,HOLD,WATCH} and a short rationale.",
-    "4. Place trades via place_order. MARKET orders fill at this Friday's close ± slippage.",
-    "5. VN settlement is T+2.5 (HOSE/HNX/UPCOM): you cannot sell shares the same day you buy them. Weekly cadence makes this a non-issue, but plan exits ≥1 week from entry.",
-    "6. Be decisive. Brief output. The harness only cares about your tool calls.",
-    "",
-    renderProfilePrompt(profile),
-    freezeSection,
-    "",
-    `Simulated today: ${asOfDateIso}.`,
-  ].filter((s) => s !== "").join("\n");
-}
-
-export function buildBacktestOptions(opts: {
-  profile: AgentProfile;
-  asOfDateIso: string;
-  resume?: string;
-  extras?: BacktestPromptExtras;
-}): Options {
-  const cfg = loadConfig();
-  return {
-    model: cfg.model,
-    systemPrompt: buildBacktestSystemPrompt(opts.profile, opts.asOfDateIso, opts.extras),
-    ...(opts.resume ? { resume: opts.resume } : {}),
-    mcpServers: {
-      vnstock: buildMcpServer(),
-    },
-    includePartialMessages: true,
-    allowedTools: [
-      "mcp__vnstock__market_quote",
-      "mcp__vnstock__market_ohlcv",
-      "mcp__vnstock__technical_indicators",
-      "mcp__vnstock__portfolio_list",
-      "mcp__vnstock__portfolio_record",
-      "mcp__vnstock__portfolio_remove",
-      "mcp__vnstock__journal_append",
-      "mcp__vnstock__journal_read",
-      "mcp__vnstock__discover_tickers",
-      "mcp__vnstock__place_order",
-      "mcp__vnstock__cancel_order",
-      "mcp__vnstock__list_orders",
-      "mcp__vnstock__broker_state",
-    ],
-  };
-}
-
-export interface BacktestTurnContext {
-  profile: AgentProfile;
-  asOfStore: AsOfStore;
-  asOfDateIso: string;
-  /** Resume token from the previous week of the same run. */
-  resume?: string;
-  extras?: BacktestPromptExtras;
-}
-
-/**
- * Run a single backtest turn within the given as-of clock. The async generator
- * yields raw SDK messages so the caller can stream / record tokens / capture
- * the post-turn session_id.
- */
-export async function* runBacktestTurn(
-  prompt: string,
-  ctx: BacktestTurnContext,
-) {
-  // We need an async generator that runs *inside* asOfClock.run. ALS preserves
-  // the store across awaits, so wrapping the generator body works.
-  const opts = buildBacktestOptions({
-    profile: ctx.profile,
-    asOfDateIso: ctx.asOfDateIso,
-    resume: ctx.resume,
-    extras: ctx.extras,
-  });
-  // Set module-level override so tool handlers dispatched from the SDK's
-  // MCP bridge (which loses ALS context) still see the simulated date and
-  // per-run broker. ALS is also set, for any in-process call-chains.
-  setActiveAsOf(ctx.asOfStore);
-  try {
-    const stream = asOfClock.run(ctx.asOfStore, () =>
-      query({ prompt, options: opts }),
-    );
-    for await (const message of stream) {
-      yield message;
-    }
-  } finally {
-    setActiveAsOf(null);
-  }
 }

@@ -56,6 +56,13 @@ describe("Azoth config and DB defaults", () => {
     expect(loadConfig().watchlist).toContain("HPG");
   });
 
+  it("treats blank VNSTOCK_CONFIG as unset", () => {
+    initializeAzothRuntime();
+    process.env.VNSTOCK_CONFIG = "";
+    resetConfigCacheForTests();
+    expect(loadConfig().watchlist).toContain("HPG");
+  });
+
   it("honors VNSTOCK_CONFIG override", () => {
     const custom = join(tmp, "custom.yaml");
     writeFileSync(custom, [

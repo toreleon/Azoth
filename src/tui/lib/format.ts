@@ -1,8 +1,3 @@
-export function formatVnd(amount: number | null | undefined): string {
-  if (amount == null || !Number.isFinite(amount)) return "—";
-  return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(amount);
-}
-
 export function formatBigVnd(amount: number | null | undefined): string {
   if (amount == null || !Number.isFinite(amount)) return "—";
   const abs = Math.abs(amount);
@@ -27,12 +22,6 @@ export function formatTokens(n: number | null | undefined): string {
   if (n == null) return "0";
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
-}
-
-export function formatTime(epochSec: number | null | undefined): string {
-  if (epochSec == null) return "—";
-  const d = new Date(epochSec * 1000);
-  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 export function formatDate(epochSec: number | null | undefined): string {

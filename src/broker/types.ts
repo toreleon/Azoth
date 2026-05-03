@@ -44,6 +44,7 @@ export interface Broker {
   readonly name: string;
 
   placeOrder(input: PlaceOrderInput): Promise<Order>;
+  recordRejectedOrder?(input: PlaceOrderInput, reason: string): Promise<Order>;
   cancelOrder(id: string): Promise<Order>;
   listOrders(filter?: {
     ticker?: string;

@@ -3,12 +3,14 @@ import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
 import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
-import { runBacktestTurn } from "./orchestrator.js";
 import { type AgentProfile, profileRef } from "./profile.js";
 import { loadProfile } from "./profileStore.js";
-import { DISCOVERY_UNIVERSE } from "../tools/discover.js";
-import { getCacheStats, resetCacheStats } from "../data/cache.js";
-import { replayOrRecord } from "./llmReplayCache.js";
+import { DISCOVERY_UNIVERSE, discoverTickers } from "../tools/discover.js";
+import { setActiveAsOf } from "./clock.js";
+import { runTeamAnalysis } from "./team/index.js";
+import type { FinalDecision, TeamEvent } from "./team/state.js";
+import { checkOrder } from "../risk/guardrails.js";
+import type { BrokerPosition, Order, PlaceOrderInput } from "../broker/types.js";
 
 export interface BacktestOptions {
   start: string;
@@ -16,6 +18,8 @@ export interface BacktestOptions {
   /** Profile reference in `<id>@v<n>` form, e.g. "vn-equity@v0". */
   profileRef: string;
   initialCash: number;
+  /** Number of discovered names to run through the full team each week. */
+  maxCandidates?: number;
 }
 
 export interface TurnResultPayload {
@@ -60,13 +64,15 @@ export interface SummaryPayload {
   totalOutTokens: number;
   weeks: number;
   trades: number;
+  rejectedTrades: number;
   reportPath: string | null;
 }
 
 export interface BacktestCallbacks {
   onStart?: (info: { runId: string; profile: AgentProfile; brokerName: string; fridays: number[]; universe: string[] }) => void;
   onTurnStart?: (info: { asOf: number; dateIso: string }) => void;
-  onStreamEvent?: (ev: unknown) => void;
+  onTeamEvent?: (ev: TeamEvent, ctx: { asOf: number; dateIso: string; ticker: string }) => void;
+  onOrder?: (order: Order, ctx: { asOf: number; dateIso: string; decision: FinalDecision }) => void;
   onTurnEnd?: (turn: TurnResultPayload) => void;
   onEquity?: (eq: EquityPayload) => void;
   onTurnError?: (err: Error, ctx: { asOf: number; dateIso: string }) => void;
@@ -95,17 +101,119 @@ function fridayCloses(vnindexBars: Bar[], startSec: number, endSec: number): num
   return out;
 }
 
-interface ResultMessage {
-  type: "result";
-  session_id?: string;
-  total_cost_usd?: number;
-  num_turns?: number;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-  };
+function lotRound(qty: number): number {
+  return Math.floor(qty / 100) * 100;
+}
+
+function positionValue(p: BrokerPosition, price: number | null): number {
+  return (price ?? p.avgCost) * p.quantity * 1000;
+}
+
+async function markToMarket(
+  broker: Awaited<ReturnType<typeof getBacktestBroker>>,
+  priceAt: (ticker: string) => number | null,
+): Promise<number> {
+  const snap = await broker.snapshot();
+  return snap.positions.reduce(
+    (sum, p) => sum + positionValue(p, priceAt(p.ticker)),
+    snap.cashVnd,
+  );
+}
+
+async function recordGuardrailReject(
+  broker: Awaited<ReturnType<typeof getBacktestBroker>>,
+  input: PlaceOrderInput,
+  reasons: string[],
+): Promise<Order> {
+  const reason = `guardrail_blocked: ${reasons.join("; ")}`;
+  return broker.recordRejectedOrder
+    ? broker.recordRejectedOrder(input, reason)
+    : broker.placeOrder(input);
+}
+
+async function submitOrder(
+  broker: Awaited<ReturnType<typeof getBacktestBroker>>,
+  input: PlaceOrderInput,
+  refPrice: number,
+): Promise<Order> {
+  const guard = await checkOrder(broker, input, refPrice);
+  if (!guard.ok) return recordGuardrailReject(broker, input, guard.reasons);
+  return broker.placeOrder(input);
+}
+
+async function applyTeamDecision(args: {
+  broker: Awaited<ReturnType<typeof getBacktestBroker>>;
+  decision: FinalDecision;
+  equityVnd: number;
+  price: number | null;
+  maxPositionPct: number;
+  freezeBuys: boolean;
+}): Promise<Order | null> {
+  const { broker, decision, equityVnd, price, maxPositionPct, freezeBuys } = args;
+  if (price == null || equityVnd <= 0) return null;
+
+  const snap = await broker.snapshot();
+  const current = snap.positions.find((p) => p.ticker === decision.ticker);
+  const currentQty = current?.quantity ?? 0;
+  const currentValue = currentQty * price * 1000;
+  const requestedPct = Math.max(0, Math.min(decision.sizingPct, maxPositionPct));
+  const targetValue =
+    decision.rating === "Sell"
+      ? 0
+      : decision.rating === "Underweight"
+        ? Math.min(currentValue, requestedPct * equityVnd)
+        : decision.rating === "Hold"
+          ? currentValue
+          : requestedPct * equityVnd;
+
+  const deltaValue = targetValue - currentValue;
+  if ((decision.rating === "Buy" || decision.rating === "Overweight") && freezeBuys) {
+    return recordGuardrailReject(
+      broker,
+      {
+        ticker: decision.ticker,
+        side: "BUY",
+        type: "MARKET",
+        quantity: 100,
+        notes: "team backtest buy blocked by defensive freeze",
+      },
+      ["drawdown circuit breaker active: BUY orders are frozen this turn"],
+    );
+  }
+
+  if (deltaValue > price * 1000 * 100) {
+    const qty = lotRound(deltaValue / (price * 1000));
+    if (qty <= 0) return null;
+    return submitOrder(
+      broker,
+      {
+        ticker: decision.ticker,
+        side: "BUY",
+        type: "MARKET",
+        quantity: qty,
+        notes: `team ${decision.rating}: ${(decision.sizingPct * 100).toFixed(1)}% target`,
+      },
+      price,
+    );
+  }
+
+  if (deltaValue < -price * 1000 * 100 && currentQty > 0) {
+    const qty = Math.min(currentQty, lotRound(Math.abs(deltaValue) / (price * 1000)));
+    if (qty <= 0) return null;
+    return submitOrder(
+      broker,
+      {
+        ticker: decision.ticker,
+        side: "SELL",
+        type: "MARKET",
+        quantity: qty,
+        notes: `team ${decision.rating}: reduce to ${(requestedPct * 100).toFixed(1)}% target`,
+      },
+      price,
+    );
+  }
+
+  return null;
 }
 
 export async function runBacktestSession(
@@ -117,6 +225,7 @@ export async function runBacktestSession(
   const ref = profileRef(profile);
   const universe = [...DISCOVERY_UNIVERSE];
   const db = getDb();
+  const maxCandidates = Math.max(1, Math.min(opts.maxCandidates ?? 3, profile.params.maxNames, 5));
 
   const startSec = isoSec(opts.start);
   const endSec = isoSec(opts.end);
@@ -151,7 +260,7 @@ export async function runBacktestSession(
     startSec,
     endSec,
     opts.initialCash,
-    JSON.stringify({ universe, model: cfg.model, broker: brokerName, profileRef: ref }),
+    JSON.stringify({ universe, model: cfg.model, broker: brokerName, profileRef: ref, engine: "team", maxCandidates }),
     Math.floor(Date.now() / 1000),
   );
 
@@ -162,7 +271,6 @@ export async function runBacktestSession(
   const vnindexBaseline = vnindexAt(fridays[0]!);
   if (vnindexBaseline == null) throw new Error("no VNINDEX data at first Friday");
 
-  let resume: string | undefined;
   let peakMtm = opts.initialCash;
   let freezeBuys = false;
 
@@ -174,105 +282,89 @@ export async function runBacktestSession(
       return series.length ? series[series.length - 1]!.close : null;
     };
     broker.setPriceOverride(priceOverride);
-
-    const prompt = [
-      `Today is ${dateIso}. It is a Friday close.`,
-      `Step 1: call broker_state to see your current portfolio.`,
-      `Step 2: call discover_tickers (criterion of your choosing per your strategy) to build THIS WEEK's watchlist of 5–10 candidates.`,
-      `Step 3: drill into the top candidates with technical_indicators.`,
-      `Step 4: journal each decision and place orders for high-conviction trades. Also re-evaluate any existing holdings — sell, trim, or hold.`,
-    ].join(" ");
-
     cb.onTurnStart?.({ asOf, dateIso });
 
+    const prompt = `Team backtest ${dateIso}: discover ${profile.params.discoveryCriterion}/${profile.params.preferredUniverse}, analyze candidates, execute broker orders from final decisions.`;
     let response = "";
-    let sessionId: string | undefined;
     let inTokens = 0;
     let outTokens = 0;
     let costUsd = 0;
     let toolCalls = 0;
-    let cacheReadTokens = 0;
-    let cacheCreationTokens = 0;
-
-    resetCacheStats();
-    const extras = { defensiveFreeze: freezeBuys };
-    const replayKey = `bt|${cfg.model}|${ref}|${dateIso}|${resume ?? "0"}|${freezeBuys ? "F" : "_"}|${prompt}`;
-    const stream = replayOrRecord(replayKey, cfg.model, prompt, () =>
-      runBacktestTurn(prompt, {
-        profile,
-        asOfStore: { asOfSec: asOf, brokerName, freezeBuys },
-        asOfDateIso: dateIso,
-        resume,
-        extras,
-      }),
-    );
 
     try {
-      for await (const m of stream) {
+      setActiveAsOf({ asOfSec: asOf, brokerName, freezeBuys });
+      const discovery = await discoverTickers({
+        criterion: profile.params.discoveryCriterion,
+        universe: profile.params.preferredUniverse,
+        limit: maxCandidates,
+      });
+      const held = (await broker.snapshot()).positions.map((p) => p.ticker);
+      const tickers = Array.from(
+        new Set([...held, ...discovery.candidates.map((c) => c.ticker)]),
+      ).slice(0, maxCandidates);
+
+      const decisions: FinalDecision[] = [];
+      for (const ticker of tickers) {
         if (cb.signal?.aborted) break;
-        cb.onStreamEvent?.(m);
-        if (m.type === "stream_event") {
-          const ev = (m as { event: any }).event;
-          if (ev?.type === "content_block_start" && ev.content_block?.type === "tool_use") {
-            toolCalls++;
-          } else if (ev?.type === "content_block_delta") {
-            const d = ev.delta;
-            if (d?.type === "text_delta" && d.text) response += d.text;
-          }
-        } else if (m.type === "result") {
-          const r = m as unknown as ResultMessage;
-          sessionId = r.session_id;
-          inTokens = r.usage?.input_tokens ?? 0;
-          outTokens = r.usage?.output_tokens ?? 0;
-          costUsd = r.total_cost_usd ?? 0;
-          cacheReadTokens = r.usage?.cache_read_input_tokens ?? 0;
-          cacheCreationTokens = r.usage?.cache_creation_input_tokens ?? 0;
-        } else if (m.type === "system" && (m as { subtype?: string }).subtype === "init") {
-          const sid = (m as { session_id?: string }).session_id;
-          if (sid && !sessionId) sessionId = sid;
-        }
+        const result = await runTeamAnalysis(
+          { ticker, asOfDateIso: dateIso, debateRounds: 1 },
+          {
+            allowWebSearch: false,
+            emit: (ev) => {
+              cb.onTeamEvent?.(ev, { asOf, dateIso, ticker });
+              if (ev.type === "role_tool") toolCalls++;
+              if (ev.type === "role_end") {
+                const usage = ev.usage ?? {};
+                inTokens += usage.inputTokens ?? 0;
+                outTokens += usage.outputTokens ?? 0;
+                costUsd += usage.costUsd ?? 0;
+              }
+            },
+          },
+        );
+        decisions.push(result.decision);
+        response += `[${ticker}] ${result.decision.rating} ${(result.decision.sizingPct * 100).toFixed(1)}%: ${result.decision.rationale}\n`;
+
+        const equity = await markToMarket(broker, priceOverride);
+        const order = await applyTeamDecision({
+          broker,
+          decision: result.decision,
+          equityVnd: equity,
+          price: priceOverride(ticker),
+          maxPositionPct: Math.min(profile.params.maxPositionPct, cfg.risk.max_position_pct),
+          freezeBuys,
+        });
+        if (order) cb.onOrder?.(order, { asOf, dateIso, decision: result.decision });
       }
     } catch (err) {
       cb.onTurnError?.(err as Error, { asOf, dateIso });
+    } finally {
+      setActiveAsOf(null);
     }
-
-    if (sessionId) resume = sessionId;
 
     db.prepare(
       `INSERT OR REPLACE INTO backtest_turns
          (run_id, as_of, session_id, prompt, response, in_tokens, out_tokens, cost_usd,
           cache_read_tokens, cache_creation_tokens)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      runId,
-      asOf,
-      sessionId ?? null,
-      prompt,
-      response,
-      inTokens,
-      outTokens,
-      costUsd,
-      cacheReadTokens,
-      cacheCreationTokens,
-    );
+    ).run(runId, asOf, null, prompt, response, inTokens, outTokens, costUsd, 0, 0);
 
-    const cs = getCacheStats();
     cb.onTurnEnd?.({
       asOf,
       dateIso,
       prompt,
       response,
-      sessionId,
+      sessionId: undefined,
       inTokens,
       outTokens,
       costUsd,
       toolCalls,
-      cacheReadTokens,
-      cacheCreationTokens,
-      cacheHits: cs.hits,
-      cacheMisses: cs.misses,
-      inflightCollapses: cs.inflight_collapses,
-      llmReplayHit: stream.replayed === true,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      inflightCollapses: 0,
+      llmReplayHit: false,
     });
 
     const snap = await broker.snapshot();
@@ -298,6 +390,7 @@ export async function runBacktestSession(
   }
 
   broker.setPriceOverride(null);
+  setActiveAsOf(null);
   db.prepare("UPDATE backtest_runs SET finished_at = ? WHERE id = ?").run(
     Math.floor(Date.now() / 1000),
     runId,
@@ -312,6 +405,9 @@ export async function runBacktestSession(
   const orderRows = db
     .prepare("SELECT * FROM broker_orders WHERE broker = ? AND status = 'FILLED' ORDER BY created_at")
     .all(brokerName) as Array<{ ticker: string; side: string; filled_price: number; filled_qty: number; created_at: number }>;
+  const rejectedOrderRows = db
+    .prepare("SELECT * FROM broker_orders WHERE broker = ? AND status = 'REJECTED' ORDER BY created_at")
+    .all(brokerName) as Array<{ ticker: string; side: string; quantity: number; reject_reason: string | null; created_at: number }>;
 
   const last = equityRows[equityRows.length - 1];
   const finalMtm = last?.mtm_vnd ?? opts.initialCash;
@@ -343,6 +439,7 @@ export async function runBacktestSession(
     totalOutTokens: totalOut,
     weeks: equityRows.length,
     trades: orderRows.length,
+    rejectedTrades: rejectedOrderRows.length,
     reportPath: null,
   };
   cb.onComplete?.(summary);

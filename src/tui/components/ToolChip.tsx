@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Text } from "ink";
 import { theme, glyph } from "../lib/theme.js";
 import { summarizeToolInput, summarizeToolResult } from "../lib/toolSummary.js";
@@ -14,7 +13,7 @@ export function ToolChip({ name, input, result, failed }: ToolChipProps) {
   const status = failed ? "fail" : result ? "done" : "running";
   const color = status === "fail" ? theme.down : status === "done" ? theme.up : theme.accent;
   const pill = status === "fail" ? glyph.fail : status === "done" ? glyph.ok : "…";
-  const argSummary = summarizeToolInput(name, input);
+  const argSummary = summarizeToolInput(input);
   const resultSummary = result ? summarizeToolResult(name, result) : null;
   return (
     <Box flexDirection="column">

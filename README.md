@@ -1,113 +1,291 @@
 # Azoth
 
-CLI agent platform for Vietnam stock investment decisions, built on the Claude Agent SDK (TypeScript).
+Azoth is a professional agent CLI for Vietnam equity research, portfolio
+workflow, and broker-aware trading operations.
 
-All five phases of the original plan are now in:
+It combines an interactive terminal UI, Claude Agent SDK orchestration,
+market-data tools, multi-agent research, local journaling, paper trading,
+backtesting, and optional DNSE Entrade X live broker integration. Azoth is
+designed for disciplined decision support: every recommendation should be
+grounded in tool output, written to a journal, and constrained by explicit
+autonomy and risk settings.
 
-- **Phase 1** — market data + technical indicators
-- **Phase 2** — fundamentals + per-ticker news
-- **Phase 3** — macro indices, foreign flow, portfolio, and decision journal
-- **Phase 4** — paper broker, autonomy modes (advisory / confirm / auto), risk guardrails, RSI backtest
-- **Phase 5** — DNSE Entrade X live broker (LightSpeed v2 REST) + broker contract tests
+> Azoth is investment software, not financial advice. Live trading can place
+> real orders against a real account. Use advisory or paper mode until you have
+> verified configuration, data quality, account state, and risk limits.
 
-## Setup
+## Highlights
+
+- **Agent-native CLI**: run Azoth from the terminal with a rich Ink-based UI,
+  streaming model output, tool chips, status bar, slash commands, and resumable
+  project sessions.
+- **VN market research tools**: quote, OHLCV, technical indicators,
+  fundamentals, company news, macro indices, foreign flow, ticker discovery,
+  portfolio state, and decision journal.
+- **Multi-agent desk**: structured analyst workflow with technical,
+  fundamentals, news, sentiment, bull, bear, research manager, trader, risk,
+  and portfolio roles.
+- **Broker-aware execution**: advisory, confirm, and auto autonomy modes with
+  paper broker support and DNSE Entrade X integration for live accounts.
+- **Risk controls**: position sizing limits, order notional limits, ticker
+  whitelist/watchlist checks, market-hour checks, and buy freeze support.
+- **Backtesting**: replay strategy behavior with the paper broker to validate
+  feeds, accounting, lot sizing, fees, and guardrails before using live tools.
+- **Local-first state**: configuration, SQLite cache, portfolio records,
+  journals, broker records, team runs, and session logs live under `~/.azoth`
+  by default.
+
+## Quick Start
+
+Requirements:
+
+- Node.js 20 or newer
+- pnpm or npm
+- `ANTHROPIC_API_KEY` for the Claude Agent SDK
+
+Install and initialize:
 
 ```bash
-pnpm install        # or: npm install
+pnpm install
 pnpm azoth:init
 cp ~/.azoth/.env.example ~/.azoth/.env
-# edit ~/.azoth/.env and set ANTHROPIC_API_KEY
+```
+
+Edit `~/.azoth/.env` and set:
+
+```bash
+ANTHROPIC_API_KEY=...
+```
+
+Start the professional TUI:
+
+```bash
+pnpm azoth
+```
+
+The classic readline REPL is also available:
+
+```bash
 pnpm dev
 ```
 
-## Try it
+## Common Workflows
 
+Ask the agent a market question:
+
+```text
+Should we add more bank exposure this week?
 ```
-you> Show 30-day RSI for HPG
-you> Compare MACD on FPT vs VCB
-you> What's the bollinger band situation on VNINDEX (kind=index)?
+
+Run structured team analysis:
+
+```text
+/analyze FPT
+/analyze HPG --rounds 3
+/team Should we rotate from steel into banks this month?
 ```
+
+Check market and portfolio state:
+
+```text
+/quote VCB
+/positions
+/journal decisions 10
+```
+
+Run a backtest:
+
+```text
+/backtest 2025-01-03 2025-04-30 1000000000
+```
+
+Manage sessions:
+
+```text
+/new
+/sessions
+/resume
+/resume <session-id>
+```
+
+## Slash Commands
+
+| Command | Purpose |
+| --- | --- |
+| `/team <message>` | Run a multi-agent debate on a market or portfolio question. |
+| `/analyze <ticker> [--rounds N]` | Run structured team analysis for one ticker. |
+| `/backtest [start] [end] [cash]` | Run a weekly backtest and render results inline. |
+| `/journal [decisions\|orders\|fills\|alerts] [N]` | Show recent journal rows. |
+| `/quote <ticker>` | Request quote, technicals, and recent news for a ticker. |
+| `/positions` | Summarize current portfolio positions and exposures. |
+| `/new` | Start a new resumable session. |
+| `/resume [id]` | Resume the latest session or a specific session. |
+| `/sessions` | List recent project sessions. |
+| `/help` | Show command help in the TUI. |
 
 ## Configuration
 
-Azoth stores runtime state in `~/.azoth` by default. A fresh install creates:
+Azoth stores runtime state in `~/.azoth` unless `AZOTH_HOME` is set.
 
-- `~/.azoth/config.yaml` — user configuration
-- `~/.azoth/.env.example` — environment template
-- `~/.azoth/azoth.db` — SQLite data/cache/journal/broker database
-- `~/.azoth/projects/<encoded-cwd>/*.jsonl` — per-project chat sessions
+A fresh runtime contains:
 
-Set `AZOTH_HOME` to use a different root. `VNSTOCK_CONFIG` and `VNSTOCK_DB`
-still override the config and database paths for tests or advanced setups.
+- `~/.azoth/config.yaml` - user configuration
+- `~/.azoth/.env.example` - environment template
+- `~/.azoth/azoth.db` - SQLite cache, journal, broker, and run database
+- `~/.azoth/projects/<encoded-cwd>/*.jsonl` - per-project session logs
 
-Edit `~/.azoth/config.yaml`:
+Useful environment variables:
 
-- `autonomy`: only `advisory` is wired in Phase 1.
-- `model`: any Claude model id (default `claude-sonnet-4-6`).
-- `watchlist`: tickers the agent treats as default focus.
-- `risk.*`: reserved for Phase 4+.
+| Variable | Purpose |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | Required model API key. |
+| `AZOTH_HOME` | Override the runtime directory. |
+| `VNSTOCK_CONFIG` | Override the config file path. |
+| `VNSTOCK_DB` | Override the SQLite database path. |
+| `AZOTH_ALT_SCREEN=1` | Run the TUI in the alternate screen buffer. |
+| `VNSTOCK_LIVE_TRADING=1` | Explicitly enable live trading paths. |
+| `DNSE_TEST_LIVE=1` | Run DNSE read-only live probes in tests. |
 
-## Data sources
+Default config:
 
-- **OHLCV (stocks + indices)**: DNSE Entrade public API (`services.entrade.com.vn/chart-api/v2/ohlcs/...`), no auth.
-- **Quote / ref / ceiling / floor / company info**: SSI iBoard public (`iboard-query.ssi.com.vn/stock/...`), no auth.
+```yaml
+autonomy: advisory
+model: glm-5.1
 
-Responses are cached in SQLite (`~/.azoth/azoth.db`) with short TTLs.
+team:
+  quick_model: glm-5.1
+  deep_model: glm-5.1
+  output_language: en
 
-## Layout
+watchlist:
+  - HPG
+  - VCB
+  - FPT
+  - VNM
+  - MWG
 
+broker: paper
+
+risk:
+  max_position_pct: 0.15
+  max_daily_loss_pct: 0.03
+  max_order_notional_vnd: 50000000
+  ticker_whitelist: []
+  allow_margin: false
 ```
-src/
-  cli.ts                   # readline REPL entry
-  agent/orchestrator.ts    # system prompt + Agent SDK query loop
-  tools/                   # SDK tools (market_quote, market_ohlcv, technical_indicators)
-  data/sources/            # raw API clients (DNSE, SSI iBoard)
-  data/cache.ts            # SQLite TTL cache
-  storage/                 # better-sqlite3 + schema
-  config/                  # YAML config + zod loader
-  runtime/                 # ~/.azoth paths, bootstrap, sessions
-```
 
-## Live trading (DNSE Entrade X)
+Autonomy modes:
 
-**Read this before flipping the switch.** Live mode places real orders against
-a real account.
+- `advisory`: no order tools are exposed. Azoth recommends; the user executes.
+- `confirm`: order tools are available, but each order requires CLI approval.
+- `auto`: order tools run through configured guardrails before submission.
+
+Broker modes:
+
+- `paper`: local paper broker backed by SQLite.
+- `dnse`: DNSE Entrade X / LightSpeed integration for live accounts.
+
+## Data Sources
+
+Azoth uses public and broker APIs for Vietnam market context:
+
+- **OHLCV**: DNSE Entrade public chart API.
+- **Quotes and reference prices**: SSI iBoard public endpoints.
+- **Fundamentals**: VNDirect Finfo and CafeF.
+- **News and disclosures**: CafeF.
+- **Open web context**: model WebSearch when built-in market tools are not
+  sufficient.
+
+Market responses are cached in SQLite with short TTLs to keep the CLI fast and
+reduce repeated network calls.
+
+## Live Trading With DNSE
+
+Live mode places real orders. Keep `autonomy: advisory` or `broker: paper`
+until the checklist below is complete.
 
 1. Open a DNSE account and enable Entrade X / LightSpeed API access.
-2. Fill `DNSE_USERNAME`, `DNSE_PASSWORD`, `DNSE_ACCOUNT_NO` in `~/.azoth/.env`.
-3. **Find your `DNSE_LOAN_PACKAGE_ID`**: this is account-specific. After
-   logging in once, hit `GET https://api.dnse.com.vn/margin-service/loan-products`
-   with the JWT and pick an `id` for your equity sub-account. Community values
-   like `1372` are NOT yours.
+2. Add `DNSE_USERNAME`, `DNSE_PASSWORD`, and `DNSE_ACCOUNT_NO` to
+   `~/.azoth/.env`.
+3. Find your account-specific `DNSE_LOAN_PACKAGE_ID`. After login, call
+   `GET https://api.dnse.com.vn/margin-service/loan-products` with the JWT and
+   choose the correct loan product id for your equity sub-account.
 4. Set `broker: dnse` in `~/.azoth/config.yaml`.
-5. Set `autonomy: confirm` (recommended) — every order will prompt y/N in the
-   CLI before submission.
-6. Run `pnpm test` and `pnpm dev` with `DNSE_TEST_LIVE=1` set, but **leave
-   `VNSTOCK_LIVE_TRADING` unset** for now. Verify `broker_state` and
-   `list_orders` calls return your real cash + positions.
-7. Only then set `VNSTOCK_LIVE_TRADING=1` and place a single 100-share test
-   order on a liquid ticker (SSI, VND, VPB) during market hours.
-8. The first `place_order` of each session triggers an email OTP prompt.
+5. Set `autonomy: confirm` first, so every order prompts for approval.
+6. Run `pnpm test` and then `DNSE_TEST_LIVE=1 pnpm test` for read-only live
+   probes.
+7. Verify `broker_state` and `list_orders` return the expected cash, positions,
+   and orders.
+8. Only then set `VNSTOCK_LIVE_TRADING=1`.
+9. During market hours, place one small 100-share test order on a liquid ticker
+   and verify the result with DNSE directly.
 
-The DNSE client is built defensively — DNSE has not published a stable public
-spec, so field names are parsed leniently. If you hit a parse error, capture
-the raw HTTP response and patch `src/broker/dnse.ts`.
+The first `place_order` in a live session may trigger an email OTP prompt.
 
 ## Backtesting
 
-```
-pnpm backtest --days=180 --rsi-buy=30 --rsi-sell=70 --lots=2
-```
+Run the RSI backtest from the shell:
 
-Replays an RSI mean-reversion strategy on the watchlist via PaperBroker.
-Sanity-checks data feeds, lot sizing, fees, and accounting without spending
-LLM tokens.
-
-## Tests
-
-```
-pnpm test                # PaperBroker contract suite
-DNSE_TEST_LIVE=1 pnpm test   # also runs DNSE read-only probes
+```bash
+pnpm backtest:rsi --days=180 --rsi-buy=30 --rsi-sell=70 --lots=2
 ```
 
-See `/home/tore/.claude/plans/i-am-planning-to-wise-catmull.md` for the full multi-phase plan.
+Run the agent backtest:
+
+```bash
+pnpm backtest
+```
+
+Backtests use the paper broker and simulated time. They are intended to validate
+data feeds, accounting behavior, lot sizing, fees, strategy assumptions, and
+risk guardrails before using live broker tools.
+
+## Development
+
+Common commands:
+
+```bash
+pnpm azoth          # run the Ink TUI
+pnpm dev            # run the classic readline REPL
+pnpm azoth:init     # initialize ~/.azoth
+pnpm analyze        # run the standalone analysis CLI
+pnpm backtest       # run agent backtest
+pnpm backtest:rsi   # run RSI strategy backtest
+pnpm test           # run Vitest
+pnpm typecheck      # run TypeScript type checks
+pnpm build          # compile to dist/
+```
+
+Project layout:
+
+```text
+src/
+  cli.ts                   classic readline REPL
+  cli/azoth.tsx            Ink terminal UI entrypoint
+  tui/                     TUI components, hooks, cards, theme, commands
+  agent/orchestrator.ts    Agent SDK prompt, tools, sessions
+  agent/team/              multi-agent research desk
+  tools/                   market, portfolio, journal, broker tools
+  data/sources/            DNSE, SSI, CafeF, VNDirect clients
+  broker/                  paper and DNSE broker implementations
+  risk/                    pre-trade guardrails
+  storage/                 SQLite schema and database access
+  runtime/                 ~/.azoth paths, bootstrap, session store
+  config/                  YAML defaults and loader
+```
+
+## Operating Principles
+
+Azoth is built around a few explicit constraints:
+
+- Recommendations must be grounded in tool output, not memory.
+- Prices are stated in correct units. VN stock prices from DNSE and SSI are in
+  thousand VND.
+- Vietnam settlement is treated as T+2.5; Azoth should not propose same-day
+  round trips.
+- Buy, sell, or hold recommendations should include technicals, fundamentals,
+  news, and macro context.
+- News citations should include source URL and publish date.
+- Decisions should be persisted to the local journal with rationale and an exit
+  plan.
+- Order placement is disabled in advisory mode and guarded in auto mode.

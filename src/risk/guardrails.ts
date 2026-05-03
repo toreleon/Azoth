@@ -27,11 +27,14 @@ export async function checkOrder(
     );
   }
 
+  const inBacktest = currentBrokerName() != null;
   const allowed =
     cfg.risk.ticker_whitelist.length > 0
       ? cfg.risk.ticker_whitelist
-      : cfg.watchlist;
-  if (!allowed.map((t) => t.toUpperCase()).includes(ticker)) {
+      : inBacktest
+        ? []
+        : cfg.watchlist;
+  if (allowed.length > 0 && !allowed.map((t) => t.toUpperCase()).includes(ticker)) {
     reasons.push(`ticker ${ticker} is not in watchlist/whitelist`);
   }
 
@@ -61,7 +64,7 @@ export async function checkOrder(
   // Backtest mode (per-run broker pinned via ALS): skip wall-clock checks.
   // The harness only fires on simulated Friday closes, which by definition
   // sit outside live trading hours of the real wall clock.
-  if (currentBrokerName()) {
+  if (inBacktest) {
     return { ok: reasons.length === 0, reasons };
   }
 

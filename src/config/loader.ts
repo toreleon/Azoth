@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -33,12 +33,16 @@ let cached: Config | null = null;
 
 export function loadConfig(): Config {
   if (cached) return cached;
-  const path = resolve(process.env.VNSTOCK_CONFIG ?? azothPaths().config);
-  if (!process.env.VNSTOCK_CONFIG) {
+  const configOverride = process.env.VNSTOCK_CONFIG?.trim() || undefined;
+  const path = resolve(configOverride ?? azothPaths().config);
+  if (!configOverride) {
     ensureAzothDirs();
     if (!existsSync(path)) {
       writeFileSync(path, DEFAULT_CONFIG_YAML, { encoding: "utf8", mode: 0o600 });
     }
+  }
+  if (existsSync(path) && statSync(path).isDirectory()) {
+    throw new Error(`Config path points to a directory: ${path}. Set VNSTOCK_CONFIG to a YAML file path.`);
   }
   const raw = readFileSync(path, "utf8");
   const parsed = parseYaml(raw);

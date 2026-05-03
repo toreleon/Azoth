@@ -1,5 +1,5 @@
 import { getDb } from "../../storage/db.js";
-import { formatDate, formatPrice, truncate } from "./format.js";
+import { formatDate, formatPrice } from "./format.js";
 
 export type JournalTab = "decisions" | "orders" | "fills" | "alerts";
 
@@ -83,20 +83,4 @@ export function loadJournal(tab: JournalTab, limit = 10): JournalRow[] {
   } catch {
     return [];
   }
-}
-
-const HEADER: Record<JournalTab, string> = {
-  decisions: "DECISIONS",
-  orders: "ORDERS",
-  fills: "FILLS",
-  alerts: "ALERTS",
-};
-
-export function formatJournal(tab: JournalTab, rows: JournalRow[]): string {
-  const head = `─ ${HEADER[tab]} (latest ${rows.length})`;
-  if (rows.length === 0) return `${head}\n  (no rows)`;
-  const body = rows
-    .map((r) => `  ${r.secondary.padEnd(12)} ${truncate(r.primary, 26).padEnd(26)} ${truncate(r.detail.replace(/\s+/g, " "), 60)}`)
-    .join("\n");
-  return `${head}\n${body}`;
 }

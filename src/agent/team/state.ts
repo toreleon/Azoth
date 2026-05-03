@@ -99,6 +99,31 @@ export interface RoleUsage {
 
 // Zod schemas for parsing role JSON outputs from the LLM.
 
+export const NavFractionSchema = z.union([
+  z.number().min(0).max(1),
+  // Role prompts ask for 0..1 NAV fractions, but LLMs sometimes return
+  // percent-like whole numbers such as 4.0 for 4%.
+  z.number().gt(1).max(100).transform((value) => value / 100),
+]);
+
+const EntryBandSchema: z.ZodType<{ low: number; high: number } | undefined, z.ZodTypeDef, unknown> = z
+  .unknown()
+  .transform((value, ctx) => {
+    if (value == null) return undefined;
+    if (typeof value !== "object") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "entryBand must be an object" });
+      return z.NEVER;
+    }
+    const band = value as { low?: unknown; high?: unknown };
+    if (band.low == null || band.high == null) return undefined;
+    if (typeof band.low !== "number" || typeof band.high !== "number") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "entryBand low/high must be numbers" });
+      return z.NEVER;
+    }
+    return { low: band.low, high: band.high };
+  })
+  .optional();
+
 export const AnalystOutputSchema = z.object({
   summary: z.string().min(1),
   score: z.number().min(-1).max(1),
@@ -121,10 +146,8 @@ export type ResearchPlanOutput = z.infer<typeof ResearchPlanOutputSchema>;
 
 export const TraderOutputSchema = z.object({
   rating: z.enum(RATINGS),
-  sizingPct: z.number().min(0).max(1),
-  entryBand: z
-    .object({ low: z.number(), high: z.number() })
-    .optional(),
+  sizingPct: NavFractionSchema,
+  entryBand: EntryBandSchema,
   exitPlan: z.string().optional(),
   rationale: z.string().min(1),
 });
@@ -132,7 +155,7 @@ export type TraderOutput = z.infer<typeof TraderOutputSchema>;
 
 export const RiskOutputSchema = z.object({
   approved: z.boolean(),
-  adjustedSizingPct: z.number().min(0).max(1),
+  adjustedSizingPct: NavFractionSchema,
   concerns: z.array(z.string()).default([]),
   notes: z.string().default(""),
 });

@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Text } from "ink";
 import { theme } from "../lib/theme.js";
 
@@ -12,22 +11,23 @@ const LOGO = [
 ];
 
 const TIPS = [
+  ["/team <message>", "multi-agent team debate"],
+  ["/analyze <TICKER>", "structured team analysis"],
   ["/quote <TICKER>", "price · technicals · news"],
   ["/positions", "portfolio · PnL · exposures"],
-  ["/backtest", "weekly profile simulation"],
+  ["/backtest", "weekly strategy simulation"],
   ["/journal", "decisions · orders · fills · alerts"],
 ];
 
 export interface WelcomeProps {
   version: string;
-  profileRef: string;
   autonomy: string;
   broker: string;
   watchlist: string[];
   cwd: string;
 }
 
-export function Welcome({ version, profileRef, autonomy, broker, watchlist, cwd }: WelcomeProps) {
+export function Welcome({ version, autonomy, broker, watchlist, cwd }: WelcomeProps) {
   return (
     <Box
       borderStyle="round"
@@ -44,8 +44,8 @@ export function Welcome({ version, profileRef, autonomy, broker, watchlist, cwd 
         </Box>
         <Box marginTop={1} flexDirection="column">
           <Text>
-            <Text dimColor>profile  </Text>
-            <Text>{profileRef}</Text>
+            <Text dimColor>team     </Text>
+            <Text>investment</Text>
             <Text dimColor>  ·  autonomy  </Text>
             <Text>{autonomy}</Text>
           </Text>
@@ -79,7 +79,7 @@ export function Welcome({ version, profileRef, autonomy, broker, watchlist, cwd 
         <Box marginTop={1} flexDirection="column">
           <Text color={theme.accent} bold>What&apos;s new</Text>
           <Text dimColor>· Chat-first layout — market data flows into chat as cards, no dashboard grid.</Text>
-          <Text dimColor>· /quote, /chart, /positions, /journal, /backtest render inline.</Text>
+          <Text dimColor>· /team, /analyze, /quote, /positions, /journal, /backtest render inline.</Text>
           <Text dimColor>· Ctrl+A cycles autonomy: advisory → confirm → auto.</Text>
         </Box>
       </Box>

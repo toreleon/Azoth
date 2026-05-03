@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import "../runtime/bootstrap.js";
-import React from "react";
 import { render } from "ink";
 import { App } from "../tui/App.js";
 import { getDb, closeDb } from "../storage/db.js";

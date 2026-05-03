@@ -2,6 +2,8 @@ import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { getDb } from "../storage/db.js";
 import { getStockOhlcv } from "../data/sources/dnsePublic.js";
+import { currentBrokerName, nowSec } from "../agent/clock.js";
+import { getBroker } from "../broker/index.js";
 
 function asText(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj) }] };
@@ -16,7 +18,7 @@ interface PositionRow {
 }
 
 async function lastClose(ticker: string): Promise<number | null> {
-  const to = Math.floor(Date.now() / 1000);
+  const to = nowSec();
   const from = to - 14 * 86400;
   const bars = await getStockOhlcv(ticker, "1D", from, to).catch(() => []);
   return bars.length ? bars[bars.length - 1]!.close : null;
@@ -27,6 +29,41 @@ export const listPositionsTool = tool(
   "List the user's recorded positions with current price and unrealized P&L. Prices and avg_cost are in thousand VND (e.g. 28.5 = 28,500 VND). Position values are computed from the latest DNSE daily bar.",
   {},
   async () => {
+    if (currentBrokerName()) {
+      const snap = await getBroker().snapshot();
+      const enriched = await Promise.all(
+        snap.positions.map(async (p) => {
+          const px = await lastClose(p.ticker);
+          const cost_basis = p.avgCost * p.quantity;
+          const market_value = px != null ? px * p.quantity : null;
+          const unrealized_pnl = px != null ? (px - p.avgCost) * p.quantity : null;
+          const unrealized_pnl_pct =
+            px != null && p.avgCost > 0 ? ((px - p.avgCost) / p.avgCost) * 100 : null;
+          return {
+            ticker: p.ticker,
+            quantity: p.quantity,
+            avg_cost: p.avgCost,
+            last_close: px,
+            cost_basis,
+            market_value,
+            unrealized_pnl,
+            unrealized_pnl_pct,
+            notes: "backtest broker position",
+          };
+        }),
+      );
+      const totals = enriched.reduce(
+        (a, p) => {
+          a.cost_basis += p.cost_basis;
+          if (p.market_value != null) a.market_value += p.market_value;
+          if (p.unrealized_pnl != null) a.unrealized_pnl += p.unrealized_pnl;
+          return a;
+        },
+        { cost_basis: 0, market_value: 0, unrealized_pnl: 0 },
+      );
+      return asText({ broker: snap.broker, cash_vnd: snap.cashVnd, positions: enriched, totals });
+    }
+
     const db = getDb();
     const rows = db
       .prepare("SELECT ticker, quantity, avg_cost, opened_at, notes FROM positions")

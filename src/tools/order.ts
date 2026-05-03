@@ -71,10 +71,16 @@ export const placeOrderTool = tool(
       }
       const guard = await checkOrder(broker, input, refPrice);
       if (!guard.ok) {
+        const reason = `guardrail_blocked: ${guard.reasons.join("; ")}`;
+        const order =
+          inBacktest && broker.recordRejectedOrder
+            ? await broker.recordRejectedOrder(input, reason)
+            : undefined;
         return asText({
           ok: false,
           error: "guardrail_blocked",
           reasons: guard.reasons,
+          ...(order ? { order } : {}),
         });
       }
     } else if (cfg.autonomy === "confirm") {

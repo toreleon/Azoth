@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Phase 6 agent-driven backtest. Replays the watchlist week-by-week (Friday
- * closes), letting the LLM agent decide BUY/SELL/HOLD each week using a
- * lookahead-clamped tool subset. Records turns, equity, and trades to SQLite
- * and writes a JSON report under ~/.azoth/logs/backtests/.
+ * Phase 6 team-driven backtest. Replays the watchlist week-by-week (Friday
+ * closes), runs Azoth's structured analyst/research/trader/risk/portfolio team
+ * on discovered candidates, converts final team decisions into paper-broker
+ * orders, and writes a JSON report under ~/.azoth/logs/backtests/.
  *
  *   pnpm tsx src/cli/agent-backtest.ts \
  *     --start=2025-01-01 --end=2025-04-30 \
@@ -31,6 +31,7 @@ function parseArgs(argv: string[]): BacktestOptions {
     if (k === "end") out.end = v!;
     if (k === "profile") out.profileRef = v!;
     if (k === "initial-cash") out.initialCash = Number(v);
+    if (k === "max-candidates") out.maxCandidates = Number(v);
   }
   if (!out.start || !out.end) {
     throw new Error("--start=YYYY-MM-DD and --end=YYYY-MM-DD are required");
@@ -38,77 +39,53 @@ function parseArgs(argv: string[]): BacktestOptions {
   return out;
 }
 
-const DIM = "\x1b[2m";
-const ITALIC = "\x1b[3m";
 const CYAN = "\x1b[36m";
+const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
-
-type StreamMode = "idle" | "thinking" | "text";
-
-function setMode(state: { mode: StreamMode; thinkingHeaderShown: boolean }, next: "thinking" | "text") {
-  if (state.mode === next) return;
-  if (state.mode !== "idle") process.stdout.write("\n");
-  if (next === "thinking" && !state.thinkingHeaderShown) {
-    process.stdout.write(`${DIM}${ITALIC}[thinking]${RESET}${DIM} `);
-    state.thinkingHeaderShown = true;
-  } else if (next === "thinking") {
-    process.stdout.write(`${DIM} `);
-  }
-  state.mode = next;
-}
-
-function endStreamLine(state: { mode: StreamMode; thinkingHeaderShown: boolean }) {
-  if (state.mode === "thinking") process.stdout.write(RESET);
-  if (state.mode !== "idle") process.stdout.write("\n");
-  state.mode = "idle";
-}
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const state = { mode: "idle" as StreamMode, thinkingHeaderShown: false };
 
   const summary = await runBacktestSession(args, {
     onStart: ({ runId, profile, brokerName, fridays, universe }) => {
-      console.log(`Azoth backtest (agent-driven, dynamic watchlist)`);
+      console.log(`Azoth backtest (team-driven, dynamic watchlist)`);
       console.log(`  run_id=${runId}  profile=${profile.id}@v${profile.version}  broker=${brokerName}`);
       console.log(`  ${args.start} → ${args.end}`);
-      console.log(`  discovery universe: ${universe.length} tickers (agent picks 5–10/week)`);
+      console.log(`  discovery universe: ${universe.length} tickers (team analyzes ${args.maxCandidates ?? 3}/week)`);
       console.log(`  initial cash: ${(args.initialCash / 1e6).toFixed(0)}M VND\n`);
       console.log(`Replaying ${fridays.length} weekly closes...\n`);
     },
     onTurnStart: ({ dateIso }) => {
-      state.thinkingHeaderShown = false;
       console.log(`\n${CYAN}── ${dateIso} ─────────────────────────────${RESET}`);
     },
-    onStreamEvent: (m: any) => {
-      if (m.type === "stream_event") {
-        const ev = m.event;
-        if (ev?.type === "content_block_start") {
-          const cb = ev.content_block;
-          if (cb?.type === "thinking") setMode(state, "thinking");
-          else if (cb?.type === "text") setMode(state, "text");
-          else if (cb?.type === "tool_use") {
-            endStreamLine(state);
-            process.stdout.write(`${DIM}[tool: ${cb.name}]${RESET}\n`);
-          }
-        } else if (ev?.type === "content_block_delta") {
-          const d = ev.delta;
-          if (d?.type === "thinking_delta" && d.thinking) {
-            setMode(state, "thinking");
-            process.stdout.write(d.thinking);
-          } else if (d?.type === "text_delta" && d.text) {
-            setMode(state, "text");
-            process.stdout.write(d.text);
-          }
-        } else if (ev?.type === "content_block_stop" || ev?.type === "message_stop") {
-          endStreamLine(state);
-        }
-      } else if (m.type === "result") {
-        endStreamLine(state);
+    onTeamEvent: (ev, { ticker }) => {
+      if (ev.type === "role_start") {
+        const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+        console.log(`${DIM}[${ticker}] ${tag} ...${RESET}`);
+      } else if (ev.type === "role_tool") {
+        console.log(`${DIM}[${ticker}] tool: ${ev.tool}${RESET}`);
+      } else if (ev.type === "role_end") {
+        const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+        const o = ev.output as Record<string, unknown>;
+        const summary =
+          "score" in o
+            ? `score=${Number(o.score).toFixed(2)}`
+            : "rating" in o
+              ? `${o.rating} size=${(Number(o.sizingPct ?? 0) * 100).toFixed(1)}%`
+              : "approved" in o
+                ? `approved=${o.approved}`
+                : "thesis" in o
+                  ? String(o.thesis).slice(0, 72)
+                  : "ok";
+        console.log(`${DIM}[${ticker}] ✓ ${tag} → ${summary}${RESET}`);
       }
     },
+    onOrder: (order) => {
+      const px = order.filledPrice != null ? ` @ ${order.filledPrice.toFixed(2)}` : "";
+      const reason = order.rejectReason ? ` (${order.rejectReason})` : "";
+      console.log(`  order ${order.status}: ${order.side} ${order.quantity} ${order.ticker}${px}${reason}`);
+    },
     onTurnError: (err) => {
-      endStreamLine(state);
       console.error(`  turn error: ${err.message}`);
     },
     onEquity: ({ cashVnd, mtmVnd, benchmarkMtmVnd }) => {
@@ -122,6 +99,7 @@ async function main() {
   console.log("=== Summary ===");
   console.log(`  weeks: ${summary.weeks}`);
   console.log(`  trades filled: ${summary.trades}`);
+  console.log(`  trades rejected: ${summary.rejectedTrades}`);
   console.log(`  final mtm: ${(summary.finalMtm / 1e6).toFixed(2)}M VND  (return ${summary.totalReturn.toFixed(2)}%)`);
   console.log(`  vnindex b&h: ${(summary.finalBench / 1e6).toFixed(2)}M VND  (return ${summary.benchReturn.toFixed(2)}%)`);
   console.log(`  alpha: ${(summary.totalReturn - summary.benchReturn).toFixed(2)}%`);
@@ -135,13 +113,16 @@ async function main() {
   const tradeRows = db
     .prepare("SELECT * FROM broker_orders WHERE status = 'FILLED' AND broker LIKE ? ORDER BY created_at")
     .all(`paper-bt-${summary.runId.slice(0, 8)}`);
+  const rejectedRows = db
+    .prepare("SELECT * FROM broker_orders WHERE status = 'REJECTED' AND broker LIKE ? ORDER BY created_at")
+    .all(`paper-bt-${summary.runId.slice(0, 8)}`);
 
   const outDir = resolve(azothPaths().logs, "backtests");
   mkdirSync(outDir, { recursive: true });
   const reportPath = resolve(outDir, `backtest-${summary.runId}.json`);
   writeFileSync(
     reportPath,
-    JSON.stringify({ ...summary, equity: equityRows, trades: tradeRows }, null, 2),
+    JSON.stringify({ ...summary, equity: equityRows, trades: tradeRows, rejectedOrders: rejectedRows }, null, 2),
   );
   console.log(`  report: ${reportPath}`);
 }

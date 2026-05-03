@@ -264,11 +264,12 @@ describe("runTeamAnalysis", () => {
     expect(technical).toBeDefined();
     expect(technical!.allowedTools.some((t) => t.includes("place_order"))).toBe(false);
     expect(technical!.allowedTools.some((t) => t.includes("technical_indicators"))).toBe(true);
+    expect(technical!.allowedTools).toContain("WebSearch");
 
     const bull = observedRoleOrder.find((r) => r.role === "bull");
-    expect(bull!.allowedTools).toEqual([]);
+    expect(bull!.allowedTools).toEqual(["WebSearch"]);
     const researchManager = observedRoleOrder.find((r) => r.role === "researchManager");
-    expect(researchManager!.allowedTools).toEqual([]);
+    expect(researchManager!.allowedTools).toEqual(["WebSearch"]);
   });
 
   it("downgrades bullish directional ratings to HOLD when risk rejects", async () => {
@@ -297,6 +298,70 @@ describe("runTeamAnalysis", () => {
       { ticker: "HPG", asOfDateIso: "2025-05-02", debateRounds: 1 },
     );
     expect(decision.rating).toBe("Hold");
+  });
+
+  it("normalizes percent-like sizing outputs to NAV fractions", async () => {
+    pushResponse("technical", { summary: "x", score: 0, detail: {} });
+    pushResponse("fundamentals", { summary: "x", score: 0, detail: {} });
+    pushResponse("news", { summary: "x", score: 0, detail: {} });
+    pushResponse("sentiment", { summary: "x", score: 0, detail: {} });
+    pushResponse("bull", { thesis: "y", keyPoints: [] });
+    pushResponse("bear", { thesis: "y", keyPoints: [] });
+    pushResponse("researchManager", {
+      recommendation: "Overweight",
+      rationale: "constructive",
+      strategic_actions: "build gradually",
+    });
+    pushResponse("trader", { rating: "Overweight", sizingPct: 4, rationale: "target 4 percent NAV" });
+    pushResponse("risk", { approved: true, adjustedSizingPct: 3, concerns: ["trim size"], notes: "cap at 3%" });
+    pushResponse("portfolio", {
+      rating: "Overweight",
+      sizingPct: 3,
+      rationale: "All four dimensions support a modest overweight after risk trims sizing.",
+    });
+
+    const { runTeamAnalysis } = await import("../src/agent/team/index.js");
+    const { state, decision } = await runTeamAnalysis(
+      { ticker: "HPG", asOfDateIso: "2025-05-02", debateRounds: 1 },
+    );
+
+    expect(state.trader?.sizingPct).toBeCloseTo(0.04, 5);
+    expect(state.risk?.adjustedSizingPct).toBeCloseTo(0.03, 5);
+    expect(decision.sizingPct).toBeCloseTo(0.03, 5);
+  });
+
+  it("accepts null trader entry bands for no-entry decisions", async () => {
+    pushResponse("technical", { summary: "x", score: -0.2, detail: {} });
+    pushResponse("fundamentals", { summary: "x", score: -0.1, detail: {} });
+    pushResponse("news", { summary: "x", score: 0, detail: {} });
+    pushResponse("sentiment", { summary: "x", score: 0, detail: {} });
+    pushResponse("bull", { thesis: "weak hold", keyPoints: [] });
+    pushResponse("bear", { thesis: "avoid", keyPoints: [] });
+    pushResponse("researchManager", {
+      recommendation: "Underweight",
+      rationale: "bear case is stronger",
+      strategic_actions: "avoid new entry",
+    });
+    pushResponse("trader", {
+      rating: "Underweight",
+      sizingPct: 0,
+      entryBand: { low: null, high: null },
+      rationale: "no attractive entry",
+    });
+    pushResponse("risk", { approved: true, adjustedSizingPct: 0, concerns: [], notes: "" });
+    pushResponse("portfolio", {
+      rating: "Underweight",
+      sizingPct: 0,
+      rationale: "All four dimensions argue against initiating a position.",
+    });
+
+    const { runTeamAnalysis } = await import("../src/agent/team/index.js");
+    const { state, decision } = await runTeamAnalysis(
+      { ticker: "STB", asOfDateIso: "2025-01-10", debateRounds: 1 },
+    );
+
+    expect(state.trader?.entryBand).toBeUndefined();
+    expect(decision.rating).toBe("Underweight");
   });
 
   it("downgrades bearish directional ratings to HOLD when risk rejects", async () => {

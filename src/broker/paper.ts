@@ -270,6 +270,31 @@ export class PaperBroker implements Broker {
     );
   }
 
+  async recordRejectedOrder(input: PlaceOrderInput, reason: string): Promise<Order> {
+    const db = getDb();
+    const id = randomUUID();
+    const now = nowSec();
+    db.prepare(
+      `INSERT INTO broker_orders (id,broker,ticker,side,type,quantity,limit_price,status,reject_reason,created_at,notes)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      id,
+      this.name,
+      input.ticker.toUpperCase(),
+      input.side,
+      input.type,
+      input.quantity,
+      input.limitPrice ?? null,
+      "REJECTED",
+      reason,
+      now,
+      input.notes ?? null,
+    );
+    return rowToOrder(
+      db.prepare("SELECT * FROM broker_orders WHERE id = ?").get(id) as OrderRow,
+    );
+  }
+
   async cancelOrder(id: string): Promise<Order> {
     const db = getDb();
     const row = db

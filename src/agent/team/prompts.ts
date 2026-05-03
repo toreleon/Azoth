@@ -13,10 +13,22 @@ const PRICE_NOTE =
 const JSON_NOTE =
   "Return ONLY a single JSON object as your final assistant message. No prose around the JSON, no markdown fences. Use double quotes.";
 
+const SIZING_NOTE =
+  "For sizingPct fields, return a decimal NAV fraction from 0 to 1: use 0.04 for 4%, never 4 or \"4%\".";
+
 function header(role: string, ticker: string, asOfDateIso: string) {
   return [
     `You are the ${role} on Azoth's multi-agent VN-equity desk.`,
     `Subject ticker: ${ticker}. As-of: ${asOfDateIso}.`,
+    PRICE_NOTE,
+  ].join("\n");
+}
+
+function questionHeader(role: string, question: string, asOfDateIso: string) {
+  return [
+    `You are the ${role} on Azoth's multi-agent VN-equity desk.`,
+    `User question: ${question}`,
+    `As-of: ${asOfDateIso}.`,
     PRICE_NOTE,
   ].join("\n");
 }
@@ -125,7 +137,7 @@ export function bullPrompt(
     "Bear arguments so far:",
     renderResearch(research, "bull"),
     "",
-    "You have NO tools — argue from the evidence above. Cite specific scores / numbers.",
+    "Argue primarily from the evidence above. Use WebSearch only for recent open-web context that is missing from the analyst reports, and cite URLs/dates for anything web-sourced.",
     JSON_NOTE,
     'Schema: {"thesis": string, "keyPoints": [string]}',
   ].join("\n");
@@ -149,7 +161,7 @@ export function bearPrompt(
     "Bull arguments so far:",
     renderResearch(research, "bear"),
     "",
-    "You have NO tools — argue from the evidence above. Cite specific scores / numbers.",
+    "Argue primarily from the evidence above. Use WebSearch only for recent open-web context that is missing from the analyst reports, and cite URLs/dates for anything web-sourced.",
     JSON_NOTE,
     'Schema: {"thesis": string, "keyPoints": [string]}',
   ].join("\n");
@@ -200,7 +212,7 @@ export function researchManagerPrompt(
     "Debate transcript:",
     renderDebateTranscript(research),
     "",
-    "You have NO tools — synthesize only the evidence above.",
+    "Synthesize primarily from the evidence above. Use WebSearch only to resolve fresh, material facts, and cite URLs/dates for anything web-sourced.",
     JSON_NOTE,
     'Schema: {"recommendation": "Buy"|"Overweight"|"Hold"|"Underweight"|"Sell", "rationale": string, "strategic_actions": string}',
   ].join("\n");
@@ -228,6 +240,7 @@ export function traderPrompt(
     renderResearchPlan(researchPlan),
     "",
     "Decide on the 5-tier rating: Buy, Overweight, Hold, Underweight, or Sell. Reserve Hold for genuinely balanced evidence. Size as a fraction of portfolio NAV (0..1). Provide an entry band in thousand VND when proposing directional exposure changes, and a one-line exit plan.",
+    SIZING_NOTE,
     JSON_NOTE,
     'Schema: {"rating": "Buy"|"Overweight"|"Hold"|"Underweight"|"Sell", "sizingPct": number, "entryBand": {"low": number, "high": number}, "exitPlan": string, "rationale": string}',
   ].join("\n");
@@ -253,6 +266,7 @@ export function riskPrompt(
     `Trader proposal: ${JSON.stringify(trader)}`,
     "",
     "Approve or reject. If approved with adjustments, lower sizingPct rather than veto outright. Document concerns explicitly.",
+    SIZING_NOTE.replace("sizingPct", "adjustedSizingPct"),
     JSON_NOTE,
     'Schema: {"approved": boolean, "adjustedSizingPct": number, "concerns": [string], "notes": string}',
   ].join("\n");
@@ -288,10 +302,95 @@ export function portfolioPrompt(
     "Rules:",
     " - If risk.approved is false, you MUST output Hold.",
     " - Final sizingPct = risk.adjustedSizingPct.",
+    ` - ${SIZING_NOTE}`,
     " - Rationale must cite the four analyst dimensions (technical / fundamentals / news / sentiment) and the bull-vs-bear conclusion.",
     " - This is advisory: do NOT mention placing or having placed orders.",
     userFacingLanguageInstruction(),
     JSON_NOTE,
     'Schema: {"rating": "Buy"|"Overweight"|"Hold"|"Underweight"|"Sell", "sizingPct": number, "exitPlan": string, "rationale": string}',
+  ].join("\n");
+}
+
+export function teamBullQuestionPrompt(
+  question: string,
+  asOfDateIso: string,
+  prior: ResearchReport[] = [],
+): string {
+  return [
+    questionHeader("Bullish Researcher", question, asOfDateIso),
+    "",
+    "Make the strongest constructive case for the user's question. If the question asks for an action, argue why that action could be justified.",
+    "Use concrete VN-equity reasoning. Use WebSearch for fresh context when needed, and cite URLs/dates. Do not invent market data; say when evidence must be checked.",
+    "",
+    "Prior debate:",
+    renderDebateTranscript(prior),
+    "",
+    userFacingLanguageInstruction(),
+    JSON_NOTE,
+    'Schema: {"thesis": string, "keyPoints": [string]}',
+  ].join("\n");
+}
+
+export function teamBearQuestionPrompt(
+  question: string,
+  asOfDateIso: string,
+  prior: ResearchReport[] = [],
+): string {
+  return [
+    questionHeader("Bearish Researcher", question, asOfDateIso),
+    "",
+    "Make the strongest skeptical case against the user's question. If the question asks for an action, argue why that action could be wrong or premature.",
+    "Use concrete VN-equity reasoning. Use WebSearch for fresh context when needed, and cite URLs/dates. Do not invent market data; say when evidence must be checked.",
+    "",
+    "Prior debate:",
+    renderDebateTranscript(prior),
+    "",
+    userFacingLanguageInstruction(),
+    JSON_NOTE,
+    'Schema: {"thesis": string, "keyPoints": [string]}',
+  ].join("\n");
+}
+
+export function teamRiskQuestionPrompt(
+  question: string,
+  asOfDateIso: string,
+  research: ResearchReport[],
+): string {
+  return [
+    questionHeader("Risk Manager", question, asOfDateIso),
+    "",
+    "Evaluate the debate from a portfolio-risk perspective. Use portfolio_list, macro_indices, and foreign_flow when relevant.",
+    "Approve only if the proposed direction is compatible with concentration, market regime, and risk limits. If the question is informational, approve means the answer is safe to act on as advisory context.",
+    "",
+    "Debate transcript:",
+    renderDebateTranscript(research),
+    "",
+    userFacingLanguageInstruction(),
+    JSON_NOTE,
+    'Schema: {"approved": boolean, "adjustedSizingPct": number, "concerns": [string], "notes": string}',
+  ].join("\n");
+}
+
+export function teamPortfolioQuestionPrompt(
+  question: string,
+  asOfDateIso: string,
+  research: ResearchReport[],
+  risk: RiskReview,
+): string {
+  return [
+    questionHeader("Portfolio Manager", question, asOfDateIso),
+    "",
+    "Synthesize the full debate into a direct answer to the user's question. Be decisive, but preserve uncertainty where evidence is missing.",
+    "",
+    "Debate transcript:",
+    renderDebateTranscript(research),
+    "",
+    `Risk review: ${JSON.stringify(risk)}`,
+    "",
+    "Return a concise answer, the final recommendation, key reasons, risks, and next actions.",
+    "This is advisory: do NOT mention placing or having placed orders.",
+    userFacingLanguageInstruction(),
+    JSON_NOTE,
+    'Schema: {"answer": string, "recommendation": string, "keyReasons": [string], "risks": [string], "nextActions": [string]}',
   ].join("\n");
 }

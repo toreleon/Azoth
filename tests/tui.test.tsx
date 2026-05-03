@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import React from "react";
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { render } from "ink-testing-library";
 import { App } from "../src/tui/App.js";
 import { sparkline } from "../src/tui/lib/sparkline.js";
@@ -12,11 +12,32 @@ import { formatBigVnd, formatPct, formatPrice } from "../src/tui/lib/format.js";
 import { getDb } from "../src/storage/db.js";
 import { appendSessionRecord, createSession } from "../src/runtime/sessionStore.js";
 
+const runnerMocks = vi.hoisted(() => ({
+  runTeamAnalysis: vi.fn(),
+  runTeamQuestion: vi.fn(),
+  runBacktestSession: vi.fn(),
+}));
+
+vi.mock("../src/agent/team/index.js", () => ({
+  runTeamAnalysis: runnerMocks.runTeamAnalysis,
+  runTeamQuestion: runnerMocks.runTeamQuestion,
+}));
+
+vi.mock("../src/agent/backtestRunner.js", () => ({
+  runBacktestSession: runnerMocks.runBacktestSession,
+}));
+
 beforeAll(() => {
   process.env.AZOTH_HOME = mkdtempSync(join(tmpdir(), "azoth-tui-"));
   process.env.VNSTOCK_DB = join(process.env.AZOTH_HOME, "test.db");
   process.env.ANTHROPIC_API_KEY ??= "test-key";
   getDb();
+});
+
+beforeEach(() => {
+  runnerMocks.runTeamAnalysis.mockReset();
+  runnerMocks.runTeamQuestion.mockReset();
+  runnerMocks.runBacktestSession.mockReset();
 });
 
 function strip(s: string) {
@@ -86,7 +107,129 @@ describe("Azoth TUI", () => {
     await type(stdin, "/backtest help");
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("/backtest");
-    expect(out).toContain("[profile@vN]");
+    expect(out).toContain("[YYYY-MM-DD start]");
+    unmount();
+  });
+
+  it("/team <message> runs the team chat flow and renders a result card", async () => {
+    runnerMocks.runTeamQuestion.mockImplementationOnce(async (question: string, opts: any) => {
+      opts.emit?.({ type: "role_start", role: "bull", round: 1 });
+      opts.emit?.({
+        type: "role_end",
+        role: "bull",
+        round: 1,
+        output: { thesis: "Constructive bank exposure case", keyPoints: ["credit growth"] },
+      });
+      opts.emit?.({ type: "role_start", role: "risk" });
+      opts.emit?.({
+        type: "role_end",
+        role: "risk",
+        output: { approved: true, adjustedSizingPct: 0.03, concerns: [], notes: "" },
+      });
+      return {
+        state: {
+          runId: "team-run-12345678",
+          question,
+          asOfDateIso: "2026-05-04",
+          research: [],
+        },
+        decision: {
+          question,
+          asOfDateIso: "2026-05-04",
+          teamRunId: "team-run-12345678",
+          answer: "Add selectively; keep sizing modest until confirmation.",
+          recommendation: "Selective Overweight",
+          keyReasons: ["Banks benefit from credit growth"],
+          risks: ["Asset quality can lag"],
+          nextActions: ["Compare VCB and TCB"],
+        },
+      };
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/team Should we add more bank exposure this week?");
+    await tick();
+
+    const out = strip(lastFrame() ?? "");
+    expect(runnerMocks.runTeamQuestion).toHaveBeenCalledWith(
+      "Should we add more bank exposure this week?",
+      expect.objectContaining({ emit: expect.any(Function) }),
+    );
+    expect(out).toContain("/team Should we add more bank exposure this week?");
+    expect(out).toContain("bull#1");
+    expect(out).toContain("risk");
+    expect(out).toContain("TEAM QUESTION");
+    expect(out).toContain("Selective Overweight");
+    expect(out).toContain("Add selectively");
+    unmount();
+  });
+
+  it("/backtest runs the backtest flow and renders a summary card", async () => {
+    runnerMocks.runBacktestSession.mockImplementationOnce(async (_opts: any, cb: any) => {
+      cb.onStart?.({
+        runId: "bt-run-12345678",
+        profile: { id: "vn-equity", version: 0 },
+        brokerName: "paper-bt-test",
+        fridays: [1, 2],
+        universe: ["HPG", "VCB", "FPT"],
+      });
+      cb.onTurnStart?.({ asOf: 1, dateIso: "2025-01-03" });
+      cb.onEquity?.({
+        asOf: 1,
+        dateIso: "2025-01-03",
+        cashVnd: 900_000_000,
+        mtmVnd: 1_010_000_000,
+        benchmarkMtmVnd: 1_005_000_000,
+      });
+      return {
+        runId: "bt-run-12345678",
+        profileRef: "vn-equity@v0",
+        start: "2025-01-03",
+        end: "2025-01-10",
+        initialCash: 1_000_000_000,
+        finalMtm: 1_010_000_000,
+        finalBench: 1_005_000_000,
+        totalReturn: 1,
+        benchReturn: 0.5,
+        maxDD: 0,
+        totalCost: 0.0025,
+        totalInTokens: 10,
+        totalOutTokens: 20,
+        weeks: 1,
+        trades: 2,
+        rejectedTrades: 0,
+        reportPath: null,
+      };
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/backtest 2025-01-03 2025-01-10 1000000000");
+    await tick();
+
+    expect(runnerMocks.runBacktestSession).toHaveBeenCalledWith(
+      {
+        profileRef: "vn-equity@v0",
+        start: "2025-01-03",
+        end: "2025-01-10",
+        initialCash: 1_000_000_000,
+      },
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        onStart: expect.any(Function),
+        onTurnStart: expect.any(Function),
+        onEquity: expect.any(Function),
+      }),
+    );
+    const out = strip(lastFrame() ?? "");
+    expect(out).toContain("/backtest 2025-01-03");
+    expect(out).toContain("ready");
+    expect(out).toContain("3 tickers");
+    expect(out).toContain("1/2");
+    expect(out).toContain("BACKTEST");
+    expect(out).toContain("trades");
+    expect(out).toContain("+1.00%");
     unmount();
   });
 
@@ -96,20 +239,24 @@ describe("Azoth TUI", () => {
     stdin.write("/");
     await tick();
     const out = strip(lastFrame() ?? "");
+    expect(out).toContain("/team");
+    expect(out).toContain("/analyze");
     expect(out).toContain("/backtest");
     expect(out).toContain("/journal");
+    expect(out).not.toContain("/chart");
+    expect(out).not.toContain("/alerts");
     expect(out).toContain("Tab to complete");
     unmount();
   });
 
-  it("typing /pro filters to /profile", async () => {
+  it("typing /tea filters to /team", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
-    stdin.write("/pro");
+    stdin.write("/tea");
     await tick();
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("/profile");
-    expect(out).toContain("Switch active agent profile");
+    expect(out).toContain("/team");
+    expect(out).toContain("Run multi-agent debate");
     unmount();
   });
 
@@ -124,13 +271,23 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("bottom status shows profile ref, autonomy, hint", async () => {
+  it("/help prints local slash command help", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
-    await type(stdin, "/profile vn-equity@v1");
+    await type(stdin, "/help");
     const out = strip(lastFrame() ?? "");
+    expect(out).toContain("/team <message>");
+    expect(out).toContain("/analyze <ticker>");
+    expect(out).toContain("/journal [decisions|orders|fills|alerts]");
+    unmount();
+  });
+
+  it("bottom status shows team, autonomy, hint", async () => {
+    const { lastFrame, unmount } = render(<App />);
+    await tick();
+    const out = strip(lastFrame() ?? "");
+    expect(out).toContain("team");
     expect(out).toContain("advisory");
-    expect(out).toContain("vn-equity@v1");
     expect(out).toMatch(/Ctrl\+A|Ctrl\+C|\/backtest/);
     unmount();
   });

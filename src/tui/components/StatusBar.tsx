@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Text, useStdout } from "ink";
 import { autonomyColor, sessionColor, theme } from "../lib/theme.js";
 import { formatTokens, truncate } from "../lib/format.js";
@@ -6,7 +5,6 @@ import { formatTokens, truncate } from "../lib/format.js";
 export interface StatusBarProps {
   broker: string;
   autonomy: string;
-  profileRef: string;
   sessionId?: string;
   inTokens: number;
   outTokens: number;
@@ -30,7 +28,7 @@ export function StatusBar(p: StatusBarProps) {
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Box>
-        <Text color={theme.persona}>{p.profileRef}</Text>
+        <Text color={theme.persona}>team</Text>
         <Text color={theme.muted}> · </Text>
         <Text color={autonomyColor(p.autonomy)} bold>{p.autonomy}</Text>
         {wide ? (

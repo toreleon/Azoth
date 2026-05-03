@@ -5,7 +5,7 @@ import { StatusBar } from "./components/StatusBar.js";
 import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { ToolChip } from "./components/ToolChip.js";
 import { Welcome } from "./components/Welcome.js";
-import { SlashSuggest, matchSlash } from "./components/SlashSuggest.js";
+import { SLASH_COMMANDS, SlashSuggest, matchSlash } from "./components/SlashSuggest.js";
 import { AgentStreamProvider, useAgentStreamCtx } from "./hooks/useAgentStreamContext.js";
 import { type ChatBlock } from "./hooks/useAgentStream.js";
 import { useNow } from "./hooks/useNow.js";
@@ -14,15 +14,16 @@ import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
 import { runBacktestSession, type EquityPayload } from "../agent/backtestRunner.js";
-import { runTeamAnalysis } from "../agent/team/index.js";
+import { runTeamAnalysis, runTeamQuestion } from "../agent/team/index.js";
 import type { TeamEvent } from "../agent/team/state.js";
 import { loadJournal, type JournalTab } from "./lib/journal.js";
-import { JournalCard, BacktestCard, TeamDecisionCard } from "./lib/cards.js";
+import { JournalCard, BacktestCard, TeamDecisionCard, TeamQuestionCard } from "./lib/cards.js";
 
 type Autonomy = "advisory" | "confirm" | "auto";
 
 const THINKING_ANIMATION_INTERVAL_MS = 80;
 const BT_DEFAULTS = { start: "2025-01-03", end: "2025-04-30", cash: 1_000_000_000 };
+const DEFAULT_BACKTEST_PROFILE_REF = "vn-equity@v0";
 
 function renderBlock(b: ChatBlock, toolResults: Map<string, string>, columns = 80): React.ReactNode {
   switch (b.role) {
@@ -91,7 +92,6 @@ function AppInner() {
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
 
-  const [profileRef, setProfileRef] = useState("vn-equity@v0");
   const [autonomy, setAutonomy] = useState<Autonomy>(cfg.autonomy);
   const [stats, setStats] = useState<{ inTokens: number; outTokens: number; costUsd: number; sessionId?: string }>({ inTokens: 0, outTokens: 0, costUsd: 0 });
   const [input, setInput] = useState("");
@@ -194,6 +194,43 @@ function AppInner() {
     }
   };
 
+  const runTeamChat = async (message: string) => {
+    if (!message) {
+      stream.systemMessage("/team <message>");
+      return;
+    }
+    stream.systemMessage(`─ /team ${truncate(message, 72)}`);
+    try {
+      const result = await runTeamQuestion(message, {
+        emit: (ev: TeamEvent) => {
+          if (ev.type === "role_start") {
+            const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+            stream.systemMessage(`  ▸ ${tag} thinking…`);
+          } else if (ev.type === "role_tool") {
+            stream.systemMessage(`     [${ev.role}] tool: ${ev.tool}`);
+          } else if (ev.type === "role_end") {
+            const o = ev.output as Record<string, unknown>;
+            const desc =
+              "recommendation" in o
+                ? truncate(String(o.recommendation), 80)
+                : "answer" in o
+                  ? truncate(String(o.answer), 80)
+                  : "approved" in o
+                    ? `approved=${o.approved}`
+                    : "thesis" in o
+                      ? truncate(String(o.thesis), 80)
+                      : "ok";
+            const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+            stream.systemMessage(`  ✓ ${tag} → ${desc}`);
+          }
+        },
+      });
+      stream.appendCard(<TeamQuestionCard data={result.decision} />);
+    } catch (e) {
+      stream.systemMessage(`✗ team error: ${(e as Error).message}`);
+    }
+  };
+
   const runJournal = (args: string[]) => {
     const validTabs: JournalTab[] = ["decisions", "orders", "fills", "alerts"];
     let tab: JournalTab = "decisions";
@@ -212,22 +249,20 @@ function AppInner() {
 
   const runBacktest = async (args: string[]) => {
     if (args[0] === "help") {
-      stream.systemMessage("/backtest [profile@vN] [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND]");
+      stream.systemMessage("/backtest [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND]");
       return;
     }
     if (backtestRef.current?.running) {
       stream.systemMessage("a backtest is already running — Ctrl+B to abort");
       return;
     }
-    const profileArg = args.find((a) => /^[a-z][a-z0-9_-]*@v\d+$/i.test(a));
     const dates = args.filter((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
     const cashArg = args.find((a) => /^\d{4,}$/.test(a));
-    const btProfileRef = profileArg ?? profileRef;
     const start = dates[0] ?? BT_DEFAULTS.start;
     const end = dates[1] ?? BT_DEFAULTS.end;
     const initialCash = cashArg ? Number.parseInt(cashArg, 10) : BT_DEFAULTS.cash;
 
-    stream.systemMessage(`─ /backtest ${btProfileRef} ${start} → ${end} cash ${formatBigVnd(initialCash)}`);
+    stream.systemMessage(`─ /backtest ${start} → ${end} cash ${formatBigVnd(initialCash)}`);
     stream.systemMessage(`  fetching market data… (Ctrl+B to abort)`);
 
     const ctrl = new AbortController();
@@ -237,7 +272,7 @@ function AppInner() {
 
     try {
       const summary = await runBacktestSession(
-        { profileRef: btProfileRef, start, end, initialCash },
+        { profileRef: DEFAULT_BACKTEST_PROFILE_REF, start, end, initialCash },
         {
           signal: ctrl.signal,
           onStart: ({ fridays, universe }) => {
@@ -256,7 +291,7 @@ function AppInner() {
         },
       );
       stream.appendCard(
-        <BacktestCard data={{ profileRef: btProfileRef, start, end, initialCash, summary }} />,
+        <BacktestCard data={{ start, end, initialCash, summary }} />,
       );
     } catch (e) {
       const msg = (e as Error).message;
@@ -299,7 +334,7 @@ function AppInner() {
     if (v.startsWith("/")) {
       const [cmd, ...rest] = v.slice(1).split(/\s+/);
       const arg = rest.join(" ").trim();
-      if (cmd === "clear" || cmd === "new") stream.newSession();
+      if (cmd === "new") stream.newSession();
       else if (cmd === "resume" && arg) stream.resumeById(arg);
       else if (cmd === "resume") stream.resumeLatest();
       else if (cmd === "sessions") {
@@ -313,20 +348,16 @@ function AppInner() {
             }).join("\n");
         stream.systemMessage(text);
       }
-      else if (cmd === "profile" && arg) setProfileRef(arg);
+      else if (cmd === "team") void runTeamChat(arg);
       else if (cmd === "analyze") void runAnalyze(rest);
-      else if (cmd === "backtest" || cmd === "bt") void runBacktest(rest);
+      else if (cmd === "backtest") void runBacktest(rest);
       else if (cmd === "journal") runJournal(rest);
-      else if (cmd === "decisions") runJournal(["decisions", ...rest]);
-      else if (cmd === "orders") runJournal(["orders", ...rest]);
-      else if (cmd === "fills") runJournal(["fills", ...rest]);
       else if (cmd === "quote" && arg) void stream.send(`Give me a market quote with technicals and recent news for ${arg.toUpperCase()}.`);
-      else if (cmd === "chart" && arg) void stream.send(`Show an ASCII chart of ${arg.toUpperCase()} over the last 60 trading days with key levels.`);
       else if (cmd === "positions") void stream.send("Summarize my current portfolio positions, unrealized PnL, and exposures.");
-      else if (cmd === "alerts") void stream.send("List my active price alerts and any that fired today.");
       else if (cmd === "help") {
-        void stream.send("List the commands and capabilities available in this Azoth session.");
+        stream.systemMessage(SLASH_COMMANDS.map((c) => `/${c.name}${c.args ? ` ${c.args}` : ""} — ${c.description}`).join("\n"));
       }
+      else stream.systemMessage(`Unknown command: /${cmd}. Type /help for available commands.`);
       return;
     }
 
@@ -343,7 +374,6 @@ function AppInner() {
             {it.kind === "welcome" ? (
               <Welcome
                 version="0.1.0"
-                profileRef={profileRef}
                 autonomy={autonomy}
                 broker={cfg.broker}
                 watchlist={cfg.watchlist}
@@ -376,7 +406,6 @@ function AppInner() {
       <StatusBar
         broker={cfg.broker}
         autonomy={autonomy}
-        profileRef={profileRef}
         sessionId={stats.sessionId}
         inTokens={stats.inTokens}
         outTokens={stats.outTokens}

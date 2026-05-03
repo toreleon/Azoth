@@ -5,7 +5,7 @@ function safeJson(s: string | undefined): any {
   try { return JSON.parse(s); } catch { return null; }
 }
 
-export function summarizeToolInput(name: string, raw: string | undefined): string {
+export function summarizeToolInput(raw: string | undefined): string {
   if (!raw) return "";
   const obj = safeJson(raw);
   if (!obj || typeof obj !== "object") return truncate(raw.replace(/\s+/g, " "), 60);

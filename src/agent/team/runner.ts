@@ -12,6 +12,7 @@ export interface RoleRunOptions<T> {
   round?: number;
   emit: (ev: TeamEvent) => void;
   modelOverride?: string;
+  allowWebSearch?: boolean;
 }
 
 interface RawResult {
@@ -22,6 +23,7 @@ interface RawResult {
 }
 
 const DEEP_THINK_ROLES: ReadonlySet<RoleName> = new Set(["researchManager", "portfolio"]);
+const WEB_SEARCH_TOOL = "WebSearch";
 
 function modelForRole(role: RoleName, modelOverride?: string): string {
   const cfg = loadConfig();
@@ -32,24 +34,34 @@ function modelForRole(role: RoleName, modelOverride?: string): string {
   return cfg.team.quick_model ?? cfg.model;
 }
 
-function buildOptions(role: RoleName, systemPrompt: string, modelOverride?: string): Options {
+function buildOptions(
+  role: RoleName,
+  systemPrompt: string,
+  modelOverride?: string,
+  allowWebSearch = true,
+): Options {
   const mcpName = `azoth-${role}`;
   const allowed = allowedToolIds(role);
+  const tools = allowWebSearch ? [WEB_SEARCH_TOOL] : [];
+  const allowedTools = allowWebSearch ? [WEB_SEARCH_TOOL, ...allowed] : allowed;
   const opts: Options = {
     model: modelForRole(role, modelOverride),
     systemPrompt,
     includePartialMessages: true,
+    // Keep Claude Code built-ins locked down while intentionally exposing
+    // WebSearch for supplemental current context.
+    tools,
     mcpServers: { [mcpName]: buildRoleMcpServer(role) },
-    allowedTools: allowed,
+    allowedTools,
   };
   return opts;
 }
 
 export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; raw: RawResult }> {
-  const { role, systemPrompt, userPrompt, schema, round, emit, modelOverride } = opts;
+  const { role, systemPrompt, userPrompt, schema, round, emit, modelOverride, allowWebSearch } = opts;
   emit({ type: "role_start", role, round });
 
-  const sdkOpts = buildOptions(role, systemPrompt, modelOverride);
+  const sdkOpts = buildOptions(role, systemPrompt, modelOverride, allowWebSearch);
   const stream = query({ prompt: userPrompt, options: sdkOpts });
 
   let text = "";
