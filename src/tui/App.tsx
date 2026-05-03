@@ -14,8 +14,10 @@ import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
 import { runBacktestSession, type EquityPayload } from "../agent/backtestRunner.js";
+import { runTeamAnalysis } from "../agent/team/index.js";
+import type { TeamEvent } from "../agent/team/state.js";
 import { loadJournal, type JournalTab } from "./lib/journal.js";
-import { JournalCard, BacktestCard } from "./lib/cards.js";
+import { JournalCard, BacktestCard, TeamDecisionCard } from "./lib/cards.js";
 
 type Autonomy = "advisory" | "confirm" | "auto";
 
@@ -137,6 +139,59 @@ function AppInner() {
     return items;
   }, [stream.committed]);
 
+  const runAnalyze = async (args: string[]) => {
+    if (!args.length || args[0] === "help") {
+      stream.systemMessage("/analyze <ticker> [--rounds N] [--as-of YYYY-MM-DD]");
+      return;
+    }
+    let ticker: string | undefined;
+    let rounds: number | undefined;
+    let asOf: string | undefined;
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]!;
+      if (a === "--rounds") rounds = Number(args[++i]);
+      else if (a === "--as-of") asOf = args[++i];
+      else if (!a.startsWith("-")) ticker = a.toUpperCase();
+    }
+    if (!ticker) {
+      stream.systemMessage("✗ /analyze requires a ticker");
+      return;
+    }
+    stream.systemMessage(`─ /analyze ${ticker} (rounds=${rounds ?? 2})`);
+    try {
+      const result = await runTeamAnalysis(
+        { ticker, debateRounds: rounds, asOfDateIso: asOf },
+        {
+          emit: (ev: TeamEvent) => {
+            if (ev.type === "role_start") {
+              const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+              stream.systemMessage(`  ▸ ${tag} thinking…`);
+            } else if (ev.type === "role_tool") {
+              stream.systemMessage(`     [${ev.role}] tool: ${ev.tool}`);
+            } else if (ev.type === "role_end") {
+              const o = ev.output as Record<string, unknown>;
+              const desc =
+                "score" in o
+                  ? `score=${Number(o.score).toFixed(2)} ${truncate(String(o.summary ?? ""), 60)}`
+                  : "action" in o
+                  ? `${o.action} size=${(Number(o.sizingPct) * 100).toFixed(1)}%`
+                  : "approved" in o
+                  ? `approved=${o.approved}`
+                  : "thesis" in o
+                  ? truncate(String(o.thesis), 80)
+                  : "ok";
+              const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+              stream.systemMessage(`  ✓ ${tag} → ${desc}`);
+            }
+          },
+        },
+      );
+      stream.appendCard(<TeamDecisionCard data={{ state: result.state, decision: result.decision }} />);
+    } catch (e) {
+      stream.systemMessage(`✗ analyze error: ${(e as Error).message}`);
+    }
+  };
+
   const runJournal = (args: string[]) => {
     const validTabs: JournalTab[] = ["decisions", "orders", "fills", "alerts"];
     let tab: JournalTab = "decisions";
@@ -257,6 +312,7 @@ function AppInner() {
         stream.systemMessage(text);
       }
       else if (cmd === "profile" && arg) setProfileRef(arg);
+      else if (cmd === "analyze") void runAnalyze(rest);
       else if (cmd === "backtest" || cmd === "bt") void runBacktest(rest);
       else if (cmd === "journal") runJournal(rest);
       else if (cmd === "decisions") runJournal(["decisions", ...rest]);

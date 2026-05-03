@@ -9,6 +9,7 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
+  { name: "analyze", args: "<ticker> [--rounds N]", description: "Run multi-agent debate on a ticker" },
   { name: "backtest", args: "[profile@vN] [start] [end] [cash]", description: "Run a weekly backtest, results inline" },
   { name: "journal", args: "[decisions|orders|fills|alerts] [N]", description: "Print latest journal rows inline" },
   { name: "decisions", args: "[N]", description: "Latest decisions" },

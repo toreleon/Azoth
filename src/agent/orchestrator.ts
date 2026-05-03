@@ -23,8 +23,7 @@ import {
 } from "../tools/order.js";
 import { loadConfig } from "../config/loader.js";
 import { asOfClock, setActiveAsOf, type AsOfStore } from "./clock.js";
-import { type AgentProfile, profileRef, renderProfilePrompt } from "./profile.js";
-import { type RenderedMemory, renderMemoryPrompt } from "./memory.js";
+import { type AgentProfile, renderProfilePrompt } from "./profile.js";
 import {
   activateSession,
   appendSessionRecord,
@@ -395,7 +394,6 @@ export async function* runTurn(prompt: string) {
 // ---------- Backtest mode ---------------------------------------------------
 
 export interface BacktestPromptExtras {
-  memory?: RenderedMemory;
   /** True if max-drawdown floor was breached on the previous turn. */
   defensiveFreeze?: boolean;
 }
@@ -405,7 +403,6 @@ export function buildBacktestSystemPrompt(
   asOfDateIso: string,
   extras: BacktestPromptExtras = {},
 ): string {
-  const memorySection = extras.memory ? renderMemoryPrompt(extras.memory) : "";
   const freezeSection = extras.defensiveFreeze
     ? [
         "",
@@ -435,7 +432,6 @@ export function buildBacktestSystemPrompt(
     "6. Be decisive. Brief output. The harness only cares about your tool calls.",
     "",
     renderProfilePrompt(profile),
-    memorySection ? `\n${memorySection}` : "",
     freezeSection,
     "",
     `Simulated today: ${asOfDateIso}.`,

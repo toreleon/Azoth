@@ -6,6 +6,7 @@ import { vnColor, pctColor, pnlColor } from "./colors.js";
 import { formatBigVnd, formatPct, formatPrice, truncate } from "./format.js";
 import type { JournalTab, JournalRow } from "./journal.js";
 import type { SummaryPayload } from "../../agent/backtestRunner.js";
+import type { FinalDecision, TeamState } from "../../agent/team/state.js";
 
 export interface QuoteCardData {
   ticker: string;
@@ -93,6 +94,67 @@ export function BacktestCard({ data }: { data: BacktestCardInput }) {
         <Text color={pnlColor(alpha)} bold>{formatPct(alpha)}</Text>
         <Text dimColor>   maxDD </Text>
         <Text color={theme.down}>{formatPct(data.summary.maxDD * 100)}</Text>
+      </Box>
+    </Panel>
+  );
+}
+
+export interface TeamDecisionCardInput {
+  state: TeamState;
+  decision: FinalDecision;
+}
+
+const ACTION_COLOR: Record<string, string> = {
+  BUY: theme.up,
+  SELL: theme.down,
+  HOLD: theme.muted,
+  WATCH: theme.accent,
+};
+
+export function TeamDecisionCard({ data }: { data: TeamDecisionCardInput }) {
+  const { state, decision } = data;
+  const actionColor = ACTION_COLOR[decision.action] ?? "white";
+  return (
+    <Panel
+      title={`TEAM ${decision.ticker}  ${state.asOfDateIso}`}
+      borderColor={actionColor}
+      badge={`#${decision.journalId ?? "?"}`}
+    >
+      <Box>
+        <Text bold color={actionColor}>{decision.action}</Text>
+        <Text dimColor>   size </Text>
+        <Text>{(decision.sizingPct * 100).toFixed(1)}%</Text>
+        <Text dimColor>   run </Text>
+        <Text>{decision.teamRunId.slice(0, 8)}</Text>
+      </Box>
+      <Box flexDirection="column">
+        {state.analysts.map((a) => (
+          <Box key={a.role}>
+            <Text dimColor>{a.role.padEnd(13)}</Text>
+            <Text color={a.score > 0 ? theme.up : a.score < 0 ? theme.down : theme.muted}>
+              {a.score >= 0 ? "+" : ""}
+              {a.score.toFixed(2)}
+            </Text>
+            <Text dimColor>  {truncate(a.summary, 60)}</Text>
+          </Box>
+        ))}
+      </Box>
+      {state.risk ? (
+        <Box>
+          <Text dimColor>risk </Text>
+          <Text color={state.risk.approved ? theme.up : theme.down}>
+            {state.risk.approved ? "approved" : "rejected"}
+          </Text>
+          {state.risk.concerns.length ? (
+            <Text dimColor>  · {truncate(state.risk.concerns.join("; "), 60)}</Text>
+          ) : null}
+        </Box>
+      ) : null}
+      <Box marginTop={1} flexDirection="column">
+        <Text>{truncate(decision.rationale, 240)}</Text>
+        {decision.exitPlan ? (
+          <Text dimColor>exit · {truncate(decision.exitPlan, 100)}</Text>
+        ) : null}
       </Box>
     </Panel>
   );

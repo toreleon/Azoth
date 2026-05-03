@@ -6,7 +6,6 @@ import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePubl
 import { runBacktestTurn } from "./orchestrator.js";
 import { type AgentProfile, profileRef } from "./profile.js";
 import { loadProfile } from "./profileStore.js";
-import { loadTurnMemory } from "./memory.js";
 import { DISCOVERY_UNIVERSE } from "../tools/discover.js";
 import { getCacheStats, resetCacheStats } from "../data/cache.js";
 import { replayOrRecord } from "./llmReplayCache.js";
@@ -196,10 +195,8 @@ export async function runBacktestSession(
     let cacheCreationTokens = 0;
 
     resetCacheStats();
-    const memory = loadTurnMemory(profile.id, asOf, [profile.params.discoveryCriterion]);
-    const extras = { memory, defensiveFreeze: freezeBuys };
-    const memHash = memory.long.length + memory.mid.length;
-    const replayKey = `bt|${cfg.model}|${ref}|${dateIso}|${resume ?? "0"}|${freezeBuys ? "F" : "_"}|${memHash}|${prompt}`;
+    const extras = { defensiveFreeze: freezeBuys };
+    const replayKey = `bt|${cfg.model}|${ref}|${dateIso}|${resume ?? "0"}|${freezeBuys ? "F" : "_"}|${prompt}`;
     const stream = replayOrRecord(replayKey, cfg.model, prompt, () =>
       runBacktestTurn(prompt, {
         profile,
