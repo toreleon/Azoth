@@ -111,9 +111,23 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("/team <message> runs the team chat flow and renders a result card", async () => {
+  it("/team <message> streams the team chat flow as a plain response", async () => {
     runnerMocks.runTeamQuestion.mockImplementationOnce(async (question: string, opts: any) => {
       opts.emit?.({ type: "role_start", role: "bull", round: 1 });
+      opts.emit?.({
+        type: "role_tool",
+        role: "bull",
+        tool: "WebSearch",
+        input: JSON.stringify({ query: "Vietnam banks credit growth May 2026" }),
+        toolUseId: "tool-1",
+      });
+      opts.emit?.({
+        type: "role_tool_result",
+        role: "bull",
+        tool: "WebSearch",
+        toolUseId: "tool-1",
+        content: "Search result: credit growth target remains supportive for banks.",
+      });
       opts.emit?.({
         type: "role_end",
         role: "bull",
@@ -158,14 +172,80 @@ describe("Azoth TUI", () => {
     );
     expect(out).toContain("/team Should we add more bank exposure this week?");
     expect(out).toContain("bull#1");
+    expect(out).toContain("WebSearch: Vietnam banks credit growth May 2026");
+    expect(out).toContain("WebSearch result: Search result: credit growth target");
     expect(out).toContain("risk");
-    expect(out).toContain("TEAM QUESTION");
+    expect(out).not.toContain("TEAM QUESTION");
+    expect(out).toContain("Recommendation:");
     expect(out).toContain("Selective Overweight");
     expect(out).toContain("Add selectively");
     unmount();
   });
 
-  it("/backtest runs the backtest flow and renders a summary card", async () => {
+  it("/analyze streams the team analysis as a plain response", async () => {
+    runnerMocks.runTeamAnalysis.mockImplementationOnce(async (_input: any, opts: any) => {
+      opts.emit?.({ type: "role_start", role: "technical" });
+      opts.emit?.({
+        type: "role_tool",
+        role: "technical",
+        tool: "WebSearch",
+        input: JSON.stringify({ query: "FPT Vietnam stock latest earnings" }),
+        toolUseId: "tool-2",
+      });
+      opts.emit?.({
+        type: "role_tool_result",
+        role: "technical",
+        tool: "WebSearch",
+        toolUseId: "tool-2",
+        content: "Search result: FPT earnings were resilient.",
+      });
+      opts.emit?.({
+        type: "role_end",
+        role: "technical",
+        output: { summary: "trend improving", score: 0.35, detail: {} },
+      });
+      return {
+        state: {
+          runId: "team-run-87654321",
+          ticker: "FPT",
+          asOfDateIso: "2026-05-04",
+          analysts: [{ role: "technical", summary: "trend improving", score: 0.35, detail: {} }],
+          research: [],
+          risk: { approved: true, adjustedSizingPct: 0.04, concerns: [], notes: "" },
+        },
+        decision: {
+          ticker: "FPT",
+          rating: "Overweight",
+          sizingPct: 0.04,
+          rationale: "Momentum and fundamentals justify a modest overweight.",
+          exitPlan: "Cut if trend breaks.",
+          teamRunId: "team-run-87654321",
+          journalId: 12,
+        },
+      };
+    });
+
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/analyze FPT --rounds 1");
+    await tick();
+
+    const out = strip(lastFrame() ?? "");
+    expect(runnerMocks.runTeamAnalysis).toHaveBeenCalledWith(
+      { ticker: "FPT", debateRounds: 1, asOfDateIso: undefined },
+      expect.objectContaining({ emit: expect.any(Function) }),
+    );
+    expect(out).toContain("/analyze FPT");
+    expect(out).toContain("technical");
+    expect(out).toContain("WebSearch: FPT Vietnam stock latest earnings");
+    expect(out).toContain("WebSearch result: Search result: FPT earnings");
+    expect(out).not.toContain("TEAM FPT");
+    expect(out).toContain("Final: Overweight 4.0% FPT");
+    expect(out).toContain("Momentum and fundamentals");
+    unmount();
+  });
+
+  it("/backtest streams the backtest flow as a plain response", async () => {
     runnerMocks.runBacktestSession.mockImplementationOnce(async (_opts: any, cb: any) => {
       cb.onStart?.({
         runId: "bt-run-12345678",
@@ -175,6 +255,57 @@ describe("Azoth TUI", () => {
         universe: ["HPG", "VCB", "FPT"],
       });
       cb.onTurnStart?.({ asOf: 1, dateIso: "2025-01-03" });
+      cb.onTeamEvent?.({ type: "role_start", role: "technical" }, { asOf: 1, dateIso: "2025-01-03", ticker: "HPG" });
+      cb.onTeamEvent?.({
+        type: "role_tool",
+        role: "technical",
+        tool: "WebSearch",
+        input: JSON.stringify({ query: "HPG steel demand Vietnam 2025" }),
+        toolUseId: "tool-3",
+      }, { asOf: 1, dateIso: "2025-01-03", ticker: "HPG" });
+      cb.onTeamEvent?.({
+        type: "role_tool_result",
+        role: "technical",
+        tool: "WebSearch",
+        toolUseId: "tool-3",
+        content: "Search result: steel demand stayed mixed.",
+      }, { asOf: 1, dateIso: "2025-01-03", ticker: "HPG" });
+      cb.onTeamEvent?.({
+        type: "role_end",
+        role: "technical",
+        output: { summary: "momentum improving", score: 0.4, detail: {} },
+      }, { asOf: 1, dateIso: "2025-01-03", ticker: "HPG" });
+      cb.onTeamEvent?.({
+        type: "role_end",
+        role: "portfolio",
+        output: { rating: "Overweight", sizingPct: 0.05, rationale: "team decision" },
+      }, { asOf: 1, dateIso: "2025-01-03", ticker: "HPG" });
+      cb.onOrder?.({
+        id: "order-1",
+        broker: "paper-bt-test",
+        ticker: "HPG",
+        side: "BUY",
+        type: "MARKET",
+        quantity: 1000,
+        limitPrice: null,
+        status: "FILLED",
+        rejectReason: null,
+        createdAt: 1,
+        filledAt: 1,
+        filledPrice: 28.5,
+        filledQty: 1000,
+        notes: "team Overweight",
+      }, {
+        asOf: 1,
+        dateIso: "2025-01-03",
+        decision: {
+          ticker: "HPG",
+          rating: "Overweight",
+          sizingPct: 0.05,
+          rationale: "team decision",
+          teamRunId: "team-run",
+        },
+      });
       cb.onEquity?.({
         asOf: 1,
         dateIso: "2025-01-03",
@@ -214,20 +345,31 @@ describe("Azoth TUI", () => {
         start: "2025-01-03",
         end: "2025-01-10",
         initialCash: 1_000_000_000,
+        maxCandidates: undefined,
       },
       expect.objectContaining({
         signal: expect.any(AbortSignal),
         onStart: expect.any(Function),
         onTurnStart: expect.any(Function),
+        onTeamEvent: expect.any(Function),
+        onOrder: expect.any(Function),
         onEquity: expect.any(Function),
       }),
     );
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("/backtest 2025-01-03");
-    expect(out).toContain("ready");
+    expect(out).toContain("Ready");
     expect(out).toContain("3 tickers");
-    expect(out).toContain("1/2");
-    expect(out).toContain("BACKTEST");
+    expect(out).toContain("team analyzes 3/week");
+    expect(out).toContain("team analysis");
+    expect(out).toContain("[HPG]");
+    expect(out).toContain("technical WebSearch: HPG steel demand Vietnam 2025");
+    expect(out).toContain("technical WebSearch result: Search result: steel demand");
+    expect(out).toContain("technical");
+    expect(out).toContain("portfolio");
+    expect(out).toContain("order FILLED");
+    expect(out).not.toContain("BACKTEST  2025");
+    expect(out).toContain("Backtest 2025");
     expect(out).toContain("trades");
     expect(out).toContain("+1.00%");
     unmount();

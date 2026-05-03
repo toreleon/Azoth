@@ -84,7 +84,8 @@ export type TeamEvent =
   | { type: "run_start"; runId: string; ticker: string }
   | { type: "role_start"; role: RoleName; round?: number }
   | { type: "role_delta"; role: RoleName; text: string }
-  | { type: "role_tool"; role: RoleName; tool: string }
+  | { type: "role_tool"; role: RoleName; tool: string; input?: string; toolUseId?: string }
+  | { type: "role_tool_result"; role: RoleName; tool?: string; toolUseId?: string; content: string }
   | { type: "role_end"; role: RoleName; round?: number; output: unknown; usage?: RoleUsage }
   | { type: "final"; decision: FinalDecision }
   | { type: "error"; role?: RoleName; message: string };

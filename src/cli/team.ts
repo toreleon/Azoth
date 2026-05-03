@@ -38,7 +38,10 @@ function emit(ev: TeamEvent): void {
       break;
     }
     case "role_tool":
-      process.stdout.write(`     [${ev.role}] tool: ${ev.tool}\n`);
+      process.stdout.write(`     [${ev.role}] ${ev.tool}${formatToolInput(ev.input)}\n`);
+      break;
+    case "role_tool_result":
+      process.stdout.write(`     [${ev.role}] ${ev.tool ?? "tool"} result: ${formatToolResult(ev.content)}\n`);
       break;
     case "role_end": {
       const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
@@ -49,6 +52,22 @@ function emit(ev: TeamEvent): void {
       process.stderr.write(`✗ ${ev.role ?? "team"}: ${ev.message}\n`);
       break;
   }
+}
+
+function formatToolInput(input?: string): string {
+  if (!input) return "";
+  try {
+    const parsed = JSON.parse(input) as Record<string, unknown>;
+    const query = parsed.query ?? parsed.q ?? parsed.search_query ?? parsed.url;
+    if (query != null) return `: ${String(query)}`;
+  } catch {
+    // Fall back to raw streamed JSON.
+  }
+  return `: ${input.replace(/\s+/g, " ").trim()}`;
+}
+
+function formatToolResult(content: string): string {
+  return content.replace(/\s+/g, " ").trim().slice(0, 900);
 }
 
 function summarize(output: unknown): string {

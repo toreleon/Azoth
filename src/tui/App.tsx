@@ -11,19 +11,124 @@ import { type ChatBlock } from "./hooks/useAgentStream.js";
 import { useNow } from "./hooks/useNow.js";
 import { loadConfig } from "../config/loader.js";
 import { classifySession } from "./lib/marketSession.js";
-import { formatBigVnd, truncate } from "./lib/format.js";
+import { formatBigVnd, formatPct, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
-import { runBacktestSession, type EquityPayload } from "../agent/backtestRunner.js";
+import { runBacktestSession, type EquityPayload, type SummaryPayload } from "../agent/backtestRunner.js";
 import { runTeamAnalysis, runTeamQuestion } from "../agent/team/index.js";
-import type { TeamEvent } from "../agent/team/state.js";
+import type { FinalDecision, TeamEvent, TeamState } from "../agent/team/state.js";
 import { loadJournal, type JournalTab } from "./lib/journal.js";
-import { JournalCard, BacktestCard, TeamDecisionCard, TeamQuestionCard } from "./lib/cards.js";
+import { JournalCard } from "./lib/cards.js";
 
 type Autonomy = "advisory" | "confirm" | "auto";
 
 const THINKING_ANIMATION_INTERVAL_MS = 80;
 const BT_DEFAULTS = { start: "2025-01-03", end: "2025-04-30", cash: 1_000_000_000 };
 const DEFAULT_BACKTEST_PROFILE_REF = "vn-equity@v0";
+
+function teamRoleDesc(output: Record<string, unknown>, mode: "analyze" | "question" | "backtest") {
+  if ("score" in output) {
+    const suffix = mode === "backtest" ? "" : ` ${truncate(String(output.summary ?? ""), 60)}`;
+    return `score=${Number(output.score).toFixed(2)}${suffix}`;
+  }
+  if ("rating" in output) return `${output.rating} size=${(Number(output.sizingPct ?? 0) * 100).toFixed(1)}%`;
+  if ("recommendation" in output) return truncate(String(output.recommendation), 80);
+  if ("answer" in output) return truncate(String(output.answer), 80);
+  if ("action" in output) return `${output.action} size=${(Number(output.sizingPct ?? 0) * 100).toFixed(1)}%`;
+  if ("approved" in output) return `approved=${output.approved}`;
+  if ("thesis" in output) return truncate(String(output.thesis), mode === "backtest" ? 72 : 80);
+  return "ok";
+}
+
+function compactToolInput(input?: string) {
+  if (!input) return "";
+  try {
+    const parsed = JSON.parse(input) as Record<string, unknown>;
+    const query = parsed.query ?? parsed.q ?? parsed.search_query ?? parsed.url;
+    if (query != null) return String(query);
+  } catch {
+    // Fall back to the raw streamed JSON below.
+  }
+  return input.replace(/\s+/g, " ").trim();
+}
+
+function compactToolResult(content: string) {
+  return truncate(content.replace(/\s+/g, " ").trim(), 900);
+}
+
+function renderTeamToolCall(ev: Extract<TeamEvent, { type: "role_tool" }>, prefix = "") {
+  const input = compactToolInput(ev.input);
+  return `${prefix}[${ev.role}] ${ev.tool}${input ? `: ${input}` : ""}\n`;
+}
+
+function renderTeamToolResult(ev: Extract<TeamEvent, { type: "role_tool_result" }>, prefix = "") {
+  return `${prefix}[${ev.role}] ${ev.tool ?? "tool"} result: ${compactToolResult(ev.content)}\n`;
+}
+
+function renderAnalyzeResult(state: TeamState, decision: FinalDecision) {
+  const lines = [
+    "",
+    `Final: ${decision.rating} ${(decision.sizingPct * 100).toFixed(1)}% ${decision.ticker}`,
+    `Run: ${decision.teamRunId.slice(0, 8)}${decision.journalId ? `  journal #${decision.journalId}` : ""}`,
+  ];
+  if (state.analysts.length) {
+    lines.push("", "Analysts:");
+    for (const a of state.analysts) {
+      const score = `${a.score >= 0 ? "+" : ""}${a.score.toFixed(2)}`;
+      lines.push(`- ${a.role}: ${score} ${truncate(a.summary, 90)}`);
+    }
+  }
+  if (state.risk) {
+    const concerns = state.risk.concerns.length ? `; ${truncate(state.risk.concerns.join("; "), 90)}` : "";
+    lines.push("", `Risk: ${state.risk.approved ? "approved" : "rejected"}${concerns}`);
+  }
+  lines.push("", decision.rationale);
+  if (decision.exitPlan) lines.push("", `Exit: ${decision.exitPlan}`);
+  return lines.join("\n");
+}
+
+function renderTeamQuestionResult(data: {
+  question: string;
+  asOfDateIso: string;
+  teamRunId: string;
+  answer: string;
+  recommendation: string;
+  keyReasons: string[];
+  risks: string[];
+  nextActions: string[];
+}) {
+  const lines = [
+    "",
+    `Recommendation: ${data.recommendation}`,
+    `Run: ${data.teamRunId.slice(0, 8)}  as of ${data.asOfDateIso}`,
+    "",
+    data.answer,
+  ];
+  if (data.keyReasons.length) {
+    lines.push("", "Reasons:");
+    for (const r of data.keyReasons.slice(0, 4)) lines.push(`- ${r}`);
+  }
+  if (data.risks.length) {
+    lines.push("", "Risks:");
+    for (const r of data.risks.slice(0, 3)) lines.push(`- ${r}`);
+  }
+  if (data.nextActions.length) {
+    lines.push("", "Next:");
+    for (const a of data.nextActions.slice(0, 3)) lines.push(`- ${a}`);
+  }
+  return lines.join("\n");
+}
+
+function renderBacktestResult(start: string, end: string, initialCash: number, summary: SummaryPayload) {
+  const alpha = summary.totalReturn - summary.benchReturn;
+  return [
+    "",
+    `Backtest ${start} -> ${end}`,
+    `Cash: ${formatBigVnd(initialCash)}  weeks: ${summary.weeks}  trades: ${summary.trades}${summary.rejectedTrades ? `  rejected: ${summary.rejectedTrades}` : ""}`,
+    `Final: ${formatBigVnd(summary.finalMtm)}  bench: ${formatBigVnd(summary.finalBench)}`,
+    `Return: ${formatPct(summary.totalReturn)}  bench: ${formatPct(summary.benchReturn)}  alpha: ${formatPct(alpha)}  maxDD: ${formatPct(summary.maxDD * 100)}`,
+    `Cost: $${summary.totalCost.toFixed(4)}`,
+  ].join("\n");
+}
 
 function renderBlock(b: ChatBlock, toolResults: Map<string, string>, columns = 80): React.ReactNode {
   switch (b.role) {
@@ -157,7 +262,8 @@ function AppInner() {
       stream.systemMessage("✗ /analyze requires a ticker");
       return;
     }
-    stream.systemMessage(`─ /analyze ${ticker} (rounds=${rounds ?? 2})`);
+    stream.beginLocalResponse(`/analyze ${ticker} (rounds=${rounds ?? 2})`);
+    stream.appendLocalResponse(`Running team analysis for ${ticker}...\n`);
     try {
       const result = await runTeamAnalysis(
         { ticker, debateRounds: rounds, asOfDateIso: asOf },
@@ -165,32 +271,24 @@ function AppInner() {
           emit: (ev: TeamEvent) => {
             if (ev.type === "role_start") {
               const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.systemMessage(`  ▸ ${tag} thinking…`);
+              stream.appendLocalResponse(`- ${tag} thinking...\n`);
             } else if (ev.type === "role_tool") {
-              stream.systemMessage(`     [${ev.role}] tool: ${ev.tool}`);
+              stream.appendLocalResponse(renderTeamToolCall(ev, "  "));
+            } else if (ev.type === "role_tool_result") {
+              stream.appendLocalResponse(renderTeamToolResult(ev, "  "));
             } else if (ev.type === "role_end") {
-              const o = ev.output as Record<string, unknown>;
-              const desc =
-                "score" in o
-                  ? `score=${Number(o.score).toFixed(2)} ${truncate(String(o.summary ?? ""), 60)}`
-                  : "rating" in o
-                  ? `${o.rating} size=${(Number(o.sizingPct) * 100).toFixed(1)}%`
-                  : "action" in o
-                  ? `${o.action} size=${(Number(o.sizingPct ?? 0) * 100).toFixed(1)}%`
-                  : "approved" in o
-                  ? `approved=${o.approved}`
-                  : "thesis" in o
-                  ? truncate(String(o.thesis), 80)
-                  : "ok";
+              const desc = teamRoleDesc(ev.output as Record<string, unknown>, "analyze");
               const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.systemMessage(`  ✓ ${tag} → ${desc}`);
+              stream.appendLocalResponse(`  ${tag} -> ${desc}\n`);
             }
           },
         },
       );
-      stream.appendCard(<TeamDecisionCard data={{ state: result.state, decision: result.decision }} />);
+      stream.appendLocalResponse(renderAnalyzeResult(result.state, result.decision));
     } catch (e) {
-      stream.systemMessage(`✗ analyze error: ${(e as Error).message}`);
+      stream.appendLocalResponse(`Analyze error: ${(e as Error).message}`);
+    } finally {
+      stream.finishLocalResponse();
     }
   };
 
@@ -199,35 +297,30 @@ function AppInner() {
       stream.systemMessage("/team <message>");
       return;
     }
-    stream.systemMessage(`─ /team ${truncate(message, 72)}`);
+    stream.beginLocalResponse(`/team ${message}`);
+    stream.appendLocalResponse("Running team debate...\n");
     try {
       const result = await runTeamQuestion(message, {
         emit: (ev: TeamEvent) => {
           if (ev.type === "role_start") {
             const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-            stream.systemMessage(`  ▸ ${tag} thinking…`);
+            stream.appendLocalResponse(`- ${tag} thinking...\n`);
           } else if (ev.type === "role_tool") {
-            stream.systemMessage(`     [${ev.role}] tool: ${ev.tool}`);
+            stream.appendLocalResponse(renderTeamToolCall(ev, "  "));
+          } else if (ev.type === "role_tool_result") {
+            stream.appendLocalResponse(renderTeamToolResult(ev, "  "));
           } else if (ev.type === "role_end") {
-            const o = ev.output as Record<string, unknown>;
-            const desc =
-              "recommendation" in o
-                ? truncate(String(o.recommendation), 80)
-                : "answer" in o
-                  ? truncate(String(o.answer), 80)
-                  : "approved" in o
-                    ? `approved=${o.approved}`
-                    : "thesis" in o
-                      ? truncate(String(o.thesis), 80)
-                      : "ok";
+            const desc = teamRoleDesc(ev.output as Record<string, unknown>, "question");
             const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-            stream.systemMessage(`  ✓ ${tag} → ${desc}`);
+            stream.appendLocalResponse(`  ${tag} -> ${desc}\n`);
           }
         },
       });
-      stream.appendCard(<TeamQuestionCard data={result.decision} />);
+      stream.appendLocalResponse(renderTeamQuestionResult(result.decision));
     } catch (e) {
-      stream.systemMessage(`✗ team error: ${(e as Error).message}`);
+      stream.appendLocalResponse(`Team error: ${(e as Error).message}`);
+    } finally {
+      stream.finishLocalResponse();
     }
   };
 
@@ -249,7 +342,7 @@ function AppInner() {
 
   const runBacktest = async (args: string[]) => {
     if (args[0] === "help") {
-      stream.systemMessage("/backtest [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND]");
+      stream.systemMessage("/backtest [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND] [--max-candidates N]");
       return;
     }
     if (backtestRef.current?.running) {
@@ -258,12 +351,21 @@ function AppInner() {
     }
     const dates = args.filter((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
     const cashArg = args.find((a) => /^\d{4,}$/.test(a));
+    const maxCandidatesArg = args.findIndex((a) => a === "--max-candidates");
+    const maxCandidatesEq = args.find((a) => a.startsWith("--max-candidates="));
+    const maxCandidates =
+      maxCandidatesArg >= 0 && args[maxCandidatesArg + 1]
+        ? Number.parseInt(args[maxCandidatesArg + 1]!, 10)
+        : maxCandidatesEq
+          ? Number.parseInt(maxCandidatesEq.slice("--max-candidates=".length), 10)
+          : undefined;
     const start = dates[0] ?? BT_DEFAULTS.start;
     const end = dates[1] ?? BT_DEFAULTS.end;
     const initialCash = cashArg ? Number.parseInt(cashArg, 10) : BT_DEFAULTS.cash;
 
-    stream.systemMessage(`─ /backtest ${start} → ${end} cash ${formatBigVnd(initialCash)}`);
-    stream.systemMessage(`  fetching market data… (Ctrl+B to abort)`);
+    stream.beginLocalResponse(`/backtest ${start} ${end} ${initialCash}`);
+    stream.appendLocalResponse(`Team-driven replay from ${start} to ${end}, cash ${formatBigVnd(initialCash)}.\n`);
+    stream.appendLocalResponse("Fetching market data... Ctrl+B to abort.\n");
 
     const ctrl = new AbortController();
     backtestRef.current = { ctrl, running: true };
@@ -272,32 +374,53 @@ function AppInner() {
 
     try {
       const summary = await runBacktestSession(
-        { profileRef: DEFAULT_BACKTEST_PROFILE_REF, start, end, initialCash },
+        { profileRef: DEFAULT_BACKTEST_PROFILE_REF, start, end, initialCash, maxCandidates },
         {
           signal: ctrl.signal,
           onStart: ({ fridays, universe }) => {
             totalFridays = fridays.length;
-            stream.systemMessage(`  ready · ${universe.length} tickers · ${totalFridays} weeks`);
+            stream.appendLocalResponse(
+              `Ready: ${universe.length} tickers, ${totalFridays} weeks, team analyzes ${maxCandidates ?? 3}/week.\n`,
+            );
           },
           onTurnStart: ({ dateIso }) => {
             turnIdx += 1;
-            stream.systemMessage(`  ▸ ${turnIdx}/${totalFridays}  ${dateIso}  thinking…`);
+            stream.appendLocalResponse(`\n${turnIdx}/${totalFridays} ${dateIso} team analysis...\n`);
+          },
+          onTeamEvent: (ev, { ticker }) => {
+            if (ev.type === "role_start") {
+              const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+              stream.appendLocalResponse(`- [${ticker}] ${tag}...\n`);
+            } else if (ev.type === "role_tool") {
+              const input = compactToolInput(ev.input);
+              stream.appendLocalResponse(`  [${ticker}] ${ev.role} ${ev.tool}${input ? `: ${input}` : ""}\n`);
+            } else if (ev.type === "role_tool_result") {
+              stream.appendLocalResponse(`  [${ticker}] ${ev.role} ${ev.tool ?? "tool"} result: ${compactToolResult(ev.content)}\n`);
+            } else if (ev.type === "role_end") {
+              const desc = teamRoleDesc(ev.output as Record<string, unknown>, "backtest");
+              const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
+              stream.appendLocalResponse(`  [${ticker}] ${tag} -> ${desc}\n`);
+            }
+          },
+          onOrder: (order) => {
+            const px = order.filledPrice != null ? ` @ ${order.filledPrice.toFixed(2)}` : "";
+            const reason = order.rejectReason ? ` · ${truncate(order.rejectReason, 80)}` : "";
+            stream.appendLocalResponse(`  order ${order.status}: ${order.side} ${order.quantity} ${order.ticker}${px}${reason}\n`);
           },
           onEquity: (e: EquityPayload) => {
-            stream.systemMessage(
-              `    ${e.dateIso}  mtm ${formatBigVnd(e.mtmVnd)}  bench ${formatBigVnd(e.benchmarkMtmVnd)}`,
+            stream.appendLocalResponse(
+              `  ${e.dateIso} mtm ${formatBigVnd(e.mtmVnd)} bench ${formatBigVnd(e.benchmarkMtmVnd)}\n`,
             );
           },
         },
       );
-      stream.appendCard(
-        <BacktestCard data={{ start, end, initialCash, summary }} />,
-      );
+      stream.appendLocalResponse(renderBacktestResult(start, end, initialCash, summary));
     } catch (e) {
       const msg = (e as Error).message;
-      stream.systemMessage(msg === "aborted" ? "✗ backtest aborted" : `✗ backtest error: ${msg}`);
+      stream.appendLocalResponse(msg === "aborted" ? "Backtest aborted." : `Backtest error: ${msg}`);
     } finally {
       backtestRef.current = null;
+      stream.finishLocalResponse();
     }
   };
 

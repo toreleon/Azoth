@@ -63,7 +63,9 @@ async function main() {
         const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
         console.log(`${DIM}[${ticker}] ${tag} ...${RESET}`);
       } else if (ev.type === "role_tool") {
-        console.log(`${DIM}[${ticker}] tool: ${ev.tool}${RESET}`);
+        console.log(`${DIM}[${ticker}] ${ev.role} ${ev.tool}${formatToolInput(ev.input)}${RESET}`);
+      } else if (ev.type === "role_tool_result") {
+        console.log(`${DIM}[${ticker}] ${ev.role} ${ev.tool ?? "tool"} result: ${formatToolResult(ev.content)}${RESET}`);
       } else if (ev.type === "role_end") {
         const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
         const o = ev.output as Record<string, unknown>;
@@ -125,6 +127,22 @@ async function main() {
     JSON.stringify({ ...summary, equity: equityRows, trades: tradeRows, rejectedOrders: rejectedRows }, null, 2),
   );
   console.log(`  report: ${reportPath}`);
+}
+
+function formatToolInput(input?: string): string {
+  if (!input) return "";
+  try {
+    const parsed = JSON.parse(input) as Record<string, unknown>;
+    const query = parsed.query ?? parsed.q ?? parsed.search_query ?? parsed.url;
+    if (query != null) return `: ${String(query)}`;
+  } catch {
+    // Fall back to raw streamed JSON.
+  }
+  return `: ${input.replace(/\s+/g, " ").trim()}`;
+}
+
+function formatToolResult(content: string): string {
+  return content.replace(/\s+/g, " ").trim().slice(0, 900);
 }
 
 main().catch((err) => {

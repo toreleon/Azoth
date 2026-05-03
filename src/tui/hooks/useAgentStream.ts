@@ -41,6 +41,9 @@ export interface AgentStreamState {
   streaming: boolean;
   cumulative: TurnStats;
   send: (prompt: string) => Promise<void>;
+  beginLocalResponse: (prompt?: string) => void;
+  appendLocalResponse: (text: string) => void;
+  finishLocalResponse: () => void;
   abort: () => void;
   reset: () => void;
   newSession: () => void;
@@ -272,6 +275,22 @@ export function useAgentStream(): AgentStreamState {
     }
   }, []);
 
+  const beginLocalResponse = useCallback((prompt?: string) => {
+    abortRef.current = false;
+    setStreaming(true);
+    if (prompt?.trim()) appendCommitted({ id: nextId(), role: "user", text: prompt });
+    startActive({ id: nextId(), role: "text", text: "" });
+  }, []);
+
+  const appendLocalResponse = useCallback((text: string) => {
+    updateActive((b) => (b.role === "text" ? { ...b, text: b.text + text } : b));
+  }, []);
+
+  const finishLocalResponse = useCallback(() => {
+    finalizeActive();
+    setStreaming(false);
+  }, []);
+
   const abort = useCallback(() => {
     abortRef.current = true;
   }, []);
@@ -346,6 +365,9 @@ export function useAgentStream(): AgentStreamState {
     streaming,
     cumulative,
     send,
+    beginLocalResponse,
+    appendLocalResponse,
+    finishLocalResponse,
     abort,
     reset,
     newSession,

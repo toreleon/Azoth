@@ -22,24 +22,6 @@ export interface BacktestOptions {
   maxCandidates?: number;
 }
 
-export interface TurnResultPayload {
-  asOf: number;
-  dateIso: string;
-  prompt: string;
-  response: string;
-  sessionId: string | undefined;
-  inTokens: number;
-  outTokens: number;
-  costUsd: number;
-  toolCalls: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-  cacheHits: number;
-  cacheMisses: number;
-  inflightCollapses: number;
-  llmReplayHit: boolean;
-}
-
 export interface EquityPayload {
   asOf: number;
   dateIso: string;
@@ -73,7 +55,6 @@ export interface BacktestCallbacks {
   onTurnStart?: (info: { asOf: number; dateIso: string }) => void;
   onTeamEvent?: (ev: TeamEvent, ctx: { asOf: number; dateIso: string; ticker: string }) => void;
   onOrder?: (order: Order, ctx: { asOf: number; dateIso: string; decision: FinalDecision }) => void;
-  onTurnEnd?: (turn: TurnResultPayload) => void;
   onEquity?: (eq: EquityPayload) => void;
   onTurnError?: (err: Error, ctx: { asOf: number; dateIso: string }) => void;
   onComplete?: (summary: SummaryPayload) => void;
@@ -289,7 +270,6 @@ export async function runBacktestSession(
     let inTokens = 0;
     let outTokens = 0;
     let costUsd = 0;
-    let toolCalls = 0;
 
     try {
       setActiveAsOf({ asOfSec: asOf, brokerName, freezeBuys });
@@ -312,7 +292,6 @@ export async function runBacktestSession(
             allowWebSearch: false,
             emit: (ev) => {
               cb.onTeamEvent?.(ev, { asOf, dateIso, ticker });
-              if (ev.type === "role_tool") toolCalls++;
               if (ev.type === "role_end") {
                 const usage = ev.usage ?? {};
                 inTokens += usage.inputTokens ?? 0;
@@ -348,24 +327,6 @@ export async function runBacktestSession(
           cache_read_tokens, cache_creation_tokens)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(runId, asOf, null, prompt, response, inTokens, outTokens, costUsd, 0, 0);
-
-    cb.onTurnEnd?.({
-      asOf,
-      dateIso,
-      prompt,
-      response,
-      sessionId: undefined,
-      inTokens,
-      outTokens,
-      costUsd,
-      toolCalls,
-      cacheReadTokens: 0,
-      cacheCreationTokens: 0,
-      cacheHits: 0,
-      cacheMisses: 0,
-      inflightCollapses: 0,
-      llmReplayHit: false,
-    });
 
     const snap = await broker.snapshot();
     let mtm = snap.cashVnd;

@@ -66,6 +66,8 @@ export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; 
 
   let text = "";
   let currentText = "";
+  let currentTool: { tool: string; toolUseId?: string; input: string } | null = null;
+  const toolsById = new Map<string, string>();
   let toolCount = 0;
   const usage: RoleUsage = {};
   let sessionId: string | undefined;
@@ -77,7 +79,7 @@ export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; 
         const cb = ev.content_block;
         if (cb?.type === "tool_use") {
           toolCount++;
-          emit({ type: "role_tool", role, tool: cb.name ?? "?" });
+          currentTool = { tool: cb.name ?? "?", toolUseId: cb.id, input: "" };
         } else if (cb?.type === "text") {
           currentText = "";
         }
@@ -87,6 +89,39 @@ export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; 
           text += d.text;
           currentText += d.text;
           emit({ type: "role_delta", role, text: d.text });
+        } else if (d?.type === "input_json_delta" && d.partial_json && currentTool) {
+          currentTool.input += d.partial_json;
+        }
+      } else if (ev?.type === "content_block_stop" && currentTool) {
+        if (currentTool.toolUseId) toolsById.set(currentTool.toolUseId, currentTool.tool);
+        emit({
+          type: "role_tool",
+          role,
+          tool: currentTool.tool,
+          input: currentTool.input || undefined,
+          toolUseId: currentTool.toolUseId,
+        });
+        currentTool = null;
+      }
+    } else if (message.type === "user") {
+      const content = (message as any).message?.content;
+      if (Array.isArray(content)) {
+        for (const c of content) {
+          if (c?.type === "tool_result") {
+            const resultText = typeof c.content === "string"
+              ? c.content
+              : Array.isArray(c.content)
+                ? c.content.map((x: any) => x?.text ?? "").join("")
+                : JSON.stringify(c.content);
+            const toolUseId = c.tool_use_id as string | undefined;
+            emit({
+              type: "role_tool_result",
+              role,
+              toolUseId,
+              tool: toolUseId ? toolsById.get(toolUseId) : undefined,
+              content: resultText.slice(0, 4000),
+            });
+          }
         }
       }
     } else if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
