@@ -4,8 +4,24 @@ import { render } from "ink";
 import { App } from "../tui/App.js";
 import { getDb, closeDb } from "../storage/db.js";
 import { loadConfig } from "../config/loader.js";
+import { azothPaths } from "../runtime/paths.js";
+
+function printInitResult() {
+  getDb();
+  closeDb();
+  const paths = azothPaths();
+  console.log(`Azoth runtime initialized at ${paths.home}`);
+  console.log(`Config: ${paths.config}`);
+  console.log(`Database: ${process.env.VNSTOCK_DB ?? paths.db}`);
+}
 
 function main() {
+  const command = process.argv[2];
+  if (command === "init" || command === "--init") {
+    printInitResult();
+    return;
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error("ANTHROPIC_API_KEY is not set. Copy ~/.azoth/.env.example to ~/.azoth/.env and fill it in.");
     process.exit(1);

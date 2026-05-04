@@ -65,7 +65,7 @@ export function buildSystemPrompt(): string {
     "1. Always ground recommendations in tool output, not memory. Cite the value, ticker, and source you used.",
     "2. Vietnamese tickers are 3-letter (4 for some derivatives). Uppercase them.",
     "3. Prices from DNSE/SSI are quoted in thousand VND for stocks (e.g. 28.5 means 28,500 VND). State units explicitly.",
-    "3a. Settlement is T+2.5 (HOSE/HNX/UPCOM): shares bought today are deliverable T+2 ~13:00 ICT; sale proceeds become usable cash on the same T+2 timeline. Never propose same-day round-trips.",
+    "3a. Formal settlement for HOSE/HNX/UPCOM shares, fund certificates, and covered warrants is T+2. In practice securities and sale proceeds are credited before about 13:00 ICT on T+2, so they are usable from the afternoon T+2 session. Never call this a formal T+2.5 cycle and never propose same-day round-trips.",
     "4. For a buy/sell/hold recommendation, call at minimum technical_indicators, fundamentals_snapshot, ticker_news, AND macro_indices. Add foreign_flow when institutional positioning is relevant.",
     "4a. For broad allocation questions or complex multi-factor decisions, call team_question. For a deep recommendation on one ticker, call team_analyze instead of manually recreating the whole team workflow.",
     "4b. When you call team_question or team_analyze, wait for that team tool to finish and then summarize its findings. Do not call duplicate market/fundamental/news/technical tools in parallel unless the user explicitly asks for raw source data.",

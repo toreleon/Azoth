@@ -46,7 +46,7 @@ const SYSTEM_OPERATING_RULES = [
   "Always ground claims in tool output; do not invent figures.",
   "Use WebSearch for current open-web context when Azoth's market/news tools are insufficient. Cite URLs and dates for web-sourced claims.",
   "Cite tickers in uppercase. Prices are in thousand VND on DNSE/SSI.",
-  "Settlement is T+2.5 — never propose same-day round-trips.",
+  "Formal settlement for HOSE/HNX/UPCOM shares, fund certificates, and covered warrants is T+2; availability is typically before 13:00 ICT on T+2, from the afternoon session. Never call this a formal T+2.5 cycle and never propose same-day round-trips.",
 ].join("\n");
 
 const ANALYST_DEFINITIONS: Array<{

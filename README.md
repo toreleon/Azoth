@@ -50,14 +50,13 @@ Latest release: [v0.0.1](docs/releases/v0.0.1.md)
 Requirements:
 
 - Node.js 20 or newer
-- pnpm or npm
+- npm, pnpm, or another Node package runner
 - `ANTHROPIC_API_KEY` for the Claude Agent SDK
 
-Install and initialize:
+One-shot usage with `npx`:
 
 ```bash
-pnpm install
-pnpm azoth:init
+npx azoth-vn init
 cp ~/.azoth/.env.example ~/.azoth/.env
 ```
 
@@ -70,11 +69,37 @@ ANTHROPIC_API_KEY=...
 Start the professional TUI:
 
 ```bash
-pnpm azoth
+npx azoth-vn
+```
+
+Install globally if you prefer a persistent command:
+
+```bash
+npm install -g azoth-vn
+azoth init
+azoth
+```
+
+Install from source for development:
+
+```bash
+pnpm install
+pnpm azoth:init
+```
+
+Packaged CLI binaries:
+
+```bash
+azoth            # TUI
+azoth init       # initialize ~/.azoth
+azoth-init       # same initializer as a direct bin
+azoth-analyze    # standalone single-ticker team analysis
+azoth-team       # standalone team question CLI
+azoth-backtest   # standalone backtest CLI
 ```
 
 The TUI requires an interactive terminal. In non-TTY environments, use the
-standalone commands such as `pnpm azoth:init`, `pnpm test`, `pnpm build`, or
+standalone commands such as `azoth init`, `pnpm test`, `pnpm build`, or
 programmatic health checks.
 
 ## Feature Overview
@@ -342,7 +367,9 @@ Azoth is built around a few explicit constraints:
 - Recommendations must be grounded in tool output, not memory.
 - Prices are stated in correct units. VN stock prices from DNSE and SSI are in
   thousand VND.
-- Vietnam settlement is treated as T+2.5; Azoth should not propose same-day
+- Vietnam listed equity settlement is treated as formal T+2, with securities
+  and sale proceeds typically available before 13:00 ICT on T+2 for afternoon
+  use; Azoth should not call this a formal T+2.5 cycle or propose same-day
   round trips.
 - Buy, sell, or hold recommendations should include technicals, fundamentals,
   news, and macro context.

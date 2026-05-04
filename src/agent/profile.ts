@@ -78,7 +78,7 @@ export function renderProfilePrompt(p: AgentProfile): string {
   lines.push(`- Stop loss: cut a position down ${(p.params.stopLossPct * 100).toFixed(0)}% from entry.`);
   lines.push(`- Cash floor: keep at least ${(p.params.cashFloorPct * 100).toFixed(0)}% in cash.`);
   lines.push(`- Max concurrent names: ${p.params.maxNames}.`);
-  lines.push(`- Min holding period: ${p.params.minHoldingWeeks} week(s) (T+2.5 settlement still applies).`);
+  lines.push(`- Min holding period: ${p.params.minHoldingWeeks} week(s) (T+2 formal settlement; availability typically from afternoon T+2 still applies).`);
   lines.push(`- Drawdown floor: ${(p.params.maxDrawdownFloor * 100).toFixed(0)}% — breaching this triggers a defensive freeze.`);
   lines.push(`- Preferred discovery universe: '${p.params.preferredUniverse}'.`);
   lines.push(`- Default discovery criterion: '${p.params.discoveryCriterion}'.`);

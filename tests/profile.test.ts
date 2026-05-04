@@ -24,7 +24,7 @@ const baseProfile: AgentProfile = {
     discoveryCriterion: "momentum",
   },
   regimePlaybook: { trend_up: "lean in" },
-  notes: ["T+2.5"],
+  notes: ["T+2 afternoon availability"],
   createdAt: 1714608000,
 };
 
