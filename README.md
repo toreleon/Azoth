@@ -21,7 +21,7 @@ autonomy and risk settings.
 > real orders against a real account. Use advisory or paper mode until you have
 > verified configuration, data quality, account state, and risk limits.
 
-Latest release: [v0.1.0](docs/releases/v0.1.0.md)
+Latest release: [v0.1.1](docs/releases/v0.1.1.md)
 
 ## Terminal UI
 
@@ -325,6 +325,8 @@ reduce repeated network calls.
 
 ## Release Notes
 
+- [v0.1.1](docs/releases/v0.1.1.md) - pipeline-published package release for
+  the v0.1 public baseline.
 - [v0.1.0](docs/releases/v0.1.0.md) - consolidated public baseline with chat
   TUI, multi-agent desk, Vietnam market tools, local journaling, paper broker,
   guardrails, backtesting, DNSE integration foundations, npm packaging, and
