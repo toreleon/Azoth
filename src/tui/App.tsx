@@ -5,6 +5,7 @@ import { StatusBar } from "./components/StatusBar.js";
 import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { ToolChip } from "./components/ToolChip.js";
 import { Welcome } from "./components/Welcome.js";
+import { LlmSetup } from "./components/LlmSetup.js";
 import { SLASH_COMMANDS, SlashSuggest, matchSlash } from "./components/SlashSuggest.js";
 import { AgentStreamProvider, useAgentStreamCtx } from "./hooks/useAgentStreamContext.js";
 import { type ChatBlock } from "./hooks/useAgentStream.js";
@@ -12,6 +13,7 @@ import { useNow } from "./hooks/useNow.js";
 import { loadConfig, updateConfig } from "../config/loader.js";
 import { resetBrokerCache } from "../broker/index.js";
 import { collectHealth, renderHealth } from "../runtime/health.js";
+import { hasLlmEnvironment } from "../runtime/llmSetup.js";
 import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, formatPct, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
@@ -185,6 +187,15 @@ function renderBlock(b: ChatBlock, toolResults: Map<string, string>, columns = 8
 }
 
 export function App() {
+  const [llmReady, setLlmReady] = useState(hasLlmEnvironment());
+  if (!llmReady) {
+    return (
+      <ErrorBoundary>
+        <LlmSetup onComplete={() => setLlmReady(true)} />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <AgentStreamProvider>
       <ErrorBoundary>

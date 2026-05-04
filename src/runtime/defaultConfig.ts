@@ -27,6 +27,7 @@ risk:
 
 export const DEFAULT_ENV_EXAMPLE = `# Azoth environment
 ANTHROPIC_API_KEY=
+ANTHROPIC_BASE_URL=
 
 # Optional overrides:
 # AZOTH_HOME=~/.azoth

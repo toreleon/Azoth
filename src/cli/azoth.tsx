@@ -22,10 +22,6 @@ function main() {
     return;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("ANTHROPIC_API_KEY is not set. Copy ~/.azoth/.env.example to ~/.azoth/.env and fill it in.");
-    process.exit(1);
-  }
   loadConfig();
   getDb();
 

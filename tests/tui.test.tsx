@@ -1,10 +1,11 @@
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import React from "react";
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { render } from "ink-testing-library";
 import { App } from "../src/tui/App.js";
+import { LlmSetup } from "../src/tui/components/LlmSetup.js";
 import { sparkline } from "../src/tui/lib/sparkline.js";
 import { vnColor, pctColor } from "../src/tui/lib/colors.js";
 import { classifySession } from "../src/tui/lib/marketSession.js";
@@ -38,6 +39,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  process.env.ANTHROPIC_API_KEY = "test-key";
   runnerMocks.runTeamAnalysis.mockReset();
   runnerMocks.runTeamQuestion.mockReset();
   runnerMocks.runBacktestSession.mockReset();
@@ -61,6 +63,11 @@ async function type(stdin: { write: (s: string) => void }, s: string) {
   await tick();
 }
 
+async function enter(stdin: { write: (s: string) => void }) {
+  stdin.write("\r");
+  await tick();
+}
+
 describe("Azoth TUI", () => {
   it("boots into chat mode", async () => {
     const { lastFrame, unmount } = render(<App />);
@@ -70,6 +77,51 @@ describe("Azoth TUI", () => {
     expect(out).toContain("Tips for getting started");
     expect(out).toContain("advisory");
     unmount();
+  });
+
+  it("collects first-time LLM setup and writes Azoth env/config", async () => {
+    const prevHome = process.env.AZOTH_HOME;
+    const prevDb = process.env.AZOTH_DB;
+    const prevKey = process.env.ANTHROPIC_API_KEY;
+    const prevBaseUrl = process.env.ANTHROPIC_BASE_URL;
+    const setupHome = mkdtempSync(join(tmpdir(), "azoth-setup-"));
+    process.env.AZOTH_HOME = setupHome;
+    delete process.env.AZOTH_DB;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_BASE_URL;
+    resetConfigCacheForTests();
+
+    let unmount: (() => void) | undefined;
+    try {
+      const completed = vi.fn();
+      const rendered = render(<LlmSetup onComplete={completed} />);
+      unmount = rendered.unmount;
+      await tick();
+      expect(strip(rendered.lastFrame() ?? "")).toContain("Azoth first-time LLM setup");
+
+      await type(rendered.stdin, "sk-test-setup");
+      await enter(rendered.stdin);
+      await type(rendered.stdin, "glm-5.1");
+
+      const envPath = join(setupHome, ".env");
+      expect(existsSync(envPath)).toBe(true);
+      expect(readFileSync(envPath, "utf8")).toContain("ANTHROPIC_API_KEY=sk-test-setup");
+      expect(strip(rendered.lastFrame() ?? "")).toContain("LLM environment saved");
+
+      await enter(rendered.stdin);
+      expect(completed).toHaveBeenCalled();
+    } finally {
+      unmount?.();
+      if (prevHome === undefined) delete process.env.AZOTH_HOME;
+      else process.env.AZOTH_HOME = prevHome;
+      if (prevDb === undefined) delete process.env.AZOTH_DB;
+      else process.env.AZOTH_DB = prevDb;
+      if (prevKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = prevKey;
+      if (prevBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
+      else process.env.ANTHROPIC_BASE_URL = prevBaseUrl;
+      resetConfigCacheForTests();
+    }
   });
 
   it("opens with a fresh chat session", async () => {

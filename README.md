@@ -51,25 +51,24 @@ Requirements:
 
 - Node.js 20 or newer
 - npm, pnpm, or another Node package runner
-- `ANTHROPIC_API_KEY` for the Claude Agent SDK
+- an Anthropic-compatible API key for the Claude Agent SDK
 
 One-shot usage with `npx`:
 
 ```bash
 npx @toreleon/azoth init
-cp ~/.azoth/.env.example ~/.azoth/.env
-```
-
-Edit `~/.azoth/.env` and set:
-
-```bash
-ANTHROPIC_API_KEY=...
-```
-
-Start the professional TUI:
-
-```bash
 npx @toreleon/azoth
+```
+
+On a fresh machine, the TUI opens a first-time LLM setup screen. It writes
+`~/.azoth/.env` and updates the model fields in `~/.azoth/config.yaml`.
+
+Manual setup is still supported:
+
+```bash
+cp ~/.azoth/.env.example ~/.azoth/.env
+$EDITOR ~/.azoth/.env
+ANTHROPIC_API_KEY=...
 ```
 
 Install globally if you prefer a persistent command:
@@ -214,6 +213,7 @@ Useful environment variables:
 | Variable | Purpose |
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Required model API key. |
+| `ANTHROPIC_BASE_URL` | Optional Anthropic-compatible endpoint for non-Anthropic providers. |
 | `AZOTH_HOME` | Override the runtime directory. |
 | `AZOTH_CONFIG` | Override the config file path. |
 | `AZOTH_DB` | Override the SQLite database path. |
