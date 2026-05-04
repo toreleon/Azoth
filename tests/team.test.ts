@@ -86,7 +86,6 @@ describe("runTeamAnalysis", () => {
         "  quick_model: claude-haiku-4-6",
         "  deep_model: claude-sonnet-4-6",
         "  output_language: vi",
-        "watchlist: [VCB]",
         "broker: paper",
         "risk:",
         "  max_position_pct: 0.15",

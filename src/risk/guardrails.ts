@@ -28,14 +28,9 @@ export async function checkOrder(
   }
 
   const inBacktest = currentBrokerName() != null;
-  const allowed =
-    cfg.risk.ticker_whitelist.length > 0
-      ? cfg.risk.ticker_whitelist
-      : inBacktest
-        ? []
-        : cfg.watchlist;
+  const allowed = cfg.risk.ticker_whitelist;
   if (allowed.length > 0 && !allowed.map((t) => t.toUpperCase()).includes(ticker)) {
-    reasons.push(`ticker ${ticker} is not in watchlist/whitelist`);
+    reasons.push(`ticker ${ticker} is not in ticker_whitelist`);
   }
 
   if (input.side === "BUY" && currentFreezeBuys()) {

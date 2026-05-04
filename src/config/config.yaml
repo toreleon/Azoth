@@ -14,14 +14,6 @@ team:
   deep_model: glm-5.1
   output_language: en
 
-# Tickers the agent should track by default.
-watchlist:
-  - HPG
-  - VCB
-  - FPT
-  - VNM
-  - MWG
-
 # Broker selection for later phases. Phase 1: ignored.
 broker: paper
 
@@ -30,5 +22,5 @@ risk:
   max_position_pct: 0.15        # max 15% of portfolio in one ticker
   max_daily_loss_pct: 0.03      # halt trading if down 3% intraday
   max_order_notional_vnd: 50000000
-  ticker_whitelist: []          # empty = use watchlist
+  ticker_whitelist: []          # empty = no ticker restriction
   allow_margin: false

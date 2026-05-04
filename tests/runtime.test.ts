@@ -53,14 +53,14 @@ describe("Azoth config and DB defaults", () => {
     initializeAzothRuntime();
     const paths = azothPaths();
     expect(existsSync(paths.config)).toBe(true);
-    expect(loadConfig().watchlist).toContain("HPG");
+    expect(loadConfig().broker).toBe("paper");
   });
 
   it("treats blank VNSTOCK_CONFIG as unset", () => {
     initializeAzothRuntime();
     process.env.VNSTOCK_CONFIG = "";
     resetConfigCacheForTests();
-    expect(loadConfig().watchlist).toContain("HPG");
+    expect(loadConfig().broker).toBe("paper");
   });
 
   it("honors VNSTOCK_CONFIG override", () => {
@@ -68,7 +68,6 @@ describe("Azoth config and DB defaults", () => {
     writeFileSync(custom, [
       "autonomy: confirm",
       "model: test-model",
-      "watchlist: [AAA]",
       "broker: paper",
       "risk:",
       "  max_position_pct: 0.1",

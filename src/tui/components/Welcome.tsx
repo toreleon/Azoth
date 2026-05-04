@@ -23,11 +23,10 @@ export interface WelcomeProps {
   version: string;
   autonomy: string;
   broker: string;
-  watchlist: string[];
   cwd: string;
 }
 
-export function Welcome({ version, autonomy, broker, watchlist, cwd }: WelcomeProps) {
+export function Welcome({ version, autonomy, broker, cwd }: WelcomeProps) {
   return (
     <Box
       borderStyle="round"
@@ -52,10 +51,6 @@ export function Welcome({ version, autonomy, broker, watchlist, cwd }: WelcomePr
           <Text>
             <Text dimColor>broker   </Text>
             <Text>{broker}</Text>
-          </Text>
-          <Text>
-            <Text dimColor>watch    </Text>
-            <Text>{watchlist.slice(0, 8).join(" ")}</Text>
           </Text>
           <Text>
             <Text dimColor>cwd      </Text>

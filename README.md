@@ -27,8 +27,8 @@ autonomy and risk settings.
   and portfolio roles.
 - **Broker-aware execution**: advisory, confirm, and auto autonomy modes with
   paper broker support and DNSE Entrade X integration for live accounts.
-- **Risk controls**: position sizing limits, order notional limits, ticker
-  whitelist/watchlist checks, market-hour checks, and buy freeze support.
+- **Risk controls**: position sizing limits, order notional limits, optional
+  ticker whitelist checks, market-hour checks, and buy freeze support.
 - **Backtesting**: replay strategy behavior with the paper broker to validate
   feeds, accounting, lot sizing, fees, and guardrails before using live tools.
 - **Local-first state**: configuration, SQLite cache, portfolio records,
@@ -156,13 +156,6 @@ team:
   quick_model: glm-5.1
   deep_model: glm-5.1
   output_language: en
-
-watchlist:
-  - HPG
-  - VCB
-  - FPT
-  - VNM
-  - MWG
 
 broker: paper
 

@@ -16,7 +16,6 @@ const ConfigSchema = z.object({
     })
     .optional()
     .default({}),
-  watchlist: z.array(z.string().regex(/^[A-Z0-9]{3,4}$/)).min(1),
   broker: z.enum(["paper", "dnse"]),
   risk: z.object({
     max_position_pct: z.number().min(0).max(1),

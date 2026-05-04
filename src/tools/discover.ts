@@ -215,7 +215,7 @@ export async function discoverTickers(input: {
 export const discoverTickersTool = tool(
   "discover_tickers",
   [
-    "Discover Vietnamese stocks matching a strategy criterion. Use this at the START of each turn to build a focused 5–10 ticker watchlist for THIS week.",
+    "Discover Vietnamese stocks matching a strategy criterion. Use this at the START of each turn to build a focused 5–10 ticker candidate set for THIS week.",
     "Searches a curated liquid universe (~28 names: VN30 + active mid-caps). Returns candidates ranked by the chosen metric, with 1w/1m return, RSI14, and 5d/20d volume ratio.",
     "Criteria:",
     "- 'momentum': highest 1-month return, breaking out (rsi 50-75, rising vol).",

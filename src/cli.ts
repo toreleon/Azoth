@@ -67,7 +67,6 @@ async function main() {
   const cfg = loadConfig();
   getDb(); // initialize schema
   console.log(`Azoth — autonomy=${cfg.autonomy}, model=${cfg.model}`);
-  console.log(`Watchlist: ${cfg.watchlist.join(", ")}`);
   console.log("Type a question. Empty line or Ctrl+C to exit.\n");
 
   const rl = readline.createInterface({ input, output });

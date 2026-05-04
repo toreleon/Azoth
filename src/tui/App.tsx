@@ -499,7 +499,6 @@ function AppInner() {
                 version="0.1.0"
                 autonomy={autonomy}
                 broker={cfg.broker}
-                watchlist={cfg.watchlist}
                 cwd={process.cwd()}
               />
             ) : (

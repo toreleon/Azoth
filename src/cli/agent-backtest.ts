@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Phase 6 team-driven backtest. Replays the watchlist week-by-week (Friday
+ * Phase 6 team-driven backtest. Replays discovered candidates week-by-week (Friday
  * closes), runs Azoth's structured analyst/research/trader/risk/portfolio team
  * on discovered candidates, converts final team decisions into paper-broker
  * orders, and writes a JSON report under ~/.azoth/logs/backtests/.
@@ -48,7 +48,7 @@ async function main() {
 
   const summary = await runBacktestSession(args, {
     onStart: ({ runId, profile, brokerName, fridays, universe }) => {
-      console.log(`Azoth backtest (team-driven, dynamic watchlist)`);
+      console.log(`Azoth backtest (team-driven, dynamic discovery)`);
       console.log(`  run_id=${runId}  profile=${profile.id}@v${profile.version}  broker=${brokerName}`);
       console.log(`  ${args.start} → ${args.end}`);
       console.log(`  discovery universe: ${universe.length} tickers (team analyzes ${args.maxCandidates ?? 3}/week)`);

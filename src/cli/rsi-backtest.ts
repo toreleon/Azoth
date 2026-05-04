@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Phase 4 backtest runner — sanity-checks the PaperBroker with a deterministic
- * RSI mean-reversion strategy over the watchlist. This intentionally does NOT
+ * RSI mean-reversion strategy over Azoth's curated discovery universe. This intentionally does NOT
  * use the LLM (which would be slow + expensive); it verifies the
  * data + broker + accounting pipeline.
  *
@@ -13,6 +13,7 @@ import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { PaperBroker } from "../broker/paper.js";
 import { getStockOhlcv, type Bar } from "../data/sources/dnsePublic.js";
+import { DISCOVERY_UNIVERSE } from "../tools/discover.js";
 
 interface Args {
   days: number;
@@ -57,9 +58,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cfg = loadConfig();
   getDb();
+  const universe = [...DISCOVERY_UNIVERSE];
 
   console.log("Azoth backtest");
-  console.log(`  watchlist: ${cfg.watchlist.join(", ")}`);
+  console.log(`  universe: ${universe.join(", ")}`);
   console.log(
     `  days=${args.days}  rsi_buy=${args.rsiBuy}  rsi_sell=${args.rsiSell}  qty/trade=${args.lots * 100}  init_cash=${(args.initialCash / 1e6).toFixed(0)}M VND`,
   );
@@ -72,13 +74,13 @@ async function main() {
 
   // Pre-fetch all OHLCV
   const bars: Record<string, Bar[]> = {};
-  for (const t of cfg.watchlist) {
+  for (const t of universe) {
     bars[t] = await getStockOhlcv(t, "1D", from, to);
   }
 
   // Build aligned timeline (union of all timestamps)
   const allTimes = new Set<number>();
-  for (const t of cfg.watchlist) for (const b of bars[t]!) allTimes.add(b.time);
+  for (const t of universe) for (const b of bars[t]!) allTimes.add(b.time);
   const timeline = [...allTimes].sort((a, b) => a - b);
 
   const trades: Trade[] = [];
@@ -87,7 +89,7 @@ async function main() {
   for (let i = 14; i < timeline.length; i++) {
     const day = timeline[i]!;
     const dayIso = new Date(day * 1000).toISOString().slice(0, 10);
-    for (const t of cfg.watchlist) {
+    for (const t of universe) {
       const series = bars[t]!.filter((b) => b.time <= day);
       if (series.length < 20) continue;
       const closes = series.map((b) => b.close);

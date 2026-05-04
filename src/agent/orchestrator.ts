@@ -15,6 +15,7 @@ import {
 } from "../tools/portfolio.js";
 import { journalAppendTool, journalReadTool } from "../tools/journal.js";
 import { discoverTickersTool } from "../tools/discover.js";
+import { teamAnalyzeTool, teamQuestionTool } from "../tools/team.js";
 import {
   placeOrderTool,
   cancelOrderTool,
@@ -43,7 +44,6 @@ export function buildSystemPrompt(): string {
     cfg.autonomy === "advisory"
       ? "Current autonomy mode: advisory. Order-placement tools are unavailable."
       : `Current autonomy mode: ${cfg.autonomy}. Order-placement tools are available through the configured ${cfg.broker} broker.`,
-    `Default watchlist: ${cfg.watchlist.join(", ")}.`,
     "",
     "Tools available:",
     "- market_quote: latest reference / ceiling / floor / company info (SSI iBoard).",
@@ -56,7 +56,9 @@ export function buildSystemPrompt(): string {
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
     "- portfolio_list / portfolio_record / portfolio_remove: read and update the user's positions in local SQLite. Avg cost is in thousand VND.",
     "- journal_append / journal_read: persist and review past decisions.",
-    "- discover_tickers: dynamically scan a curated VN30+midcap universe by criterion (momentum / breakout / oversold / low_volatility / high_volume / top_gainers / top_losers) and return 5–10 ranked candidates. Use to build your own watchlist instead of relying on a fixed list.",
+    "- discover_tickers: dynamically scan a curated VN30+midcap universe by criterion (momentum / breakout / oversold / low_volatility / high_volume / top_gainers / top_losers) and return 5–10 ranked candidates.",
+    "- team_question: delegate complex market, portfolio, or allocation questions to Azoth's bull/bear/risk/portfolio team.",
+    "- team_analyze: delegate deep single-ticker buy/sell/hold analysis to Azoth's full analyst/research/trader/risk/portfolio team.",
     cfg.autonomy === "advisory"
       ? "- (no order tools — autonomy=advisory)"
       : "- place_order / cancel_order / list_orders / broker_state: trade through the configured broker (paper or dnse). Quantity must be a multiple of 100. Prices are in thousand VND.",
@@ -67,6 +69,7 @@ export function buildSystemPrompt(): string {
     "3. Prices from DNSE/SSI are quoted in thousand VND for stocks (e.g. 28.5 means 28,500 VND). State units explicitly.",
     "3a. Settlement is T+2.5 (HOSE/HNX/UPCOM): shares bought today are deliverable T+2 ~13:00 ICT; sale proceeds become usable cash on the same T+2 timeline. Never propose same-day round-trips.",
     "4. For a buy/sell/hold recommendation, call at minimum technical_indicators, fundamentals_snapshot, ticker_news, AND macro_indices. Add foreign_flow when institutional positioning is relevant.",
+    "4a. For broad allocation questions or complex multi-factor decisions, call team_question. For a deep recommendation on one ticker, call team_analyze instead of manually recreating the whole team workflow.",
     "5. When citing news, include the URL and publish date so the user can verify.",
     "6. After delivering a recommendation, call journal_append to persist the rationale and exit plan.",
     "7. Keep replies concise. Show the numbers, then a one-paragraph synthesis covering all four dimensions (technical / fundamental / news / macro).",
@@ -92,6 +95,8 @@ export function buildMcpServer() {
     journalAppendTool,
     journalReadTool,
     discoverTickersTool,
+    teamQuestionTool,
+    teamAnalyzeTool,
   ];
   const orderTools = [
     placeOrderTool,
@@ -139,6 +144,8 @@ export function buildOptions(opts: { resume?: string } = {}): Options {
       "mcp__vnstock__journal_append",
       "mcp__vnstock__journal_read",
       "mcp__vnstock__discover_tickers",
+      "mcp__vnstock__team_question",
+      "mcp__vnstock__team_analyze",
       ...(cfg.autonomy === "advisory"
         ? []
         : [

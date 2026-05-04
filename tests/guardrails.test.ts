@@ -31,7 +31,6 @@ beforeEach(() => {
   writeFileSync(cfg, [
     "autonomy: auto",
     "model: default",
-    "watchlist: [HPG]",
     "broker: paper",
     "risk:",
     "  max_position_pct: 0.15",
@@ -53,7 +52,7 @@ afterEach(() => {
 });
 
 describe("guardrails in backtest mode", () => {
-  it("does not restrict dynamic discovery tickers to the static watchlist", async () => {
+  it("does not restrict dynamic discovery tickers when ticker_whitelist is empty", async () => {
     setActiveAsOf({ asOfSec: 1, brokerName: "paper-bt-test" });
     const result = await checkOrder(
       broker,
@@ -73,6 +72,6 @@ describe("guardrails in backtest mode", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.reasons.join(" ")).toContain("exceeds max");
-    expect(result.reasons.join(" ")).not.toContain("watchlist");
+    expect(result.reasons.join(" ")).not.toContain("ticker_whitelist");
   });
 });

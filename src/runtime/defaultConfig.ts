@@ -13,14 +13,6 @@ team:
   deep_model: glm-5.1
   output_language: en
 
-# Tickers the agent should track by default.
-watchlist:
-  - HPG
-  - VCB
-  - FPT
-  - VNM
-  - MWG
-
 # Broker selection.
 broker: paper
 

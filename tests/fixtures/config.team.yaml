@@ -4,10 +4,6 @@ team:
   quick_model: claude-haiku-4-6
   deep_model: claude-sonnet-4-6
   output_language: en
-watchlist:
-  - VCB
-  - FPT
-  - HPG
 broker: paper
 risk:
   max_position_pct: 0.15
