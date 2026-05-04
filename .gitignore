@@ -1,11 +1,50 @@
+# Dependencies
 node_modules/
+
+# Build and package output
 dist/
+coverage/
+*.tsbuildinfo
+*.tgz
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+vitest-debug.log*
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+.azoth/
+
+# Runtime databases and local state
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
 .test-*.db*
-.env
-.env.local
+out/
+
+# Tool caches
+.cache/
+.vite/
+.turbo/
+.eslintcache
+.nyc_output/
+
+# Editor and OS files
 .DS_Store
-.azoth/
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json

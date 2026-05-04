@@ -3,7 +3,15 @@
   "version": "0.0.1",
   "description": "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toreleon/Azoth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/toreleon/Azoth/issues"
+  },
+  "homepage": "https://github.com/toreleon/Azoth#readme",
   "engines": {
     "node": ">=20"
   },
@@ -29,7 +37,10 @@
     "team:chat": "tsx src/cli/team.ts",
     "backtest": "tsx src/cli/agent-backtest.ts",
     "build": "tsc -p tsconfig.json",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
     "prepack": "pnpm build",
+    "release": "pnpm build && pnpm publish --access public --provenance",
     "start": "node dist/src/cli/azoth.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -48,6 +59,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.0",
     "@types/react": "^18.3.12",

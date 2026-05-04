@@ -294,6 +294,21 @@ reduce repeated network calls.
   multi-agent desk, data tools, paper broker, guardrails, backtesting, and DNSE
   integration foundations.
 
+## Contributing and Releases
+
+Azoth is MIT licensed and uses GitHub Actions for pull request validation,
+security scanning, and npm releases.
+
+User-facing changes should include a Changesets release note:
+
+```bash
+pnpm changeset
+```
+
+The release workflow opens a version pull request after changes land on
+`master`. Merging that version pull request publishes `@toreleon/azoth` to npm
+and creates the matching GitHub release.
+
 ## Live Trading With DNSE
 
 Live mode places real orders. Keep `autonomy: advisory` or `broker: paper`

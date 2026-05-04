@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible problem in Azoth
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting a bug. Please include enough detail for maintainers to reproduce it.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: List the exact commands or steps that reproduce the issue.
+      placeholder: |
+        1. Run `...`
+        2. See `...`
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Node.js version, package manager version, and Azoth version.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant output. Remove secrets and account credentials.
+      render: text
