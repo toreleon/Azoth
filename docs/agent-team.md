@@ -143,7 +143,7 @@ broker orders, and records the resulting equity curve.
 
 ```mermaid
 flowchart TD
-  User["User: /backtest START END CASH"] --> Init["Create backtest run"]
+  User["User: /backtest [START END CASH]"] --> Init["Create backtest run"]
   Init --> Broker["Create isolated paper broker"]
   Init --> Data["Load universe OHLCV and VNINDEX"]
   Data --> Fridays["Find Friday trading turns"]
@@ -178,7 +178,11 @@ The backtest loop has several important constraints:
 
 - The active clock is pinned to the historical Friday turn, so market tools do
   not see future bars.
-- Candidate discovery defaults to a momentum scan over Azoth's default universe.
+- When no date range is supplied, `/backtest` uses the previous calendar week.
+- Weekly turns use the last available trading close in each week, so holiday
+  Fridays still produce a replay turn when the week has earlier trading data.
+- Candidate discovery can scan listed equities or a caller-provided ticker
+  basket; backtests use the default liquid universe to keep replay cost bounded.
 - Each candidate receives a one-round team analysis to keep replay cost bounded.
 - Web search is disabled during backtests so historical turns rely on Azoth's
   market data and cached/local tools rather than current open-web context.

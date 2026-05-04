@@ -54,7 +54,7 @@ export function buildSystemPrompt(): string {
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
     "- portfolio_list: read broker cash, positions, exposure, and unrealized P&L. Avg cost and last close are in thousand VND; monetary totals are in VND.",
     "- journal_append / journal_read: persist and review past decisions.",
-    "- discover_tickers: dynamically scan a curated VN30+midcap universe by criterion (momentum / breakout / oversold / low_volatility / high_volume / top_gainers / top_losers) and return 5–10 ranked candidates.",
+    "- discover_tickers: scan listed Vietnamese equities, an explicit ticker basket, or a preset universe by signal/strategy (momentum, breakout, mean reversion, defensive, liquidity surge, relative strength, weakness) and return 5–10 ranked candidates.",
     "- team_question: delegate complex market, portfolio, or allocation questions to Azoth's bull/bear/risk/portfolio team.",
     "- team_analyze: delegate deep single-ticker buy/sell/hold analysis to Azoth's full analyst/research/trader/risk/portfolio team.",
     cfg.autonomy === "advisory"

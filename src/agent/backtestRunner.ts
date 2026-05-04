@@ -75,15 +75,18 @@ function dateOf(epochSec: number): string {
   return new Date(epochSec * 1000).toISOString().slice(0, 10);
 }
 
-function fridayCloses(vnindexBars: Bar[], startSec: number, endSec: number): number[] {
-  const out: number[] = [];
+function weeklyCloses(vnindexBars: Bar[], startSec: number, endSec: number): number[] {
+  const byWeek = new Map<string, number>();
   for (const b of vnindexBars) {
     if (b.time < startSec || b.time > endSec) continue;
     const d = new Date(b.time * 1000);
     const ict = new Date(d.getTime() + 7 * 3600 * 1000);
-    if (ict.getUTCDay() === 5) out.push(b.time);
+    const day = ict.getUTCDay();
+    const monday = new Date(Date.UTC(ict.getUTCFullYear(), ict.getUTCMonth(), ict.getUTCDate()));
+    monday.setUTCDate(monday.getUTCDate() - (day === 0 ? 6 : day - 1));
+    byWeek.set(monday.toISOString().slice(0, 10), b.time);
   }
-  return out;
+  return [...byWeek.values()].sort((a, b) => a - b);
 }
 
 function lotRound(qty: number): number {
@@ -235,10 +238,10 @@ export async function runBacktestSession(
   }
   const vnindex = await getIndexOhlcv("VNINDEX", "1D", fetchFrom, fetchTo);
 
-  const fridays = fridayCloses(vnindex, startSec, endSec);
-  if (fridays.length === 0) throw new Error("no Friday trading days in range");
+  const weeklyTurns = weeklyCloses(vnindex, startSec, endSec);
+  if (weeklyTurns.length === 0) throw new Error("no trading days in range");
 
-  cb.onStart?.({ runId, strategy: BACKTEST_STRATEGY_NAME, brokerName, fridays, universe });
+  cb.onStart?.({ runId, strategy: BACKTEST_STRATEGY_NAME, brokerName, fridays: weeklyTurns, universe });
 
   db.prepare(
     `INSERT INTO backtest_runs
@@ -269,14 +272,14 @@ export async function runBacktestSession(
     const series = vnindex.filter((b) => b.time <= asOf);
     return series.length ? series[series.length - 1]!.close : null;
   };
-  const vnindexBaseline = vnindexAt(fridays[0]!);
-  if (vnindexBaseline == null) throw new Error("no VNINDEX data at first Friday");
+  const vnindexBaseline = vnindexAt(weeklyTurns[0]!);
+  if (vnindexBaseline == null) throw new Error("no VNINDEX data at first weekly turn");
 
   let peakMtm = opts.initialCash;
   let freezeBuys = false;
 
   try {
-    for (const asOf of fridays) {
+    for (const asOf of weeklyTurns) {
       throwIfAborted(cb.signal);
       const dateIso = dateOf(asOf);
       const priceOverride = (sym: string): number | null => {

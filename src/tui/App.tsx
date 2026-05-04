@@ -27,8 +27,25 @@ import { JournalCard } from "./lib/cards.js";
 type Autonomy = "advisory" | "confirm" | "auto";
 
 const THINKING_ANIMATION_INTERVAL_MS = 80;
-const BT_DEFAULTS = { start: "2025-01-03", end: "2025-04-30", cash: 1_000_000_000 };
+const BT_DEFAULTS = { cash: 1_000_000_000 };
 const PACKAGE_VERSION = packageVersion();
+
+function isoLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function previousWeekRange(now = new Date()): { start: string; end: string } {
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = end.getDay();
+  const daysSincePreviousSunday = day === 0 ? 7 : day;
+  end.setDate(end.getDate() - daysSincePreviousSunday);
+  const start = new Date(end);
+  start.setDate(end.getDate() - 6);
+  return { start: isoLocalDate(start), end: isoLocalDate(end) };
+}
 
 function teamRoleDesc(output: Record<string, unknown>, mode: "analyze" | "question" | "backtest") {
   if ("score" in output) {
@@ -382,7 +399,7 @@ function AppInner() {
 
   const runBacktest = async (args: string[]) => {
     if (args[0] === "help") {
-      stream.systemMessage("/backtest [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND] [--max-candidates N]");
+      stream.systemMessage("/backtest [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND] [--max-candidates N]\nNo dates = previous calendar week.");
       return;
     }
     if (backtestRef.current?.running) {
@@ -399,8 +416,9 @@ function AppInner() {
         : maxCandidatesEq
           ? Number.parseInt(maxCandidatesEq.slice("--max-candidates=".length), 10)
           : undefined;
-    const start = dates[0] ?? BT_DEFAULTS.start;
-    const end = dates[1] ?? BT_DEFAULTS.end;
+    const defaultRange = previousWeekRange();
+    const start = dates[0] ?? defaultRange.start;
+    const end = dates[1] ?? defaultRange.end;
     const initialCash = cashArg ? Number.parseInt(cashArg, 10) : BT_DEFAULTS.cash;
 
     stream.beginLocalResponse(`/backtest ${start} ${end} ${initialCash}`);

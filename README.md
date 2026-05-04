@@ -51,7 +51,7 @@ Check market, portfolio, journal, and backtest state:
 /quote VCB
 /positions
 /journal decisions 10
-/backtest 2025-01-03 2025-04-30 1000000000
+/backtest
 ```
 
 ## Highlights
@@ -166,7 +166,13 @@ Check market and portfolio state:
 /journal decisions 10
 ```
 
-Run a backtest:
+Run a backtest for the previous calendar week:
+
+```text
+/backtest
+```
+
+You can still provide an explicit range and starting cash:
 
 ```text
 /backtest 2025-01-03 2025-04-30 1000000000
@@ -219,7 +225,7 @@ still stream the full local team flow.
 | --- | --- |
 | `/team <message>` | Run a multi-agent debate on a market or portfolio question. |
 | `/analyze <ticker> [--rounds N]` | Run structured team analysis for one ticker. |
-| `/backtest [start] [end] [cash]` | Run a weekly backtest and render results inline. |
+| `/backtest [start] [end] [cash]` | Run a weekly backtest and render results inline. Defaults to the previous calendar week. |
 | `/journal [decisions\|orders\|fills\|alerts] [N]` | Show recent journal rows. |
 | `/quote <ticker>` | Request quote, technicals, and recent news for a ticker. |
 | `/positions` | Summarize current portfolio positions and exposures. |

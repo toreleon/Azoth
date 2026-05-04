@@ -85,3 +85,25 @@ export async function getCompanyProfile(ticker: string): Promise<CompanyProfile 
   const json = await getJson<FinfoListResponse<CompanyProfile>>(url);
   return json.data[0] ?? null;
 }
+
+export type ListedExchange = "HOSE" | "HNX" | "UPCOM";
+
+export async function getCompanyProfilesByFloor(
+  floor: ListedExchange,
+  size = 1000,
+): Promise<CompanyProfile[]> {
+  const q = encodeURIComponent(`floor:${floor}`);
+  const url = `${FINFO}/v4/company_profiles?q=${q}&size=${size}`;
+  const json = await getJson<FinfoListResponse<CompanyProfile>>(url);
+  return json.data;
+}
+
+export async function getListedEquityTickers(
+  floors: readonly ListedExchange[] = ["HOSE", "HNX", "UPCOM"],
+): Promise<string[]> {
+  const profiles = (await Promise.all(floors.map((floor) => getCompanyProfilesByFloor(floor)))).flat();
+  const tickers = profiles
+    .map((p) => p.code.toUpperCase())
+    .filter((code) => /^[A-Z]{3}$/.test(code));
+  return Array.from(new Set(tickers)).sort();
+}
