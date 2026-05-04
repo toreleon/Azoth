@@ -56,7 +56,7 @@ Requirements:
 One-shot usage with `npx`:
 
 ```bash
-npx azoth-vn init
+npx @toreleon/azoth init
 cp ~/.azoth/.env.example ~/.azoth/.env
 ```
 
@@ -69,13 +69,13 @@ ANTHROPIC_API_KEY=...
 Start the professional TUI:
 
 ```bash
-npx azoth-vn
+npx @toreleon/azoth
 ```
 
 Install globally if you prefer a persistent command:
 
 ```bash
-npm install -g azoth-vn
+npm install -g @toreleon/azoth
 azoth init
 azoth
 ```

@@ -1,5 +1,5 @@
 {
-  "name": "azoth-vn",
+  "name": "@toreleon/azoth",
   "version": "0.0.1",
   "description": "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations",
   "type": "module",
@@ -8,7 +8,6 @@
     "node": ">=20"
   },
   "bin": {
-    "azoth-vn": "./dist/src/cli/azoth.js",
     "azoth": "./dist/src/cli/azoth.js",
     "azoth-init": "./dist/src/cli/azoth-init.js",
     "azoth-analyze": "./dist/src/cli/analyze.js",
