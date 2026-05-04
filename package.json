@@ -1,6 +1,6 @@
 {
   "name": "@toreleon/azoth",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations",
   "type": "module",
   "license": "MIT",
