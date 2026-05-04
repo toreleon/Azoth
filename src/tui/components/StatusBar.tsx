@@ -14,7 +14,7 @@ export interface StatusBarProps {
   streaming?: boolean;
 }
 
-const IDLE_HINT = "/ cmds · Ctrl+A autonomy · ? help";
+const IDLE_HINT = "/ cmds · /autonomy · /health";
 const STREAMING_HINT = "Ctrl+C abort";
 
 export function StatusBar(p: StatusBarProps) {

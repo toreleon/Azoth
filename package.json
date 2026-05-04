@@ -1,27 +1,24 @@
 {
-  "name": "vnstock-agent",
+  "name": "azoth",
   "version": "0.1.0",
-  "description": "Vietnam stock investment agent platform (Phase 1 — advisory only)",
+  "description": "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations",
   "type": "module",
   "private": true,
   "engines": {
     "node": ">=20"
   },
   "bin": {
-    "vnstock-agent": "./dist/cli.js",
-    "azoth": "./dist/cli/azoth.js"
+    "azoth": "./dist/src/cli/azoth.js"
   },
   "scripts": {
-    "dev": "tsx src/cli.ts",
     "azoth": "tsx src/cli/azoth.tsx",
     "azoth:init": "tsx src/cli/azoth-init.ts",
     "analyze": "tsx src/cli/analyze.ts",
     "team": "tsx src/cli/team.ts",
     "team:chat": "tsx src/cli/team.ts",
     "backtest": "tsx src/cli/agent-backtest.ts",
-    "backtest:rsi": "tsx src/cli/rsi-backtest.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/cli.js",
+    "start": "node dist/src/cli/azoth.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

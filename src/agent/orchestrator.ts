@@ -10,8 +10,6 @@ import { newsTool } from "../tools/news.js";
 import { indicesTool, foreignFlowTool } from "../tools/macro.js";
 import {
   listPositionsTool,
-  recordPositionTool,
-  removePositionTool,
 } from "../tools/portfolio.js";
 import { journalAppendTool, journalReadTool } from "../tools/journal.js";
 import { discoverTickersTool } from "../tools/discover.js";
@@ -54,7 +52,7 @@ export function buildSystemPrompt(): string {
     "- WebSearch: open-web search for current context not covered by Azoth data tools. Cite URLs and dates; prefer Azoth market tools for prices, financials, and VN ticker news.",
     "- macro_indices: VNINDEX/VN30/HNXINDEX/UPCOMINDEX latest close + 1d/1w/1m % change.",
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
-    "- portfolio_list / portfolio_record / portfolio_remove: read and update the user's positions in local SQLite. Avg cost is in thousand VND.",
+    "- portfolio_list: read broker cash, positions, exposure, and unrealized P&L. Avg cost and last close are in thousand VND; monetary totals are in VND.",
     "- journal_append / journal_read: persist and review past decisions.",
     "- discover_tickers: dynamically scan a curated VN30+midcap universe by criterion (momentum / breakout / oversold / low_volatility / high_volume / top_gainers / top_losers) and return 5–10 ranked candidates.",
     "- team_question: delegate complex market, portfolio, or allocation questions to Azoth's bull/bear/risk/portfolio team.",
@@ -90,8 +88,6 @@ export function buildMcpServer() {
     indicesTool,
     foreignFlowTool,
     listPositionsTool,
-    recordPositionTool,
-    removePositionTool,
     journalAppendTool,
     journalReadTool,
     discoverTickersTool,
@@ -139,8 +135,6 @@ export function buildOptions(opts: { resume?: string } = {}): Options {
       "mcp__vnstock__macro_indices",
       "mcp__vnstock__foreign_flow",
       "mcp__vnstock__portfolio_list",
-      "mcp__vnstock__portfolio_record",
-      "mcp__vnstock__portfolio_remove",
       "mcp__vnstock__journal_append",
       "mcp__vnstock__journal_read",
       "mcp__vnstock__discover_tickers",
@@ -160,6 +154,7 @@ export function buildOptions(opts: { resume?: string } = {}): Options {
 
 let activeSessionId: string | undefined;
 let activeLocalSessionId: string | undefined;
+const pendingLocalContext: string[] = [];
 
 export function resetSession() {
   const cfg = loadConfig();
@@ -169,6 +164,7 @@ export function resetSession() {
   });
   activeLocalSessionId = session.id;
   activeSessionId = undefined;
+  pendingLocalContext.length = 0;
 }
 
 export function startNewSession(title?: string): SessionIndexEntry {
@@ -180,6 +176,7 @@ export function startNewSession(title?: string): SessionIndexEntry {
   });
   activeLocalSessionId = session.id;
   activeSessionId = undefined;
+  pendingLocalContext.length = 0;
   return session;
 }
 
@@ -210,10 +207,56 @@ export function readActiveSessionRecords(): SessionRecord[] {
   return session ? readSessionRecords(session.id) : [];
 }
 
+export function recordLocalTurn(prompt: string, response: string): void {
+  const cfg = loadConfig();
+  const session = ensureActiveChatSession(prompt);
+  activeLocalSessionId = session.id;
+  const base = {
+    timestamp: Date.now(),
+    sessionId: session.id,
+    cwd: process.cwd(),
+    model: cfg.model,
+    autonomy: cfg.autonomy,
+  };
+  appendSessionRecord(session.id, {
+    ...base,
+    type: "user",
+    text: prompt,
+  });
+  appendSessionRecord(session.id, {
+    ...base,
+    timestamp: Date.now(),
+    type: "assistant",
+    text: response,
+  });
+  pendingLocalContext.push(`User command: ${prompt}\nCommand response:\n${response}`);
+}
+
 function ensureActiveChatSession(prompt: string): SessionIndexEntry {
   const existing = activeLocalSessionId ? findSession(activeLocalSessionId) : resumeLatestSession();
   if (existing) return existing;
   return startNewSession(prompt.slice(0, 80) || "Untitled session");
+}
+
+function pendingContextFromRecords(records: SessionRecord[]): string[] {
+  let lastResultIdx = -1;
+  for (let i = records.length - 1; i >= 0; i--) {
+    if (records[i]?.type === "result") {
+      lastResultIdx = i;
+      break;
+    }
+  }
+  const tail = records.slice(lastResultIdx + 1);
+  const contexts: string[] = [];
+  for (let i = 0; i < tail.length; i++) {
+    const user = tail[i];
+    const assistant = tail[i + 1];
+    if (user?.type === "user" && assistant?.type === "assistant" && user.text && assistant.text) {
+      contexts.push(`User command: ${user.text}\nCommand response:\n${assistant.text}`);
+      i += 1;
+    }
+  }
+  return contexts;
 }
 
 function recordSessionId(sdkSessionId: string, cfg: ReturnType<typeof loadConfig>) {
@@ -236,6 +279,18 @@ export async function* runTurn(prompt: string) {
   const session = ensureActiveChatSession(prompt);
   activeLocalSessionId = session.id;
   activeSessionId = session.sdkSessionId;
+  const localContext = pendingLocalContext.length
+    ? pendingLocalContext.splice(0)
+    : pendingContextFromRecords(readSessionRecords(session.id));
+  const sdkPrompt = localContext.length
+    ? [
+        "Context from local Azoth commands run earlier in this chat. Use it as prior conversation context for this turn:",
+        localContext.join("\n\n---\n\n"),
+        "",
+        "User follow-up:",
+        prompt,
+      ].join("\n")
+    : prompt;
   appendSessionRecord(session.id, {
     type: "user",
     timestamp: Date.now(),
@@ -250,7 +305,7 @@ export async function* runTurn(prompt: string) {
   // find that conversation (subprocess exits with code 1 on startup), drop
   // the stale id and retry once with a fresh session.
   const startStream = (resume: string | undefined) =>
-    query({ prompt, options: buildOptions({ resume }) });
+    query({ prompt: sdkPrompt, options: buildOptions({ resume }) });
   type TextBlock = { type: "assistant" | "thinking"; text: string };
   type ToolBlock = { type: "tool_use"; toolName?: string; toolUseId?: string; toolInput: string };
   let currentBlock: TextBlock | ToolBlock | null = null;

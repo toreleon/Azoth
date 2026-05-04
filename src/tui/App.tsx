@@ -9,7 +9,9 @@ import { SLASH_COMMANDS, SlashSuggest, matchSlash } from "./components/SlashSugg
 import { AgentStreamProvider, useAgentStreamCtx } from "./hooks/useAgentStreamContext.js";
 import { type ChatBlock } from "./hooks/useAgentStream.js";
 import { useNow } from "./hooks/useNow.js";
-import { loadConfig } from "../config/loader.js";
+import { loadConfig, updateConfig } from "../config/loader.js";
+import { resetBrokerCache } from "../broker/index.js";
+import { collectHealth, renderHealth } from "../runtime/health.js";
 import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, formatPct, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
@@ -52,7 +54,9 @@ function compactToolInput(input?: string) {
 }
 
 function compactToolResult(content: string) {
-  return truncate(content.replace(/\s+/g, " ").trim(), 900);
+  const trimmed = content.replace(/\s+/g, " ").trim();
+  if (!trimmed) return "done";
+  return truncate(trimmed, 160);
 }
 
 function renderTeamToolCall(ev: Extract<TeamEvent, { type: "role_tool" }>, prefix = "") {
@@ -61,7 +65,7 @@ function renderTeamToolCall(ev: Extract<TeamEvent, { type: "role_tool" }>, prefi
 }
 
 function renderTeamToolResult(ev: Extract<TeamEvent, { type: "role_tool_result" }>, prefix = "") {
-  return `${prefix}[${ev.role}] ${ev.tool ?? "tool"} result: ${compactToolResult(ev.content)}\n`;
+  return `${prefix}[${ev.role}] ${ev.tool ?? "tool"} result received: ${compactToolResult(ev.content)}\n`;
 }
 
 function renderAnalyzeResult(state: TeamState, decision: FinalDecision) {
@@ -142,7 +146,7 @@ function renderBlock(b: ChatBlock, toolResults: Map<string, string>, columns = 8
       );
     }
     case "thinking":
-      return <Text key={b.id} dimColor italic>{glyph.thinking} {b.text}</Text>;
+      return <Text key={b.id} dimColor>{glyph.thinking} Thinking</Text>;
     case "text":
       return (
         <Box key={b.id}>
@@ -271,7 +275,7 @@ function AppInner() {
           emit: (ev: TeamEvent) => {
             if (ev.type === "role_start") {
               const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.appendLocalResponse(`- ${tag} thinking...\n`);
+              stream.appendLocalResponse(`${glyph.toolRunning} ${tag}\n`);
             } else if (ev.type === "role_tool") {
               stream.appendLocalResponse(renderTeamToolCall(ev, "  "));
             } else if (ev.type === "role_tool_result") {
@@ -279,7 +283,7 @@ function AppInner() {
             } else if (ev.type === "role_end") {
               const desc = teamRoleDesc(ev.output as Record<string, unknown>, "analyze");
               const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.appendLocalResponse(`  ${tag} -> ${desc}\n`);
+              stream.appendLocalResponse(`  ${glyph.toolDone} ${tag}: ${desc}\n`);
             }
           },
         },
@@ -304,7 +308,7 @@ function AppInner() {
         emit: (ev: TeamEvent) => {
           if (ev.type === "role_start") {
             const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-            stream.appendLocalResponse(`- ${tag} thinking...\n`);
+            stream.appendLocalResponse(`${glyph.toolRunning} ${tag}\n`);
           } else if (ev.type === "role_tool") {
             stream.appendLocalResponse(renderTeamToolCall(ev, "  "));
           } else if (ev.type === "role_tool_result") {
@@ -312,7 +316,7 @@ function AppInner() {
           } else if (ev.type === "role_end") {
             const desc = teamRoleDesc(ev.output as Record<string, unknown>, "question");
             const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-            stream.appendLocalResponse(`  ${tag} -> ${desc}\n`);
+            stream.appendLocalResponse(`  ${glyph.toolDone} ${tag}: ${desc}\n`);
           }
         },
       });
@@ -337,6 +341,30 @@ function AppInner() {
       stream.appendCard(<JournalCard tab={tab} rows={rows} />);
     } catch (e) {
       stream.systemMessage(`✗ journal error: ${(e as Error).message}`);
+    }
+  };
+
+  const runAutonomy = (args: string[]) => {
+    const next = args[0] as Autonomy | undefined;
+    if (!next || !["advisory", "confirm", "auto"].includes(next)) {
+      stream.systemMessage(`Current autonomy: ${loadConfig().autonomy}\n/autonomy <advisory|confirm|auto>`);
+      return;
+    }
+    const updated = updateConfig({ autonomy: next });
+    setAutonomy(updated.autonomy);
+    resetBrokerCache();
+    stream.systemMessage(`Autonomy set to ${updated.autonomy}. New turns will rebuild tool access from config.`);
+  };
+
+  const runHealth = async (args: string[]) => {
+    stream.beginLocalResponse(`/health${args.includes("--probe") ? " --probe" : ""}`);
+    try {
+      const report = await collectHealth({ probeProviders: args.includes("--probe") });
+      stream.appendLocalResponse(renderHealth(report));
+    } catch (e) {
+      stream.appendLocalResponse(`Health error: ${(e as Error).message}`);
+    } finally {
+      stream.finishLocalResponse();
     }
   };
 
@@ -390,16 +418,16 @@ function AppInner() {
           onTeamEvent: (ev, { ticker }) => {
             if (ev.type === "role_start") {
               const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.appendLocalResponse(`- [${ticker}] ${tag}...\n`);
+              stream.appendLocalResponse(`${glyph.toolRunning} [${ticker}] ${tag}\n`);
             } else if (ev.type === "role_tool") {
               const input = compactToolInput(ev.input);
               stream.appendLocalResponse(`  [${ticker}] ${ev.role} ${ev.tool}${input ? `: ${input}` : ""}\n`);
             } else if (ev.type === "role_tool_result") {
-              stream.appendLocalResponse(`  [${ticker}] ${ev.role} ${ev.tool ?? "tool"} result: ${compactToolResult(ev.content)}\n`);
+              stream.appendLocalResponse(`  [${ticker}] ${ev.role} ${ev.tool ?? "tool"} result received: ${compactToolResult(ev.content)}\n`);
             } else if (ev.type === "role_end") {
               const desc = teamRoleDesc(ev.output as Record<string, unknown>, "backtest");
               const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.appendLocalResponse(`  [${ticker}] ${tag} -> ${desc}\n`);
+              stream.appendLocalResponse(`  ${glyph.toolDone} [${ticker}] ${tag}: ${desc}\n`);
             }
           },
           onOrder: (order) => {
@@ -425,9 +453,6 @@ function AppInner() {
   };
 
   useInput((inp, key) => {
-    if (key.ctrl && inp === "a") {
-      setAutonomy((a) => (a === "advisory" ? "confirm" : a === "confirm" ? "auto" : "advisory"));
-    }
     if (key.ctrl && inp === "c" && stream.streaming) stream.abort();
     if (key.ctrl && inp === "b" && backtestRef.current?.running) {
       backtestRef.current.ctrl.abort();
@@ -475,6 +500,8 @@ function AppInner() {
       else if (cmd === "analyze") void runAnalyze(rest);
       else if (cmd === "backtest") void runBacktest(rest);
       else if (cmd === "journal") runJournal(rest);
+      else if (cmd === "autonomy") runAutonomy(rest);
+      else if (cmd === "health") void runHealth(rest);
       else if (cmd === "quote" && arg) void stream.send(`Give me a market quote with technicals and recent news for ${arg.toUpperCase()}.`);
       else if (cmd === "positions") void stream.send("Summarize my current portfolio positions, unrealized PnL, and exposures.");
       else if (cmd === "help") {

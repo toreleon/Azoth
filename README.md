@@ -31,7 +31,7 @@ autonomy and risk settings.
   ticker whitelist checks, market-hour checks, and buy freeze support.
 - **Backtesting**: replay strategy behavior with the paper broker to validate
   feeds, accounting, lot sizing, fees, and guardrails before using live tools.
-- **Local-first state**: configuration, SQLite cache, portfolio records,
+- **Local-first state**: configuration, SQLite cache, broker records,
   journals, broker records, team runs, and session logs live under `~/.azoth`
   by default.
 
@@ -61,12 +61,6 @@ Start the professional TUI:
 
 ```bash
 pnpm azoth
-```
-
-The classic readline REPL is also available:
-
-```bash
-pnpm dev
 ```
 
 ## Common Workflows
@@ -118,6 +112,8 @@ Manage sessions:
 | `/journal [decisions\|orders\|fills\|alerts] [N]` | Show recent journal rows. |
 | `/quote <ticker>` | Request quote, technicals, and recent news for a ticker. |
 | `/positions` | Summarize current portfolio positions and exposures. |
+| `/autonomy <advisory\|confirm\|auto>` | Persist the autonomy mode and rebuild tool access for new turns. |
+| `/health [--probe]` | Check API key, config, DB, broker state, live-trading arm flag, market session, and optionally data providers. |
 | `/new` | Start a new resumable session. |
 | `/resume [id]` | Resume the latest session or a specific session. |
 | `/sessions` | List recent project sessions. |
@@ -217,13 +213,7 @@ The first `place_order` in a live session may trigger an email OTP prompt.
 
 ## Backtesting
 
-Run the RSI backtest from the shell:
-
-```bash
-pnpm backtest:rsi --days=180 --rsi-buy=30 --rsi-sell=70 --lots=2
-```
-
-Run the agent backtest:
+Run the team-driven agent backtest:
 
 ```bash
 pnpm backtest
@@ -239,11 +229,9 @@ Common commands:
 
 ```bash
 pnpm azoth          # run the Ink TUI
-pnpm dev            # run the classic readline REPL
 pnpm azoth:init     # initialize ~/.azoth
 pnpm analyze        # run the standalone analysis CLI
 pnpm backtest       # run agent backtest
-pnpm backtest:rsi   # run RSI strategy backtest
 pnpm test           # run Vitest
 pnpm typecheck      # run TypeScript type checks
 pnpm build          # compile to dist/
@@ -253,7 +241,6 @@ Project layout:
 
 ```text
 src/
-  cli.ts                   classic readline REPL
   cli/azoth.tsx            Ink terminal UI entrypoint
   tui/                     TUI components, hooks, cards, theme, commands
   agent/orchestrator.ts    Agent SDK prompt, tools, sessions

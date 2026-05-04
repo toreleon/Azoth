@@ -1,9 +1,12 @@
 import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ensureAzothDirs } from "../runtime/paths.js";
+import { SCHEMA_SQL } from "./schemaDef.js";
 
 let db: Database.Database | null = null;
+const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 export function getDb(): Database.Database {
   if (db) return db;
@@ -12,10 +15,18 @@ export function getDb(): Database.Database {
   db = new Database(path);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
-  const schema = readFileSync(resolve("src/storage/schema.sql"), "utf8");
+  const schema = readSchema();
   db.exec(schema);
   migrate(db);
   return db;
+}
+
+function readSchema(): string {
+  try {
+    return readFileSync(resolve(moduleDir, "schema.sql"), "utf8");
+  } catch {
+    return SCHEMA_SQL;
+  }
 }
 
 function migrate(d: Database.Database) {

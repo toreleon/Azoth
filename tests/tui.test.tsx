@@ -10,7 +10,9 @@ import { vnColor, pctColor } from "../src/tui/lib/colors.js";
 import { classifySession } from "../src/tui/lib/marketSession.js";
 import { formatBigVnd, formatPct, formatPrice } from "../src/tui/lib/format.js";
 import { getDb } from "../src/storage/db.js";
-import { appendSessionRecord, createSession } from "../src/runtime/sessionStore.js";
+import { appendSessionRecord, createSession, latestSession, readSessionRecords } from "../src/runtime/sessionStore.js";
+import { resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
+import { resetBrokerCache } from "../src/broker/index.js";
 
 const runnerMocks = vi.hoisted(() => ({
   runTeamAnalysis: vi.fn(),
@@ -38,6 +40,9 @@ beforeEach(() => {
   runnerMocks.runTeamAnalysis.mockReset();
   runnerMocks.runTeamQuestion.mockReset();
   runnerMocks.runBacktestSession.mockReset();
+  resetConfigCacheForTests();
+  updateConfig({ autonomy: "advisory", broker: "paper" });
+  resetBrokerCache();
 });
 
 function strip(s: string) {
@@ -111,6 +116,29 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
+  it("/autonomy persists mode and updates the UI", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/autonomy confirm");
+    const out = strip(lastFrame() ?? "");
+    expect(out).toContain("Autonomy set to confirm");
+    expect(out).toContain("confirm");
+    unmount();
+  });
+
+  it("/health prints local runtime checks", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/health");
+    await tick();
+    const out = strip(lastFrame() ?? "");
+    expect(out).toContain("Health:");
+    expect(out).toContain("api_key:");
+    expect(out).toContain("database:");
+    expect(out).toContain("data_provider:");
+    unmount();
+  });
+
   it("/team <message> streams the team chat flow as a plain response", async () => {
     runnerMocks.runTeamQuestion.mockImplementationOnce(async (question: string, opts: any) => {
       opts.emit?.({ type: "role_start", role: "bull", round: 1 });
@@ -173,12 +201,20 @@ describe("Azoth TUI", () => {
     expect(out).toContain("/team Should we add more bank exposure this week?");
     expect(out).toContain("bull#1");
     expect(out).toContain("WebSearch: Vietnam banks credit growth May 2026");
-    expect(out).toContain("WebSearch result: Search result: credit growth target");
+    expect(out).toContain("WebSearch result received: Search result: credit growth target");
     expect(out).toContain("risk");
     expect(out).not.toContain("TEAM QUESTION");
     expect(out).toContain("Recommendation:");
     expect(out).toContain("Selective Overweight");
     expect(out).toContain("Add selectively");
+    const session = latestSession();
+    const records = session ? readSessionRecords(session.id) : [];
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "user", text: "/team Should we add more bank exposure this week?" }),
+        expect.objectContaining({ type: "assistant", text: expect.stringContaining("Recommendation: Selective Overweight") }),
+      ]),
+    );
     unmount();
   });
 
@@ -238,7 +274,7 @@ describe("Azoth TUI", () => {
     expect(out).toContain("/analyze FPT");
     expect(out).toContain("technical");
     expect(out).toContain("WebSearch: FPT Vietnam stock latest earnings");
-    expect(out).toContain("WebSearch result: Search result: FPT earnings");
+    expect(out).toContain("WebSearch result received: Search result: FPT earnings");
     expect(out).not.toContain("TEAM FPT");
     expect(out).toContain("Final: Overweight 4.0% FPT");
     expect(out).toContain("Momentum and fundamentals");
@@ -364,7 +400,7 @@ describe("Azoth TUI", () => {
     expect(out).toContain("team analysis");
     expect(out).toContain("[HPG]");
     expect(out).toContain("technical WebSearch: HPG steel demand Vietnam 2025");
-    expect(out).toContain("technical WebSearch result: Search result: steel demand");
+    expect(out).toContain("technical WebSearch result received: Search result: steel demand");
     expect(out).toContain("technical");
     expect(out).toContain("portfolio");
     expect(out).toContain("order FILLED");

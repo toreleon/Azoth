@@ -14,6 +14,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "journal", args: "[decisions|orders|fills|alerts] [N]", description: "Print latest journal rows inline" },
   { name: "quote", args: "<ticker>", description: "Quick quote for a ticker" },
   { name: "positions", description: "Show current portfolio positions" },
+  { name: "autonomy", args: "<advisory|confirm|auto>", description: "Persist autonomy mode" },
+  { name: "health", args: "[--probe]", description: "Check local runtime and optional data provider reachability" },
   { name: "new", description: "Start a fresh resumable session" },
   { name: "resume", args: "[id]", description: "Resume latest or a specific session" },
   { name: "sessions", description: "List recent project sessions" },

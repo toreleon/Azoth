@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS kv_cache (
+export const SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS kv_cache (
   key        TEXT PRIMARY KEY,
   value      TEXT NOT NULL,
   expires_at INTEGER NOT NULL
@@ -10,19 +10,17 @@ CREATE TABLE IF NOT EXISTS decisions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at  INTEGER NOT NULL,
   ticker      TEXT NOT NULL,
-  action      TEXT NOT NULL,         -- legacy BUY | SELL | HOLD
-  rating      TEXT,                  -- Buy | Overweight | Hold | Underweight | Sell
-  rationale   TEXT NOT NULL,         -- 4-dimension synthesis
-  exit_plan   TEXT,                  -- thresholds for stop/take-profit
-  source_run  TEXT                   -- session id, optional
+  action      TEXT NOT NULL,
+  rating      TEXT,
+  rationale   TEXT NOT NULL,
+  exit_plan   TEXT,
+  source_run  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS decisions_ticker_idx ON decisions(ticker, created_at);
 
--- Paper / live broker state (Phase 4+)
-
 CREATE TABLE IF NOT EXISTS broker_state (
-  broker     TEXT PRIMARY KEY,        -- 'paper' | 'dnse'
+  broker     TEXT PRIMARY KEY,
   cash_vnd   REAL NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -31,7 +29,7 @@ CREATE TABLE IF NOT EXISTS broker_positions (
   broker     TEXT NOT NULL,
   ticker     TEXT NOT NULL,
   quantity   INTEGER NOT NULL,
-  avg_cost   REAL NOT NULL,           -- thousand VND
+  avg_cost   REAL NOT NULL,
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (broker, ticker)
 );
@@ -40,15 +38,15 @@ CREATE TABLE IF NOT EXISTS broker_orders (
   id              TEXT PRIMARY KEY,
   broker          TEXT NOT NULL,
   ticker          TEXT NOT NULL,
-  side            TEXT NOT NULL,      -- BUY | SELL
-  type            TEXT NOT NULL,      -- MARKET | LIMIT
+  side            TEXT NOT NULL,
+  type            TEXT NOT NULL,
   quantity        INTEGER NOT NULL,
-  limit_price     REAL,                -- thousand VND
-  status          TEXT NOT NULL,      -- PENDING | FILLED | CANCELLED | REJECTED
+  limit_price     REAL,
+  status          TEXT NOT NULL,
   reject_reason   TEXT,
   created_at      INTEGER NOT NULL,
   filled_at       INTEGER,
-  filled_price    REAL,                -- thousand VND
+  filled_price    REAL,
   filled_qty      INTEGER,
   notes           TEXT
 );
@@ -56,14 +54,12 @@ CREATE TABLE IF NOT EXISTS broker_orders (
 CREATE INDEX IF NOT EXISTS broker_orders_ticker_idx ON broker_orders(broker, ticker, created_at);
 CREATE INDEX IF NOT EXISTS broker_orders_status_idx ON broker_orders(broker, status);
 
--- Backtest harness (Phase 6)
-
 CREATE TABLE IF NOT EXISTS backtest_runs (
   id              TEXT PRIMARY KEY,
   persona         TEXT NOT NULL,
   start_date      INTEGER NOT NULL,
   end_date        INTEGER NOT NULL,
-  cadence         TEXT NOT NULL,         -- "weekly"
+  cadence         TEXT NOT NULL,
   initial_cash_vnd INTEGER NOT NULL,
   config_json     TEXT NOT NULL,
   created_at      INTEGER NOT NULL,
@@ -101,8 +97,6 @@ CREATE TABLE IF NOT EXISTS backtest_equity (
   benchmark_mtm_vnd REAL NOT NULL,
   PRIMARY KEY (run_id, as_of)
 );
-
--- Agent profile (Phase 7: evolving profile + harness)
 
 CREATE TABLE IF NOT EXISTS agent_profiles (
   id            TEXT NOT NULL,
@@ -142,6 +136,8 @@ CREATE TABLE IF NOT EXISTS alerts (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at  INTEGER NOT NULL,
   ticker      TEXT,
-  level       TEXT NOT NULL,         -- info | warn | critical
+  level       TEXT NOT NULL,
   message     TEXT NOT NULL
 );
+`;
+

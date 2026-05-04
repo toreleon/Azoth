@@ -1,10 +1,9 @@
-# VNStockAgent configuration
+# Azoth configuration
 
 # advisory | confirm | auto
-# Phase 1 only supports "advisory" — order tools are not yet wired.
 autonomy: advisory
 
-# Default Claude model for the orchestrator.
+# Default model for the orchestrator.
 model: glm-5.1
 
 # Multi-agent team model tiers. Research Manager and Portfolio Manager use
@@ -14,10 +13,10 @@ team:
   deep_model: glm-5.1
   output_language: en
 
-# Broker selection for later phases. Phase 1: ignored.
+# Broker selection.
 broker: paper
 
-# Risk guardrails (used in Phase 4+).
+# Risk guardrails.
 risk:
   max_position_pct: 0.15        # max 15% of portfolio in one ticker
   max_daily_loss_pct: 0.03      # halt trading if down 3% intraday

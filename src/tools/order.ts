@@ -65,7 +65,7 @@ export const placeOrderTool = tool(
 
     const refPrice = (await lastClose(input.ticker)) ?? input.limitPrice ?? null;
 
-    if (inBacktest || cfg.autonomy === "auto") {
+    if (inBacktest || cfg.autonomy === "auto" || cfg.autonomy === "confirm") {
       if (refPrice == null) {
         return asText({ ok: false, error: `no reference price for ${input.ticker}` });
       }
@@ -83,7 +83,9 @@ export const placeOrderTool = tool(
           ...(order ? { order } : {}),
         });
       }
-    } else if (cfg.autonomy === "confirm") {
+    }
+
+    if (!inBacktest && cfg.autonomy === "confirm") {
       const px =
         refPrice != null ? `${refPrice} (last close)` : "(price unavailable)";
       const ok = await confirmOnCli(

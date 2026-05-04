@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { azothHome, azothPaths, encodeProjectKey, ensureAzothDirs, projectDir } from "../src/runtime/paths.js";
 import { initializeAzothRuntime } from "../src/runtime/init.js";
-import { loadConfig, resetConfigCacheForTests } from "../src/config/loader.js";
+import { loadConfig, resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
 import { closeDb, getDb } from "../src/storage/db.js";
 import {
   activateSession,
@@ -80,6 +80,15 @@ describe("Azoth config and DB defaults", () => {
     process.env.VNSTOCK_CONFIG = custom;
     resetConfigCacheForTests();
     expect(loadConfig().model).toBe("test-model");
+  });
+
+  it("persists config updates", () => {
+    initializeAzothRuntime();
+    const updated = updateConfig({ autonomy: "confirm" });
+    resetConfigCacheForTests();
+    expect(updated.autonomy).toBe("confirm");
+    expect(loadConfig().autonomy).toBe("confirm");
+    expect(readFileSync(azothPaths().config, "utf8")).toContain("autonomy: confirm");
   });
 
   it("uses AZOTH_HOME database by default and VNSTOCK_DB when provided", () => {

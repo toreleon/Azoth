@@ -1,6 +1,7 @@
 import { loadConfig } from "../config/loader.js";
 import type { Broker, PlaceOrderInput } from "../broker/types.js";
 import { currentBrokerName, currentFreezeBuys } from "../agent/clock.js";
+import { checkVnMarketSession } from "./vnMarketSession.js";
 
 export interface GuardrailResult {
   ok: boolean;
@@ -8,8 +9,8 @@ export interface GuardrailResult {
 }
 
 /**
- * Pre-trade checks for `auto` autonomy mode. `confirm` mode skips these
- * since the human is the final gate; `advisory` never reaches the broker.
+ * Pre-trade checks for order-capable autonomy modes. `confirm` adds a human
+ * gate after these checks pass; `advisory` never reaches the broker.
  */
 export async function checkOrder(
   broker: Broker,
@@ -63,18 +64,9 @@ export async function checkOrder(
     return { ok: reasons.length === 0, reasons };
   }
 
-  // Vietnamese market hours: Mon–Fri, 09:00–15:00 ICT (UTC+7).
-  const now = new Date();
-  const ict = new Date(now.getTime() + 7 * 3600 * 1000);
-  const day = ict.getUTCDay();
-  const hour = ict.getUTCHours();
-  const minute = ict.getUTCMinutes();
-  const minsSinceMidnight = hour * 60 + minute;
-  const open = day >= 1 && day <= 5 && minsSinceMidnight >= 9 * 60 && minsSinceMidnight <= 15 * 60;
-  if (!open) {
-    reasons.push(
-      `market closed (Vietnam time ${ict.toISOString().replace("T", " ").slice(0, 16)} ICT, weekday=${day})`,
-    );
+  const session = checkVnMarketSession();
+  if (!session.open) {
+    reasons.push(`market closed (${session.ictTime} ICT: ${session.reason})`);
   }
 
   return { ok: reasons.length === 0, reasons };

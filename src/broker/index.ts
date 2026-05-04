@@ -33,6 +33,10 @@ export function getBroker(): Broker {
   }
 }
 
+export function resetBrokerCache(): void {
+  cached = null;
+}
+
 export function getBacktestBroker(
   brokerName: string,
   initialCashVnd?: number,

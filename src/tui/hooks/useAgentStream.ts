@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   readActiveSessionRecords,
   recentSessions,
+  recordLocalTurn,
   resetSession,
   resumeLatestSession,
   resumeSession,
@@ -117,6 +118,8 @@ export function useAgentStream(): AgentStreamState {
   const [streaming, setStreaming] = useState(false);
   const [cumulative, setCumulative] = useState<TurnStats>({ inTokens: 0, outTokens: 0, costUsd: 0 });
   const abortRef = useRef(false);
+  const localPromptRef = useRef<string | undefined>(undefined);
+  const localTextRef = useRef("");
 
   // Coalesce active-block delta writes: mutate a ref mirror and flush to
   // React state on a fixed cadence so per-token deltas don't each trigger a
@@ -277,16 +280,24 @@ export function useAgentStream(): AgentStreamState {
 
   const beginLocalResponse = useCallback((prompt?: string) => {
     abortRef.current = false;
+    localPromptRef.current = prompt;
+    localTextRef.current = "";
     setStreaming(true);
     if (prompt?.trim()) appendCommitted({ id: nextId(), role: "user", text: prompt });
     startActive({ id: nextId(), role: "text", text: "" });
   }, []);
 
   const appendLocalResponse = useCallback((text: string) => {
+    localTextRef.current += text;
     updateActive((b) => (b.role === "text" ? { ...b, text: b.text + text } : b));
   }, []);
 
   const finishLocalResponse = useCallback(() => {
+    const prompt = localPromptRef.current;
+    const text = localTextRef.current.trim();
+    if (prompt?.trim() && text) recordLocalTurn(prompt, text);
+    localPromptRef.current = undefined;
+    localTextRef.current = "";
     finalizeActive();
     setStreaming(false);
   }, []);

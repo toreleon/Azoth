@@ -15,6 +15,8 @@ const TIPS = [
   ["/analyze <TICKER>", "structured team analysis"],
   ["/quote <TICKER>", "price · technicals · news"],
   ["/positions", "portfolio · PnL · exposures"],
+  ["/autonomy", "persist advisory · confirm · auto"],
+  ["/health", "runtime · broker · provider checks"],
   ["/backtest", "team-driven weekly simulation"],
   ["/journal", "decisions · orders · fills · alerts"],
 ];
@@ -68,14 +70,14 @@ export function Welcome({ version, autonomy, broker, cwd }: WelcomeProps) {
             </Text>
           ))}
           <Box marginTop={0}>
-            <Text dimColor>type / to autocomplete · ↵ to send · Ctrl+C to abort</Text>
+          <Text dimColor>type / to autocomplete · ↵ to send · Ctrl+C to abort</Text>
           </Box>
         </Box>
         <Box marginTop={1} flexDirection="column">
           <Text color={theme.accent} bold>What&apos;s new</Text>
           <Text dimColor>· Chat-first layout — market data flows into chat, no dashboard grid.</Text>
           <Text dimColor>· /team, /analyze, /quote, /positions, /journal, /backtest render inline.</Text>
-          <Text dimColor>· Ctrl+A cycles autonomy: advisory → confirm → auto.</Text>
+          <Text dimColor>· /autonomy persists advisory, confirm, or auto mode.</Text>
         </Box>
       </Box>
     </Box>
