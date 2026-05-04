@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">Azoth terminal UI</title>
+  <desc id="desc">A terminal interface showing Azoth's chat-first workflow, tool calls, team subagents, slash commands, and status bar.</desc>
+  <rect width="1280" height="760" fill="#0b0f14"/>
+  <rect x="32" y="28" width="1216" height="704" rx="12" fill="#101820" stroke="#2f3b46" stroke-width="2"/>
+  <rect x="32" y="28" width="1216" height="38" rx="12" fill="#17212b"/>
+  <circle cx="58" cy="47" r="6" fill="#ff5f56"/>
+  <circle cx="80" cy="47" r="6" fill="#ffbd2e"/>
+  <circle cx="102" cy="47" r="6" fill="#27c93f"/>
+  <text x="640" y="53" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#9fb3c8">Azoth v0.0.1 - VN-stock copilot</text>
+
+  <g font-family="SFMono-Regular, Menlo, Consolas, monospace">
+    <text x="60" y="105" font-size="17" fill="#d6e2ee">› Give me full view of FPT</text>
+
+    <text x="60" y="151" font-size="17" fill="#f4f7fb">● I will run Azoth's team desk and summarize the findings when the subagents finish.</text>
+
+    <rect x="60" y="181" width="400" height="34" rx="6" fill="#152333" stroke="#31506b"/>
+    <text x="76" y="204" font-size="15" fill="#7cc4ff">◇ mcp__vnstock__team_analyze FPT</text>
+
+    <rect x="60" y="238" width="710" height="146" rx="8" fill="#111b24" stroke="#273847"/>
+    <text x="78" y="270" font-size="15" fill="#9fb3c8">◇ analyze subagents running · portfolio</text>
+    <text x="78" y="302" font-size="15" fill="#6f8294">technical · fundamentals · news · sentiment · bull · bear · trader · risk · portfolio</text>
+    <text x="78" y="334" font-size="15" fill="#62d69f">✓ analyze technical: score=0.20 base building, no confirmed breakout</text>
+    <text x="78" y="366" font-size="15" fill="#62d69f">✓ analyze risk: approved=false; foreign selling and support break risk</text>
+
+    <text x="60" y="430" font-size="17" fill="#f4f7fb">● Team finished. Summary:</text>
+    <text x="82" y="470" font-size="15" fill="#d6e2ee">Final: Hold / Watch · FPT · size 0.0%</text>
+    <text x="82" y="502" font-size="15" fill="#d6e2ee">Bull case: quality compounder, AI and semiconductor catalysts, strong ROE.</text>
+    <text x="82" y="534" font-size="15" fill="#d6e2ee">Bear case: heavy foreign selling, weak trend confirmation, key support at risk.</text>
+    <text x="82" y="566" font-size="15" fill="#d6e2ee">Plan: wait for breakout above resistance or support retest before entry.</text>
+
+    <rect x="60" y="628" width="1160" height="48" rx="8" fill="#0d151d" stroke="#3a4b5d"/>
+    <text x="78" y="658" font-size="16" fill="#7cc4ff">› Ask the agent - type / for commands</text>
+
+    <text x="60" y="704" font-size="14" fill="#8ea1b4">team · advisory</text>
+    <text x="570" y="704" font-size="14" fill="#8ea1b4">/team · /analyze · /quote · /positions · /journal · /backtest · /health</text>
+    <text x="1050" y="704" font-size="14" fill="#8ea1b4">market: closed ICT</text>
+  </g>
+</svg>

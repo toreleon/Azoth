@@ -3,6 +3,8 @@
 Azoth is a professional agent CLI for Vietnam equity research, portfolio
 workflow, and broker-aware trading operations.
 
+![Azoth terminal UI](assets/azoth-tui.svg)
+
 It combines an interactive terminal UI, Claude Agent SDK orchestration,
 market-data tools, multi-agent research, local journaling, paper trading,
 backtesting, and optional DNSE Entrade X live broker integration. Azoth is
@@ -14,11 +16,18 @@ autonomy and risk settings.
 > real orders against a real account. Use advisory or paper mode until you have
 > verified configuration, data quality, account state, and risk limits.
 
+Latest release: [v0.0.1](docs/releases/v0.0.1.md)
+
 ## Highlights
 
 - **Agent-native CLI**: run Azoth from the terminal with a rich Ink-based UI,
   streaming model output, tool chips, status bar, slash commands, and resumable
   project sessions.
+- **Chat-first workflow**: market data, team analysis, journals, backtests, and
+  broker state render inline in the conversation instead of a pinned dashboard.
+- **Automatic subagent routing**: broad portfolio questions use `team_question`;
+  deep single-ticker recommendations use `team_analyze`; the outer agent waits
+  for the team and summarizes role findings.
 - **VN market research tools**: quote, OHLCV, technical indicators,
   fundamentals, company news, macro indices, foreign flow, ticker discovery,
   portfolio state, and decision journal.
@@ -28,7 +37,8 @@ autonomy and risk settings.
 - **Broker-aware execution**: advisory, confirm, and auto autonomy modes with
   paper broker support and DNSE Entrade X integration for live accounts.
 - **Risk controls**: position sizing limits, order notional limits, optional
-  ticker whitelist checks, market-hour checks, and buy freeze support.
+  ticker whitelist checks, market-session checks, margin-disabled enforcement,
+  daily-loss halt, and drawdown buy-freeze support.
 - **Backtesting**: replay strategy behavior with the paper broker to validate
   feeds, accounting, lot sizing, fees, and guardrails before using live tools.
 - **Local-first state**: configuration, SQLite cache, broker records,
@@ -62,6 +72,24 @@ Start the professional TUI:
 ```bash
 pnpm azoth
 ```
+
+The TUI requires an interactive terminal. In non-TTY environments, use the
+standalone commands such as `pnpm azoth:init`, `pnpm test`, `pnpm build`, or
+programmatic health checks.
+
+## Feature Overview
+
+| Area | Features |
+| --- | --- |
+| Terminal UI | Ink chat interface, tool chips, slash commands, local cards, status bar, normal scrollback, optional alternate screen. |
+| Agent orchestration | Claude Agent SDK, constrained MCP tool server, resumable sessions, local context replay, abortable turns. |
+| Team desk | Technical, fundamentals, news, sentiment, bull, bear, research manager, trader, risk, and portfolio roles. |
+| Market data | Quotes, OHLCV, technical indicators, fundamentals, CafeF news, macro indices, foreign flow, and ticker discovery. |
+| Portfolio and journal | Broker state, positions, cash, unrealized P&L, decision journal, orders, fills, alerts. |
+| Execution | Paper broker, optional DNSE broker, advisory/confirm/auto autonomy, human confirmation gate. |
+| Risk | Notional cap, concentration cap, whitelist, market session, no-margin cash check, daily-loss halt, drawdown buy freeze. |
+| Backtesting | Weekly team-driven replay, paper fills, fees, rejected guardrail orders, benchmark comparison, running-peak max drawdown. |
+| Runtime | `~/.azoth` config, SQLite state, project session logs, build-safe schema fallback. |
 
 ## Common Workflows
 
@@ -101,6 +129,32 @@ Manage sessions:
 /resume
 /resume <session-id>
 ```
+
+## Agent Workflow
+
+Azoth is designed so the top-level chat agent delegates complex investment work
+to a structured team instead of improvising a long single-agent answer.
+
+```text
+User prompt
+  ├─ simple quote/news/position request -> direct market or portfolio tools
+  ├─ broad allocation / portfolio question -> team_question
+  └─ deep single-ticker view / buy-sell-hold -> team_analyze
+
+team_analyze
+  ├─ analysts: technical, fundamentals, news, sentiment
+  ├─ debate: bull and bear
+  ├─ research manager: synthesis and plan
+  ├─ trader: entry, sizing, and execution view
+  ├─ risk: veto, sizing adjustment, and concerns
+  └─ portfolio manager: final rating, allocation, rationale, exit plan
+```
+
+When the model automatically calls `team_question` or `team_analyze`, the TUI
+treats the team like a subagent run: it shows compact running status, suppresses
+noisy nested raw tool payloads, waits for the team to finish, then displays a
+short findings summary. Direct slash commands such as `/team` and `/analyze`
+still stream the full local team flow.
 
 ## Slash Commands
 
@@ -178,15 +232,42 @@ Broker modes:
 
 Azoth uses public and broker APIs for Vietnam market context:
 
-- **OHLCV**: DNSE Entrade public chart API.
-- **Quotes and reference prices**: SSI iBoard public endpoints.
-- **Fundamentals**: VNDirect Finfo and CafeF.
-- **News and disclosures**: CafeF.
-- **Open web context**: model WebSearch when built-in market tools are not
-  sufficient.
+- **OHLCV**: DNSE Entrade public chart API for daily and intraday bars.
+- **Quotes and reference prices**: SSI iBoard public endpoints for last,
+  reference, ceiling, floor, exchange, and company metadata.
+- **Technical indicators**: computed locally from DNSE bars, including RSI,
+  MACD, moving averages, EMA, and Bollinger Bands.
+- **Fundamentals**: VNDirect Finfo and CafeF for valuation, profitability,
+  balance-sheet, EPS, BVPS, margin, and historical ratio context.
+- **News and disclosures**: CafeF company news, industry news, and filings.
+- **Macro indices**: VNINDEX, VN30, HNXINDEX, and UPCOMINDEX.
+- **Foreign flow**: per-ticker foreign buy, sell, net flow, and ownership.
+- **Portfolio data**: local paper broker or DNSE account snapshots.
+- **Open web context**: model WebSearch for current context not covered by the
+  built-in market tools; responses should cite URLs and dates.
 
 Market responses are cached in SQLite with short TTLs to keep the CLI fast and
 reduce repeated network calls.
+
+## Integrations
+
+| Integration | Purpose |
+| --- | --- |
+| Claude Agent SDK | Top-level agent orchestration, streaming, MCP tool hosting, and tool restrictions. |
+| MCP tools | Azoth exposes market, portfolio, journal, team, and broker tools through a local SDK MCP server. |
+| Ink | Rich terminal UI with chat, slash commands, cards, status, and keyboard handling. |
+| SQLite / better-sqlite3 | Local cache, journal, broker state, orders, sessions, team runs, and backtest records. |
+| DNSE public APIs | Market OHLCV and optional live broker adapter support. |
+| SSI iBoard | Public quote and reference price data. |
+| VNDirect Finfo | Fundamentals and valuation snapshots. |
+| CafeF | News, disclosures, and historical financial ratios. |
+| DNSE Entrade X / LightSpeed | Optional live account reads and order submission. |
+
+## Release Notes
+
+- [v0.0.1](docs/releases/v0.0.1.md) - first packaged release with chat TUI,
+  multi-agent desk, data tools, paper broker, guardrails, backtesting, and DNSE
+  integration foundations.
 
 ## Live Trading With DNSE
 
