@@ -18,7 +18,7 @@ import { packageVersion } from "../runtime/version.js";
 import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, formatPct, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
-import { runBacktestSession, type EquityPayload, type SummaryPayload } from "../agent/backtestRunner.js";
+import { BACKTEST_DEFAULT_INTERVAL, runBacktestSession, type EquityPayload, type SummaryPayload } from "../agent/backtestRunner.js";
 import { runTeamAnalysis, runTeamQuestion } from "../agent/team/index.js";
 import type { FinalDecision, TeamEvent, TeamState } from "../agent/team/state.js";
 import { loadJournal, type JournalTab } from "./lib/journal.js";
@@ -147,7 +147,7 @@ function renderBacktestResult(start: string, end: string, initialCash: number, s
   return [
     "",
     `Backtest ${start} -> ${end}`,
-    `Cash: ${formatBigVnd(initialCash)}  weeks: ${summary.weeks}  trades: ${summary.trades}${summary.rejectedTrades ? `  rejected: ${summary.rejectedTrades}` : ""}`,
+    `Cash: ${formatBigVnd(initialCash)}  interval: ${summary.interval ?? BACKTEST_DEFAULT_INTERVAL}  turns: ${summary.intervals ?? summary.sessions ?? summary.weeks}  trades: ${summary.trades}${summary.rejectedTrades ? `  rejected: ${summary.rejectedTrades}` : ""}`,
     `Final: ${formatBigVnd(summary.finalMtm)}  bench: ${formatBigVnd(summary.finalBench)}`,
     `Return: ${formatPct(summary.totalReturn)}  bench: ${formatPct(summary.benchReturn)}  alpha: ${formatPct(alpha)}  maxDD: ${formatPct(summary.maxDD * 100)}`,
     `Cost: $${summary.totalCost.toFixed(4)}`,
@@ -399,7 +399,7 @@ function AppInner() {
 
   const runBacktest = async (args: string[]) => {
     if (args[0] === "help") {
-      stream.systemMessage("/backtest [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND] [--max-candidates N]\nNo dates = previous calendar week.");
+      stream.systemMessage("/backtest [YYYY-MM-DD start] [YYYY-MM-DD end] [cash VND] [--interval 30m|1h|2h] [--max-candidates N]\nNo dates = previous calendar week. Default interval = 30m.");
       return;
     }
     if (backtestRef.current?.running) {
@@ -410,6 +410,14 @@ function AppInner() {
     const cashArg = args.find((a) => /^\d{4,}$/.test(a));
     const maxCandidatesArg = args.findIndex((a) => a === "--max-candidates");
     const maxCandidatesEq = args.find((a) => a.startsWith("--max-candidates="));
+    const intervalArg = args.findIndex((a) => a === "--interval");
+    const intervalEq = args.find((a) => a.startsWith("--interval="));
+    const interval =
+      intervalArg >= 0 && args[intervalArg + 1]
+        ? args[intervalArg + 1]
+        : intervalEq
+          ? intervalEq.slice("--interval=".length)
+          : BACKTEST_DEFAULT_INTERVAL;
     const maxCandidates =
       maxCandidatesArg >= 0 && args[maxCandidatesArg + 1]
         ? Number.parseInt(args[maxCandidatesArg + 1]!, 10)
@@ -421,29 +429,29 @@ function AppInner() {
     const end = dates[1] ?? defaultRange.end;
     const initialCash = cashArg ? Number.parseInt(cashArg, 10) : BT_DEFAULTS.cash;
 
-    stream.beginLocalResponse(`/backtest ${start} ${end} ${initialCash}`);
-    stream.appendLocalResponse(`Team-driven replay from ${start} to ${end}, cash ${formatBigVnd(initialCash)}.\n`);
+    stream.beginLocalResponse(`/backtest ${start} ${end} ${initialCash} --interval ${interval}`);
+    stream.appendLocalResponse(`Team-driven replay from ${start} to ${end}, interval ${interval}, cash ${formatBigVnd(initialCash)}.\n`);
     stream.appendLocalResponse("Fetching market data... Ctrl+B to abort.\n");
 
     const ctrl = new AbortController();
     backtestRef.current = { ctrl, running: true };
     let turnIdx = 0;
-    let totalFridays = 0;
+    let totalTurns = 0;
 
     try {
       const summary = await runBacktestSession(
-        { start, end, initialCash, maxCandidates },
+        { start, end, initialCash, interval, maxCandidates },
         {
           signal: ctrl.signal,
-          onStart: ({ fridays, universe }) => {
-            totalFridays = fridays.length;
+          onStart: ({ interval: startedInterval, turns, fridays, universe }) => {
+            totalTurns = (turns ?? fridays).length;
             stream.appendLocalResponse(
-              `Ready: ${universe.length} tickers, ${totalFridays} weeks, team analyzes ${maxCandidates ?? 3}/week.\n`,
+              `Ready: ${universe.length} tickers, ${totalTurns} ${startedInterval} intervals, team analyzes ${maxCandidates ?? 3}/interval.\n`,
             );
           },
           onTurnStart: ({ dateIso }) => {
             turnIdx += 1;
-            stream.appendLocalResponse(`\n${turnIdx}/${totalFridays} ${dateIso} team analysis...\n`);
+            stream.appendLocalResponse(`\n${turnIdx}/${totalTurns} ${dateIso} interval analysis...\n`);
           },
           onTeamEvent: (ev, { ticker }) => {
             if (ev.type === "role_start") {

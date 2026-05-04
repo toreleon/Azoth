@@ -178,6 +178,13 @@ You can still provide an explicit range and starting cash:
 /backtest 2025-01-03 2025-04-30 1000000000
 ```
 
+Backtests default to 30-minute turns. Use `--interval` to choose a slower
+cadence such as `1h` or `2h`:
+
+```text
+/backtest 2025-01-03 2025-04-30 1000000000 --interval 1h
+```
+
 Manage sessions:
 
 ```text
@@ -225,7 +232,7 @@ still stream the full local team flow.
 | --- | --- |
 | `/team <message>` | Run a multi-agent debate on a market or portfolio question. |
 | `/analyze <ticker> [--rounds N]` | Run structured team analysis for one ticker. |
-| `/backtest [start] [end] [cash]` | Run a weekly backtest and render results inline. Defaults to the previous calendar week. |
+| `/backtest [start] [end] [cash] [--interval 30m\|1h\|2h]` | Run an interval backtest and render results inline. Defaults to previous calendar week at 30-minute cadence. |
 | `/journal [decisions\|orders\|fills\|alerts] [N]` | Show recent journal rows. |
 | `/quote <ticker>` | Request quote, technicals, and recent news for a ticker. |
 | `/positions` | Summarize current portfolio positions and exposures. |

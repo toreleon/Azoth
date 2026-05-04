@@ -21,7 +21,7 @@ export function resetCacheStats() {
 
 /**
  * In backtest mode, prefix the key with the simulated as-of date so
- * cached payloads from different weeks don't collide. Historical data
+ * cached payloads from different simulated sessions don't collide. Historical data
  * up to that as-of is immutable, so the prefix also unlocks safe reuse
  * across runs at the same as-of.
  */

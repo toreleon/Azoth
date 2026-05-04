@@ -20,7 +20,8 @@ export function BacktestCard({ data }: { data: BacktestCardInput }) {
     <Panel title={`BACKTEST  ${data.start} → ${data.end}`} borderColor={theme.persona}>
       <Box>
         <Text dimColor>cash </Text><Text>{formatBigVnd(data.initialCash)}</Text>
-        <Text dimColor>   weeks </Text><Text>{data.summary.weeks}</Text>
+        <Text dimColor>   interval </Text><Text>{data.summary.interval ?? "30m"}</Text>
+        <Text dimColor>   turns </Text><Text>{data.summary.intervals ?? data.summary.sessions ?? data.summary.weeks}</Text>
         <Text dimColor>   trades </Text><Text>{data.summary.trades}</Text>
         {data.summary.rejectedTrades ? (
           <><Text dimColor>   rejected </Text><Text color={theme.down}>{data.summary.rejectedTrades}</Text></>

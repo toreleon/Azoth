@@ -10,7 +10,7 @@ export interface SlashCommand {
 export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "team", args: "<message>", description: "Run multi-agent debate on a question" },
   { name: "analyze", args: "<ticker> [--rounds N]", description: "Run structured team analysis on a ticker" },
-  { name: "backtest", args: "[start] [end] [cash]", description: "Run a weekly backtest, defaults to last week" },
+  { name: "backtest", args: "[start] [end] [cash] [--interval 1h]", description: "Run interval backtest, defaults to 30m" },
   { name: "journal", args: "[decisions|orders|fills|alerts] [N]", description: "Print latest journal rows inline" },
   { name: "quote", args: "<ticker>", description: "Quick quote for a ticker" },
   { name: "positions", description: "Show current portfolio positions" },

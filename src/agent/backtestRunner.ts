@@ -13,6 +13,7 @@ import type { BrokerPosition, Order, PlaceOrderInput } from "../broker/types.js"
 const BACKTEST_STRATEGY_NAME = "team-default";
 const BACKTEST_DISCOVERY_CRITERION = "momentum";
 const BACKTEST_DISCOVERY_UNIVERSE = "default";
+export const BACKTEST_DEFAULT_INTERVAL = "30m";
 const BACKTEST_MAX_POSITION_PCT = 0.15;
 const BACKTEST_MAX_DRAWDOWN_FLOOR = 0.15;
 const BACKTEST_DEFAULT_CANDIDATES = 3;
@@ -22,7 +23,9 @@ export interface BacktestOptions {
   start: string;
   end: string;
   initialCash: number;
-  /** Number of discovered names to run through the full team each week. */
+  /** Replay cadence. Supports 30m, 60m, 1h, 2h, etc. Default: 30m. */
+  interval?: string;
+  /** Number of discovered names to run through the full team each interval. */
   maxCandidates?: number;
 }
 
@@ -48,6 +51,11 @@ export interface SummaryPayload {
   totalCost: number;
   totalInTokens: number;
   totalOutTokens: number;
+  interval: string;
+  intervals: number;
+  /** @deprecated use intervals */
+  sessions: number;
+  /** @deprecated use intervals */
   weeks: number;
   trades: number;
   rejectedTrades: number;
@@ -55,7 +63,7 @@ export interface SummaryPayload {
 }
 
 export interface BacktestCallbacks {
-  onStart?: (info: { runId: string; strategy: string; brokerName: string; fridays: number[]; universe: string[] }) => void;
+  onStart?: (info: { runId: string; strategy: string; brokerName: string; interval: string; turns: number[]; fridays: number[]; universe: string[] }) => void;
   onTurnStart?: (info: { asOf: number; dateIso: string }) => void;
   onTeamEvent?: (ev: TeamEvent, ctx: { asOf: number; dateIso: string; ticker: string }) => void;
   onOrder?: (order: Order, ctx: { asOf: number; dateIso: string; decision: FinalDecision }) => void;
@@ -65,28 +73,46 @@ export interface BacktestCallbacks {
   signal?: AbortSignal;
 }
 
-function isoSec(d: string): number {
-  const t = Date.parse(`${d}T15:00:00+07:00`);
+function isoSec(d: string, time = "15:00:00"): number {
+  const t = Date.parse(`${d}T${time}+07:00`);
   if (Number.isNaN(t)) throw new Error(`bad date: ${d}`);
   return Math.floor(t / 1000);
 }
 
-function dateOf(epochSec: number): string {
-  return new Date(epochSec * 1000).toISOString().slice(0, 10);
+function ictLabel(epochSec: number): string {
+  const d = new Date(epochSec * 1000 + 7 * 3600 * 1000);
+  return d.toISOString().slice(0, 16).replace("T", " ");
 }
 
-function weeklyCloses(vnindexBars: Bar[], startSec: number, endSec: number): number[] {
-  const byWeek = new Map<string, number>();
-  for (const b of vnindexBars) {
-    if (b.time < startSec || b.time > endSec) continue;
-    const d = new Date(b.time * 1000);
-    const ict = new Date(d.getTime() + 7 * 3600 * 1000);
-    const day = ict.getUTCDay();
-    const monday = new Date(Date.UTC(ict.getUTCFullYear(), ict.getUTCMonth(), ict.getUTCDate()));
-    monday.setUTCDate(monday.getUTCDate() - (day === 0 ? 6 : day - 1));
-    byWeek.set(monday.toISOString().slice(0, 10), b.time);
+function parseBacktestInterval(value: string | undefined): { label: string; minutes: number } {
+  const raw = (value ?? BACKTEST_DEFAULT_INTERVAL).trim().toLowerCase();
+  const m = raw.match(/^(\d+)\s*(m|min|h|hr)$/);
+  if (!m) throw new Error(`bad interval: ${value}. Use 30m, 1h, 2h, etc.`);
+  const n = Number.parseInt(m[1]!, 10);
+  const unit = m[2]!;
+  const minutes = unit.startsWith("h") ? n * 60 : n;
+  if (minutes < 30 || minutes % 30 !== 0) {
+    throw new Error(`bad interval: ${value}. Interval must be 30 minutes or a multiple of 30 minutes.`);
   }
-  return [...byWeek.values()].sort((a, b) => a - b);
+  if (minutes > 24 * 60) {
+    throw new Error(`bad interval: ${value}. Interval must be 24h or shorter.`);
+  }
+  return { label: minutes % 60 === 0 ? `${minutes / 60}h` : `${minutes}m`, minutes };
+}
+
+function intervalCloses(vnindexBars: Bar[], startSec: number, endSec: number, intervalMinutes: number): number[] {
+  const base = vnindexBars
+    .filter((b) => b.time >= startSec && b.time <= endSec)
+    .map((b) => b.time)
+    .sort((a, b) => a - b);
+  const step = Math.max(1, Math.round(intervalMinutes / 30));
+  if (step === 1) return base;
+
+  const out: number[] = [];
+  for (let i = step - 1; i < base.length; i += step) out.push(base[i]!);
+  const last = base[base.length - 1];
+  if (last != null && out[out.length - 1] !== last) out.push(last);
+  return out;
 }
 
 function lotRound(qty: number): number {
@@ -219,8 +245,9 @@ export async function runBacktestSession(
     1,
     Math.min(opts.maxCandidates ?? BACKTEST_DEFAULT_CANDIDATES, BACKTEST_MAX_CANDIDATES),
   );
+  const interval = parseBacktestInterval(opts.interval);
 
-  const startSec = isoSec(opts.start);
+  const startSec = isoSec(opts.start, "00:00:00");
   const endSec = isoSec(opts.end);
   if (endSec <= startSec) throw new Error("end must be after start");
 
@@ -229,29 +256,30 @@ export async function runBacktestSession(
   const broker = getBacktestBroker(brokerName, opts.initialCash);
   broker.reset(opts.initialCash);
 
-  const fetchFrom = startSec - 90 * 86400;
+  const fetchFrom = startSec - 7 * 86400;
   const fetchTo = endSec + 7 * 86400;
   const bars: Record<string, Bar[]> = {};
   for (const t of universe) {
-    bars[t] = await getStockOhlcv(t, "1D", fetchFrom, fetchTo);
+    bars[t] = await getStockOhlcv(t, "30", fetchFrom, fetchTo);
     if (cb.signal?.aborted) throw new Error("aborted");
   }
-  const vnindex = await getIndexOhlcv("VNINDEX", "1D", fetchFrom, fetchTo);
+  const vnindex = await getIndexOhlcv("VNINDEX", "30", fetchFrom, fetchTo);
 
-  const weeklyTurns = weeklyCloses(vnindex, startSec, endSec);
-  if (weeklyTurns.length === 0) throw new Error("no trading days in range");
+  const intervalTurns = intervalCloses(vnindex, startSec, endSec, interval.minutes);
+  if (intervalTurns.length === 0) throw new Error(`no ${interval.label} trading intervals in range`);
 
-  cb.onStart?.({ runId, strategy: BACKTEST_STRATEGY_NAME, brokerName, fridays: weeklyTurns, universe });
+  cb.onStart?.({ runId, strategy: BACKTEST_STRATEGY_NAME, brokerName, interval: interval.label, turns: intervalTurns, fridays: intervalTurns, universe });
 
   db.prepare(
     `INSERT INTO backtest_runs
        (id, persona, start_date, end_date, cadence, initial_cash_vnd, config_json, created_at)
-     VALUES (?, ?, ?, ?, 'weekly', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     runId,
     BACKTEST_STRATEGY_NAME,
     startSec,
     endSec,
+    interval.label,
     opts.initialCash,
     JSON.stringify({
       universe,
@@ -259,6 +287,7 @@ export async function runBacktestSession(
       broker: brokerName,
       strategy: BACKTEST_STRATEGY_NAME,
       engine: "team",
+      interval: interval.label,
       maxCandidates,
       discoveryCriterion: BACKTEST_DISCOVERY_CRITERION,
       discoveryUniverse: BACKTEST_DISCOVERY_UNIVERSE,
@@ -272,16 +301,16 @@ export async function runBacktestSession(
     const series = vnindex.filter((b) => b.time <= asOf);
     return series.length ? series[series.length - 1]!.close : null;
   };
-  const vnindexBaseline = vnindexAt(weeklyTurns[0]!);
-  if (vnindexBaseline == null) throw new Error("no VNINDEX data at first weekly turn");
+  const vnindexBaseline = vnindexAt(intervalTurns[0]!);
+  if (vnindexBaseline == null) throw new Error(`no VNINDEX data at first ${interval.label} turn`);
 
   let peakMtm = opts.initialCash;
   let freezeBuys = false;
 
   try {
-    for (const asOf of weeklyTurns) {
+    for (const asOf of intervalTurns) {
       throwIfAborted(cb.signal);
-      const dateIso = dateOf(asOf);
+      const dateIso = ictLabel(asOf);
       const priceOverride = (sym: string): number | null => {
         const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
         return series.length ? series[series.length - 1]!.close : null;
@@ -289,7 +318,7 @@ export async function runBacktestSession(
       broker.setPriceOverride(priceOverride);
       cb.onTurnStart?.({ asOf, dateIso });
 
-      const prompt = `Team backtest ${dateIso}: discover ${BACKTEST_DISCOVERY_CRITERION}/${BACKTEST_DISCOVERY_UNIVERSE}, analyze candidates, execute broker orders from final decisions.`;
+      const prompt = `Team backtest ${dateIso} ICT: ${interval.label} interval turn under T+2 settlement assumptions; discover ${BACKTEST_DISCOVERY_CRITERION}/${BACKTEST_DISCOVERY_UNIVERSE}, analyze candidates, execute broker orders from final decisions.`;
       let response = "";
       let inTokens = 0;
       let outTokens = 0;
@@ -426,6 +455,9 @@ export async function runBacktestSession(
     totalCost,
     totalInTokens: totalIn,
     totalOutTokens: totalOut,
+    interval: interval.label,
+    intervals: equityRows.length,
+    sessions: equityRows.length,
     weeks: equityRows.length,
     trades: orderRows.length,
     rejectedTrades: rejectedOrderRows.length,
