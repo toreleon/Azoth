@@ -62,16 +62,12 @@ npx @toreleon/azoth
 
 On a fresh machine, the TUI opens a first-time LLM setup screen with the Azoth
 header. Choose either a direct Anthropic API key or an Anthropic-compatible
-provider. Compatible providers also ask for `ANTHROPIC_BASE_URL`. The setup
-writes `~/.azoth/.env` and updates the model fields in `~/.azoth/config.yaml`.
+provider. Compatible providers also ask for a custom `base_url`. The setup
+writes provider, key, base URL, and model fields only to `~/.azoth/config.yaml`.
 
 Manual setup is still supported:
 
-```bash
-cp ~/.azoth/.env.example ~/.azoth/.env
-$EDITOR ~/.azoth/.env
-ANTHROPIC_API_KEY=...
-```
+Edit `~/.azoth/config.yaml` and fill the `llm:` block.
 
 Install globally if you prefer a persistent command:
 
@@ -206,7 +202,6 @@ Azoth stores runtime state in `~/.azoth` unless `AZOTH_HOME` is set.
 A fresh runtime contains:
 
 - `~/.azoth/config.yaml` - user configuration
-- `~/.azoth/.env.example` - environment template
 - `~/.azoth/azoth.db` - SQLite cache, journal, broker, and run database
 - `~/.azoth/projects/<encoded-cwd>/*.jsonl` - per-project session logs
 
@@ -214,8 +209,6 @@ Useful environment variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | Required model API key. |
-| `ANTHROPIC_BASE_URL` | Optional Anthropic-compatible endpoint for non-Anthropic providers. |
 | `AZOTH_HOME` | Override the runtime directory. |
 | `AZOTH_CONFIG` | Override the config file path. |
 | `AZOTH_DB` | Override the SQLite database path. |
@@ -228,6 +221,11 @@ Default config:
 ```yaml
 autonomy: advisory
 model: glm-5.1
+
+llm:
+  provider: anthropic
+  api_key: ""
+  base_url: ""
 
 team:
   quick_model: glm-5.1
@@ -302,8 +300,8 @@ Live mode places real orders. Keep `autonomy: advisory` or `broker: paper`
 until the checklist below is complete.
 
 1. Open a DNSE account and enable Entrade X / LightSpeed API access.
-2. Add `DNSE_USERNAME`, `DNSE_PASSWORD`, and `DNSE_ACCOUNT_NO` to
-   `~/.azoth/.env`.
+2. Export `DNSE_USERNAME`, `DNSE_PASSWORD`, and `DNSE_ACCOUNT_NO` in your shell
+   or secret manager before starting Azoth.
 3. Find your account-specific `DNSE_LOAN_PACKAGE_ID`. After login, call
    `GET https://api.dnse.com.vn/margin-service/loan-products` with the JWT and
    choose the correct loan product id for your equity sub-account.

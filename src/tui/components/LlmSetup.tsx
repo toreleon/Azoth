@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { loadConfig, updateConfig } from "../../config/loader.js";
-import { saveLlmEnvironment } from "../../runtime/llmSetup.js";
 import { azothPaths } from "../../runtime/paths.js";
 import { theme } from "../lib/theme.js";
 import { AZOTH_LOGO } from "./Welcome.js";
@@ -12,7 +11,7 @@ type Step = "provider" | "apiKey" | "baseUrl" | "model" | "done";
 
 const PROVIDERS: Array<{ id: Provider; label: string; detail: string }> = [
   { id: "anthropic", label: "Anthropic API key", detail: "Use Anthropic directly; no base URL needed." },
-  { id: "compatible", label: "Anthropic-compatible provider", detail: "Use a compatible gateway; configure ANTHROPIC_BASE_URL." },
+  { id: "compatible", label: "Anthropic-compatible provider", detail: "Use a compatible gateway; configure a custom base URL." },
 ];
 
 export interface LlmSetupProps {
@@ -26,11 +25,11 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
   const [provider, setProvider] = useState<Provider>("anthropic");
   const [providerIdx, setProviderIdx] = useState(0);
   const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState(process.env.ANTHROPIC_BASE_URL ?? "");
+  const [baseUrl, setBaseUrl] = useState(cfg.llm.base_url);
   const [model, setModel] = useState(cfg.model);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | undefined>();
-  const [savedEnv, setSavedEnv] = useState<string | undefined>();
+  const [savedConfig, setSavedConfig] = useState<string | undefined>();
 
   useInput((inp, key) => {
     if (step === "provider") {
@@ -83,12 +82,13 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
     if (step === "model") {
       const nextModel = value || cfg.model;
       try {
-        const envPath = saveLlmEnvironment({
-          apiKey,
-          baseUrl: provider === "compatible" ? baseUrl : undefined,
-        });
         updateConfig({
           model: nextModel,
+          llm: {
+            provider,
+            api_key: apiKey,
+            base_url: provider === "compatible" ? baseUrl : "",
+          },
           team: {
             ...cfg.team,
             quick_model: nextModel,
@@ -96,7 +96,7 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
           },
         });
         setModel(nextModel);
-        setSavedEnv(envPath);
+        setSavedConfig(paths.config);
         setInput("");
         setStep("done");
       } catch (e) {
@@ -109,9 +109,9 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
 
   const label =
     step === "apiKey"
-      ? PROVIDERS.find((p) => p.id === provider)!.label
+      ? `API key for ${PROVIDERS.find((p) => p.id === provider)!.label}`
       : step === "baseUrl"
-        ? "ANTHROPIC_BASE_URL"
+        ? "Custom endpoint base URL"
         : step === "model"
           ? "Model"
           : "";
@@ -135,7 +135,6 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
             <Text color={theme.muted}>Azoth first-time LLM setup</Text>
           </Box>
           <Box marginTop={1} flexDirection="column">
-            <Text><Text dimColor>env    </Text>{paths.env}</Text>
             <Text><Text dimColor>config </Text>{paths.config}</Text>
           </Box>
         </Box>
@@ -179,7 +178,7 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
             <Box marginTop={1} flexDirection="column">
               <Text color={theme.up} bold>LLM environment saved.</Text>
               <Text><Text dimColor>provider </Text>{PROVIDERS.find((p) => p.id === provider)!.label}</Text>
-              <Text><Text dimColor>env      </Text>{savedEnv}</Text>
+              <Text><Text dimColor>config   </Text>{savedConfig}</Text>
               {provider === "compatible" ? <Text><Text dimColor>base URL </Text>{baseUrl}</Text> : null}
               <Text><Text dimColor>model    </Text>{model}</Text>
               <Box marginTop={1}>

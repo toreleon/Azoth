@@ -9,8 +9,6 @@ export interface AzothPaths {
   logs: string;
   cache: string;
   config: string;
-  env: string;
-  envExample: string;
   db: string;
 }
 
@@ -27,8 +25,6 @@ export function azothPaths(): AzothPaths {
     logs: resolve(home, "logs"),
     cache: resolve(home, "cache"),
     config: resolve(home, "config.yaml"),
-    env: resolve(home, ".env"),
-    envExample: resolve(home, ".env.example"),
     db: resolve(home, "azoth.db"),
   };
 }

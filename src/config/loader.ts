@@ -8,6 +8,14 @@ import { azothPaths, ensureAzothDirs } from "../runtime/paths.js";
 const ConfigSchema = z.object({
   autonomy: z.enum(["advisory", "confirm", "auto"]),
   model: z.string().min(1),
+  llm: z
+    .object({
+      provider: z.enum(["anthropic", "compatible"]).default("anthropic"),
+      api_key: z.string().default(""),
+      base_url: z.string().default(""),
+    })
+    .optional()
+    .default({ provider: "anthropic", api_key: "", base_url: "" }),
   team: z
     .object({
       quick_model: z.string().min(1).optional(),
@@ -30,6 +38,15 @@ export type Config = z.infer<typeof ConfigSchema>;
 
 let cached: Config | null = null;
 
+function applyLlmEnvironment(cfg: Config): void {
+  const apiKey = cfg.llm.api_key.trim();
+  const baseUrl = cfg.llm.base_url.trim();
+  if (apiKey) process.env.ANTHROPIC_API_KEY = apiKey;
+  else delete process.env.ANTHROPIC_API_KEY;
+  if (cfg.llm.provider === "compatible" && baseUrl) process.env.ANTHROPIC_BASE_URL = baseUrl;
+  else delete process.env.ANTHROPIC_BASE_URL;
+}
+
 function configPath(): { path: string; override: boolean } {
   const configOverride = process.env.AZOTH_CONFIG?.trim() || undefined;
   return {
@@ -39,7 +56,10 @@ function configPath(): { path: string; override: boolean } {
 }
 
 export function loadConfig(): Config {
-  if (cached) return cached;
+  if (cached) {
+    applyLlmEnvironment(cached);
+    return cached;
+  }
   const { path, override } = configPath();
   if (!override) {
     ensureAzothDirs();
@@ -53,6 +73,7 @@ export function loadConfig(): Config {
   const raw = readFileSync(path, "utf8");
   const parsed = parseYaml(raw);
   cached = ConfigSchema.parse(parsed);
+  applyLlmEnvironment(cached);
   return cached;
 }
 
@@ -65,6 +86,7 @@ export function saveConfig(next: Config): Config {
   }
   writeFileSync(path, stringifyYaml(parsed), { encoding: "utf8", mode: 0o600 });
   cached = parsed;
+  applyLlmEnvironment(cached);
   return parsed;
 }
 
@@ -72,6 +94,7 @@ export function updateConfig(patch: Partial<Config>): Config {
   return saveConfig({
     ...loadConfig(),
     ...patch,
+    llm: patch.llm ? { ...loadConfig().llm, ...patch.llm } : loadConfig().llm,
     team: patch.team ? { ...loadConfig().team, ...patch.team } : loadConfig().team,
     risk: patch.risk ? { ...loadConfig().risk, ...patch.risk } : loadConfig().risk,
   });

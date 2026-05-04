@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import React from "react";
@@ -34,17 +34,19 @@ vi.mock("../src/agent/backtestRunner.js", () => ({
 beforeAll(() => {
   process.env.AZOTH_HOME = mkdtempSync(join(tmpdir(), "azoth-tui-"));
   process.env.AZOTH_DB = join(process.env.AZOTH_HOME, "test.db");
-  process.env.ANTHROPIC_API_KEY ??= "test-key";
   getDb();
 });
 
 beforeEach(() => {
-  process.env.ANTHROPIC_API_KEY = "test-key";
   runnerMocks.runTeamAnalysis.mockReset();
   runnerMocks.runTeamQuestion.mockReset();
   runnerMocks.runBacktestSession.mockReset();
   resetConfigCacheForTests();
-  updateConfig({ autonomy: "advisory", broker: "paper" });
+  updateConfig({
+    autonomy: "advisory",
+    broker: "paper",
+    llm: { provider: "anthropic", api_key: "test-key", base_url: "" },
+  });
   resetBrokerCache();
 });
 
@@ -79,7 +81,7 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("collects first-time LLM setup and writes Azoth env/config", async () => {
+  it("collects first-time LLM setup and writes Azoth config", async () => {
     const prevHome = process.env.AZOTH_HOME;
     const prevDb = process.env.AZOTH_DB;
     const prevKey = process.env.ANTHROPIC_API_KEY;
@@ -105,9 +107,9 @@ describe("Azoth TUI", () => {
       await type(rendered.stdin, "sk-test-setup");
       await type(rendered.stdin, "glm-5.1");
 
-      const envPath = join(setupHome, ".env");
-      expect(existsSync(envPath)).toBe(true);
-      expect(readFileSync(envPath, "utf8")).toContain("ANTHROPIC_API_KEY=sk-test-setup");
+      const configText = readFileSync(join(setupHome, "config.yaml"), "utf8");
+      expect(configText).toContain("api_key: sk-test-setup");
+      expect(configText).toContain("base_url: \"\"");
       expect(strip(rendered.lastFrame() ?? "")).toContain("LLM environment saved");
 
       await enter(rendered.stdin);
@@ -151,9 +153,10 @@ describe("Azoth TUI", () => {
       await type(rendered.stdin, "https://open.bigmodel.cn/api/anthropic");
       await type(rendered.stdin, "glm-5.1");
 
-      const envText = readFileSync(join(setupHome, ".env"), "utf8");
-      expect(envText).toContain("ANTHROPIC_API_KEY=zai-key");
-      expect(envText).toContain("ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic");
+      const configText = readFileSync(join(setupHome, "config.yaml"), "utf8");
+      expect(configText).toContain("provider: compatible");
+      expect(configText).toContain("api_key: zai-key");
+      expect(configText).toContain("base_url: https://open.bigmodel.cn/api/anthropic");
       expect(strip(rendered.lastFrame() ?? "")).toContain("Anthropic-compatible provider");
       expect(strip(rendered.lastFrame() ?? "")).toContain("https://open.bigmodel.cn/api/anthropic");
 
@@ -235,7 +238,7 @@ describe("Azoth TUI", () => {
     await tick();
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("Health:");
-    expect(out).toContain("api_key:");
+    expect(out).toContain("llm:");
     expect(out).toContain("database:");
     expect(out).toContain("data_provider:");
     unmount();

@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { loadConfig } from "../config/loader.js";
 import { getBroker } from "../broker/index.js";
 import { getDb } from "../storage/db.js";
@@ -21,16 +20,18 @@ export async function collectHealth(opts: { probeProviders?: boolean } = {}): Pr
   const rows: HealthRow[] = [];
   const paths = azothPaths();
 
-  rows.push({
-    name: "api_key",
-    ok: Boolean(process.env.ANTHROPIC_API_KEY),
-    detail: process.env.ANTHROPIC_API_KEY ? "ANTHROPIC_API_KEY is set" : "ANTHROPIC_API_KEY is missing",
-  });
-
   let cfg: ReturnType<typeof loadConfig> | null = null;
   try {
     cfg = loadConfig();
     rows.push({ name: "config", ok: true, detail: `${paths.config} autonomy=${cfg.autonomy} broker=${cfg.broker}` });
+    rows.push({
+      name: "llm",
+      ok: Boolean(cfg.llm.api_key.trim()) && (cfg.llm.provider !== "compatible" || Boolean(cfg.llm.base_url.trim())),
+      detail:
+        cfg.llm.provider === "compatible"
+          ? `compatible provider base_url=${cfg.llm.base_url ? "set" : "missing"} api_key=${cfg.llm.api_key ? "set" : "missing"}`
+          : `anthropic api_key=${cfg.llm.api_key ? "set" : "missing"}`,
+    });
   } catch (err) {
     rows.push({ name: "config", ok: false, detail: (err as Error).message });
   }
@@ -65,13 +66,6 @@ export async function collectHealth(opts: { probeProviders?: boolean } = {}): Pr
     name: "market_session",
     ok: true,
     detail: session.open ? `open ${session.session} (${session.ictTime} ICT)` : `closed (${session.ictTime} ICT: ${session.reason})`,
-  });
-
-  const envFileExists = existsSync(paths.env);
-  rows.push({
-    name: "env_file",
-    ok: envFileExists || Boolean(process.env.ANTHROPIC_API_KEY),
-    detail: envFileExists ? paths.env : `${paths.env} not found; using process env only`,
   });
 
   if (opts.probeProviders) {
