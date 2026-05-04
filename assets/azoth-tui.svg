@@ -7,7 +7,7 @@
   <circle cx="58" cy="47" r="6" fill="#ff5f56"/>
   <circle cx="80" cy="47" r="6" fill="#ffbd2e"/>
   <circle cx="102" cy="47" r="6" fill="#27c93f"/>
-  <text x="640" y="53" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#9fb3c8">Azoth v0.0.1 - Azoth copilot</text>
+  <text x="640" y="53" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#9fb3c8">Azoth v0.1.0 - Azoth copilot</text>
 
   <g font-family="SFMono-Regular, Menlo, Consolas, monospace">
     <text x="60" y="105" font-size="17" fill="#d6e2ee">› Give me full view of FPT</text>

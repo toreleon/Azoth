@@ -503,7 +503,7 @@ describe("Azoth TUI", () => {
     runnerMocks.runBacktestSession.mockImplementationOnce(async (_opts: any, cb: any) => {
       cb.onStart?.({
         runId: "bt-run-12345678",
-        profile: { id: "vn-equity", version: 0 },
+        strategy: "team-default",
         brokerName: "paper-bt-test",
         fridays: [1, 2],
         universe: ["HPG", "VCB", "FPT"],
@@ -569,7 +569,7 @@ describe("Azoth TUI", () => {
       });
       return {
         runId: "bt-run-12345678",
-        profileRef: "vn-equity@v0",
+        strategy: "team-default",
         start: "2025-01-03",
         end: "2025-01-10",
         initialCash: 1_000_000_000,
@@ -595,7 +595,6 @@ describe("Azoth TUI", () => {
 
     expect(runnerMocks.runBacktestSession).toHaveBeenCalledWith(
       {
-        profileRef: "vn-equity@v0",
         start: "2025-01-03",
         end: "2025-01-10",
         initialCash: 1_000_000_000,

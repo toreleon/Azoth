@@ -102,42 +102,6 @@ CREATE TABLE IF NOT EXISTS backtest_equity (
   PRIMARY KEY (run_id, as_of)
 );
 
--- Agent profile (Phase 7: evolving profile + harness)
-
-CREATE TABLE IF NOT EXISTS agent_profiles (
-  id            TEXT NOT NULL,
-  version       INTEGER NOT NULL,
-  parent_ver    INTEGER,
-  profile_json  TEXT NOT NULL,
-  created_at    INTEGER NOT NULL,
-  PRIMARY KEY (id, version)
-);
-
-CREATE TABLE IF NOT EXISTS profile_evaluations (
-  profile_id   TEXT NOT NULL,
-  profile_ver  INTEGER NOT NULL,
-  fold         TEXT NOT NULL,
-  run_id       TEXT NOT NULL,
-  sharpe       REAL,
-  max_dd       REAL,
-  alpha        REAL,
-  total_return REAL,
-  fitness      REAL,
-  created_at   INTEGER NOT NULL,
-  PRIMARY KEY (profile_id, profile_ver, fold)
-);
-
-CREATE TABLE IF NOT EXISTS agent_memory (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  profile_id  TEXT NOT NULL,
-  layer       TEXT NOT NULL,
-  as_of       INTEGER NOT NULL,
-  content     TEXT NOT NULL,
-  importance  REAL NOT NULL DEFAULT 0.5,
-  created_at  INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS agent_memory_lookup ON agent_memory(profile_id, layer, as_of);
-
 CREATE TABLE IF NOT EXISTS alerts (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at  INTEGER NOT NULL,

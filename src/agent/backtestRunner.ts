@@ -3,8 +3,6 @@ import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
 import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
-import { type AgentProfile, profileRef } from "./profile.js";
-import { loadProfile } from "./profileStore.js";
 import { DISCOVERY_UNIVERSE, discoverTickers } from "../tools/discover.js";
 import { setActiveAsOf } from "./clock.js";
 import { runTeamAnalysis } from "./team/index.js";
@@ -12,11 +10,17 @@ import type { FinalDecision, TeamEvent } from "./team/state.js";
 import { checkOrder } from "../risk/guardrails.js";
 import type { BrokerPosition, Order, PlaceOrderInput } from "../broker/types.js";
 
+const BACKTEST_STRATEGY_NAME = "team-default";
+const BACKTEST_DISCOVERY_CRITERION = "momentum";
+const BACKTEST_DISCOVERY_UNIVERSE = "default";
+const BACKTEST_MAX_POSITION_PCT = 0.15;
+const BACKTEST_MAX_DRAWDOWN_FLOOR = 0.15;
+const BACKTEST_DEFAULT_CANDIDATES = 3;
+const BACKTEST_MAX_CANDIDATES = 5;
+
 export interface BacktestOptions {
   start: string;
   end: string;
-  /** Profile reference in `<id>@v<n>` form, e.g. "vn-equity@v0". */
-  profileRef: string;
   initialCash: number;
   /** Number of discovered names to run through the full team each week. */
   maxCandidates?: number;
@@ -32,7 +36,7 @@ export interface EquityPayload {
 
 export interface SummaryPayload {
   runId: string;
-  profileRef: string;
+  strategy: string;
   start: string;
   end: string;
   initialCash: number;
@@ -51,7 +55,7 @@ export interface SummaryPayload {
 }
 
 export interface BacktestCallbacks {
-  onStart?: (info: { runId: string; profile: AgentProfile; brokerName: string; fridays: number[]; universe: string[] }) => void;
+  onStart?: (info: { runId: string; strategy: string; brokerName: string; fridays: number[]; universe: string[] }) => void;
   onTurnStart?: (info: { asOf: number; dateIso: string }) => void;
   onTeamEvent?: (ev: TeamEvent, ctx: { asOf: number; dateIso: string; ticker: string }) => void;
   onOrder?: (order: Order, ctx: { asOf: number; dateIso: string; decision: FinalDecision }) => void;
@@ -206,11 +210,12 @@ export async function runBacktestSession(
   cb: BacktestCallbacks = {},
 ): Promise<SummaryPayload> {
   const cfg = loadConfig();
-  const profile = loadProfile(opts.profileRef);
-  const ref = profileRef(profile);
   const universe = [...DISCOVERY_UNIVERSE];
   const db = getDb();
-  const maxCandidates = Math.max(1, Math.min(opts.maxCandidates ?? 3, profile.params.maxNames, 5));
+  const maxCandidates = Math.max(
+    1,
+    Math.min(opts.maxCandidates ?? BACKTEST_DEFAULT_CANDIDATES, BACKTEST_MAX_CANDIDATES),
+  );
 
   const startSec = isoSec(opts.start);
   const endSec = isoSec(opts.end);
@@ -233,7 +238,7 @@ export async function runBacktestSession(
   const fridays = fridayCloses(vnindex, startSec, endSec);
   if (fridays.length === 0) throw new Error("no Friday trading days in range");
 
-  cb.onStart?.({ runId, profile, brokerName, fridays, universe });
+  cb.onStart?.({ runId, strategy: BACKTEST_STRATEGY_NAME, brokerName, fridays, universe });
 
   db.prepare(
     `INSERT INTO backtest_runs
@@ -241,11 +246,22 @@ export async function runBacktestSession(
      VALUES (?, ?, ?, ?, 'weekly', ?, ?, ?)`,
   ).run(
     runId,
-    ref,
+    BACKTEST_STRATEGY_NAME,
     startSec,
     endSec,
     opts.initialCash,
-    JSON.stringify({ universe, model: cfg.model, broker: brokerName, profileRef: ref, engine: "team", maxCandidates }),
+    JSON.stringify({
+      universe,
+      model: cfg.model,
+      broker: brokerName,
+      strategy: BACKTEST_STRATEGY_NAME,
+      engine: "team",
+      maxCandidates,
+      discoveryCriterion: BACKTEST_DISCOVERY_CRITERION,
+      discoveryUniverse: BACKTEST_DISCOVERY_UNIVERSE,
+      maxPositionPct: BACKTEST_MAX_POSITION_PCT,
+      maxDrawdownFloor: BACKTEST_MAX_DRAWDOWN_FLOOR,
+    }),
     Math.floor(Date.now() / 1000),
   );
 
@@ -270,7 +286,7 @@ export async function runBacktestSession(
       broker.setPriceOverride(priceOverride);
       cb.onTurnStart?.({ asOf, dateIso });
 
-      const prompt = `Team backtest ${dateIso}: discover ${profile.params.discoveryCriterion}/${profile.params.preferredUniverse}, analyze candidates, execute broker orders from final decisions.`;
+      const prompt = `Team backtest ${dateIso}: discover ${BACKTEST_DISCOVERY_CRITERION}/${BACKTEST_DISCOVERY_UNIVERSE}, analyze candidates, execute broker orders from final decisions.`;
       let response = "";
       let inTokens = 0;
       let outTokens = 0;
@@ -279,8 +295,8 @@ export async function runBacktestSession(
       try {
         setActiveAsOf({ asOfSec: asOf, brokerName, freezeBuys });
         const discovery = await discoverTickers({
-          criterion: profile.params.discoveryCriterion,
-          universe: profile.params.preferredUniverse,
+          criterion: BACKTEST_DISCOVERY_CRITERION,
+          universe: BACKTEST_DISCOVERY_UNIVERSE,
           limit: maxCandidates,
         });
         const held = (await broker.snapshot()).positions.map((p) => p.ticker);
@@ -317,7 +333,7 @@ export async function runBacktestSession(
             decision: result.decision,
             equityVnd: equity,
             price: priceOverride(ticker),
-            maxPositionPct: Math.min(profile.params.maxPositionPct, cfg.risk.max_position_pct),
+            maxPositionPct: Math.min(BACKTEST_MAX_POSITION_PCT, cfg.risk.max_position_pct),
             freezeBuys,
           });
           if (order) cb.onOrder?.(order, { asOf, dateIso, decision: result.decision });
@@ -355,7 +371,7 @@ export async function runBacktestSession(
 
       peakMtm = Math.max(peakMtm, mtm);
       const drawdown = 1 - mtm / peakMtm;
-      freezeBuys = drawdown > profile.params.maxDrawdownFloor;
+      freezeBuys = drawdown > BACKTEST_MAX_DRAWDOWN_FLOOR;
     }
   } finally {
     broker.setPriceOverride(null);
@@ -395,7 +411,7 @@ export async function runBacktestSession(
 
   const summary: SummaryPayload = {
     runId,
-    profileRef: ref,
+    strategy: BACKTEST_STRATEGY_NAME,
     start: opts.start,
     end: opts.end,
     initialCash: opts.initialCash,

@@ -14,6 +14,7 @@ import { loadConfig, updateConfig } from "../config/loader.js";
 import { resetBrokerCache } from "../broker/index.js";
 import { collectHealth, renderHealth } from "../runtime/health.js";
 import { hasLlmEnvironment } from "../runtime/llmSetup.js";
+import { packageVersion } from "../runtime/version.js";
 import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, formatPct, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
@@ -27,7 +28,7 @@ type Autonomy = "advisory" | "confirm" | "auto";
 
 const THINKING_ANIMATION_INTERVAL_MS = 80;
 const BT_DEFAULTS = { start: "2025-01-03", end: "2025-04-30", cash: 1_000_000_000 };
-const DEFAULT_BACKTEST_PROFILE_REF = "vn-equity@v0";
+const PACKAGE_VERSION = packageVersion();
 
 function teamRoleDesc(output: Record<string, unknown>, mode: "analyze" | "question" | "backtest") {
   if ("score" in output) {
@@ -413,7 +414,7 @@ function AppInner() {
 
     try {
       const summary = await runBacktestSession(
-        { profileRef: DEFAULT_BACKTEST_PROFILE_REF, start, end, initialCash, maxCandidates },
+        { start, end, initialCash, maxCandidates },
         {
           signal: ctrl.signal,
           onStart: ({ fridays, universe }) => {
@@ -534,7 +535,7 @@ function AppInner() {
           <Box key={it.key} flexDirection="column" marginBottom={it.kind === "block" ? 1 : 0}>
             {it.kind === "welcome" ? (
               <Welcome
-                version="0.0.1"
+                version={PACKAGE_VERSION}
                 autonomy={autonomy}
                 broker={cfg.broker}
                 cwd={process.cwd()}
