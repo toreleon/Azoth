@@ -32,7 +32,7 @@ vi.mock("../src/agent/backtestRunner.js", () => ({
 
 beforeAll(() => {
   process.env.AZOTH_HOME = mkdtempSync(join(tmpdir(), "azoth-tui-"));
-  process.env.VNSTOCK_DB = join(process.env.AZOTH_HOME, "test.db");
+  process.env.AZOTH_DB = join(process.env.AZOTH_HOME, "test.db");
   process.env.ANTHROPIC_API_KEY ??= "test-key";
   getDb();
 });
@@ -66,7 +66,7 @@ describe("Azoth TUI", () => {
     const { lastFrame, unmount } = render(<App />);
     await tick();
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("VN-stock copilot");
+    expect(out).toContain("Azoth copilot");
     expect(out).toContain("Tips for getting started");
     expect(out).toContain("advisory");
     unmount();

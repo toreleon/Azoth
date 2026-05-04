@@ -12,7 +12,7 @@ function printInitResult() {
   const paths = azothPaths();
   console.log(`Azoth runtime initialized at ${paths.home}`);
   console.log(`Config: ${paths.config}`);
-  console.log(`Database: ${process.env.VNSTOCK_DB ?? paths.db}`);
+  console.log(`Database: ${process.env.AZOTH_DB ?? paths.db}`);
 }
 
 function main() {

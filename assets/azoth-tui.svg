@@ -7,7 +7,7 @@
   <circle cx="58" cy="47" r="6" fill="#ff5f56"/>
   <circle cx="80" cy="47" r="6" fill="#ffbd2e"/>
   <circle cx="102" cy="47" r="6" fill="#27c93f"/>
-  <text x="640" y="53" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#9fb3c8">Azoth v0.0.1 - VN-stock copilot</text>
+  <text x="640" y="53" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#9fb3c8">Azoth v0.0.1 - Azoth copilot</text>
 
   <g font-family="SFMono-Regular, Menlo, Consolas, monospace">
     <text x="60" y="105" font-size="17" fill="#d6e2ee">› Give me full view of FPT</text>
@@ -15,7 +15,7 @@
     <text x="60" y="151" font-size="17" fill="#f4f7fb">● I will run Azoth's team desk and summarize the findings when the subagents finish.</text>
 
     <rect x="60" y="181" width="400" height="34" rx="6" fill="#152333" stroke="#31506b"/>
-    <text x="76" y="204" font-size="15" fill="#7cc4ff">◇ mcp__vnstock__team_analyze FPT</text>
+    <text x="76" y="204" font-size="15" fill="#7cc4ff">◇ mcp__azoth__team_analyze FPT</text>
 
     <rect x="60" y="238" width="710" height="146" rx="8" fill="#111b24" stroke="#273847"/>
     <text x="78" y="270" font-size="15" fill="#9fb3c8">◇ analyze subagents running · portfolio</text>

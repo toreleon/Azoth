@@ -40,14 +40,14 @@ beforeEach(() => {
     "  allow_margin: false",
     "",
   ].join("\n"));
-  process.env.VNSTOCK_CONFIG = cfg;
+  process.env.AZOTH_CONFIG = cfg;
   resetConfigCacheForTests();
 });
 
 afterEach(() => {
   setActiveAsOf(null);
   resetConfigCacheForTests();
-  delete process.env.VNSTOCK_CONFIG;
+  delete process.env.AZOTH_CONFIG;
   rmSync(tmp, { recursive: true, force: true });
 });
 

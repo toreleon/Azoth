@@ -16,9 +16,9 @@ let tmp: string;
 
 beforeEach(async () => {
   tmp = mkdtempSync(join(tmpdir(), "azoth-orchestrator-"));
-  process.env.VNSTOCK_CONFIG = join(tmp, "config.yaml");
+  process.env.AZOTH_CONFIG = join(tmp, "config.yaml");
   writeFileSync(
-    process.env.VNSTOCK_CONFIG,
+    process.env.AZOTH_CONFIG,
     [
       "autonomy: advisory",
       "model: test-model",
@@ -43,7 +43,7 @@ beforeEach(async () => {
 afterEach(async () => {
   const { resetConfigCacheForTests } = await import("../src/config/loader.js");
   resetConfigCacheForTests();
-  delete process.env.VNSTOCK_CONFIG;
+  delete process.env.AZOTH_CONFIG;
   vi.resetModules();
 });
 
@@ -61,10 +61,10 @@ describe("outer agent team delegation", () => {
     expect(prompt).toContain("Never call this a formal T+2.5 cycle");
 
     const opts = buildOptions();
-    expect(opts.allowedTools).toContain("mcp__vnstock__team_question");
-    expect(opts.allowedTools).toContain("mcp__vnstock__team_analyze");
+    expect(opts.allowedTools).toContain("mcp__azoth__team_question");
+    expect(opts.allowedTools).toContain("mcp__azoth__team_analyze");
 
-    const server = opts.mcpServers?.vnstock as unknown as { tools: Array<{ name?: string }> };
+    const server = opts.mcpServers?.azoth as unknown as { tools: Array<{ name?: string }> };
     expect(server.tools.map((t) => t.name)).toEqual(
       expect.arrayContaining(["team_question", "team_analyze"]),
     );

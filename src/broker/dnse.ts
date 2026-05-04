@@ -23,7 +23,7 @@ import type {
  *    DNSE_PASSWORD            — login password
  *    DNSE_ACCOUNT_NO          — sub-account number (e.g. "0001234567")
  *    DNSE_LOAN_PACKAGE_ID     — per-account; fetch from /margin-service/loan-products
- *    VNSTOCK_LIVE_TRADING=1   — top-level arming flag, must be set explicitly
+ *    AZOTH_LIVE_TRADING=1   — top-level arming flag, must be set explicitly
  *
  *  Order placement requires a trading-token obtained via email OTP. The first
  *  place_order in a process triggers an interactive prompt on the CLI.
@@ -119,7 +119,7 @@ export class DNSEBroker implements Broker {
     this.password = p;
     this.accountNo = a;
     this.loanPackageId = Number(l);
-    this.armed = process.env.VNSTOCK_LIVE_TRADING === "1";
+    this.armed = process.env.AZOTH_LIVE_TRADING === "1";
   }
 
   // ---- Auth ---------------------------------------------------------------
@@ -290,7 +290,7 @@ export class DNSEBroker implements Broker {
   async placeOrder(input: PlaceOrderInput): Promise<Order> {
     if (!this.armed) {
       throw new Error(
-        "DNSE live trading is disarmed: set VNSTOCK_LIVE_TRADING=1 to enable real orders",
+        "DNSE live trading is disarmed: set AZOTH_LIVE_TRADING=1 to enable real orders",
       );
     }
     if (input.type === "LIMIT" && (input.limitPrice == null || input.limitPrice <= 0)) {
@@ -361,7 +361,7 @@ export class DNSEBroker implements Broker {
   async cancelOrder(id: string): Promise<Order> {
     if (!this.armed) {
       throw new Error(
-        "DNSE live trading is disarmed: set VNSTOCK_LIVE_TRADING=1 to cancel real orders",
+        "DNSE live trading is disarmed: set AZOTH_LIVE_TRADING=1 to cancel real orders",
       );
     }
     const jwt = await this.ensureJwt();

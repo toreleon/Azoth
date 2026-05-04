@@ -3,7 +3,7 @@
  * PaperBroker runs by default. DNSEBroker runs only when:
  *    DNSE_TEST_LIVE=1
  *    DNSE_USERNAME / DNSE_PASSWORD / DNSE_ACCOUNT_NO / DNSE_LOAN_PACKAGE_ID set
- *    VNSTOCK_LIVE_TRADING=1
+ *    AZOTH_LIVE_TRADING=1
  *  For DNSE the live test is read-only (snapshot, listOrders) — it does NOT
  *  place orders.
  */
@@ -14,7 +14,7 @@ import { DNSEBroker } from "../src/broker/dnse.js";
 import type { Broker } from "../src/broker/types.js";
 
 const TEST_DB = ".test-broker.db";
-process.env.VNSTOCK_DB = TEST_DB;
+process.env.AZOTH_DB = TEST_DB;
 
 beforeAll(() => {
   if (existsSync(TEST_DB)) unlinkSync(TEST_DB);

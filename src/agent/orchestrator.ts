@@ -107,7 +107,7 @@ export function buildMcpServer() {
       : [...baseTools, ...orderTools];
   // SDK accepts a heterogeneous tool array; widen the element type.
   return createSdkMcpServer({
-    name: "vnstock",
+    name: "azoth",
     tools: tools as unknown as Parameters<typeof createSdkMcpServer>[0]["tools"],
   });
 }
@@ -120,7 +120,7 @@ export function buildOptions(opts: { resume?: string; abortController?: AbortCon
     ...(opts.resume ? { resume: opts.resume } : {}),
     ...(opts.abortController ? { abortController: opts.abortController } : {}),
     mcpServers: {
-      vnstock: buildMcpServer(),
+      azoth: buildMcpServer(),
     },
     includePartialMessages: true,
     // Restrict Claude Code built-ins to WebSearch. Bash, Read, Edit, Task, …
@@ -129,26 +129,26 @@ export function buildOptions(opts: { resume?: string; abortController?: AbortCon
     tools: ["WebSearch"],
     allowedTools: [
       "WebSearch",
-      "mcp__vnstock__market_quote",
-      "mcp__vnstock__market_ohlcv",
-      "mcp__vnstock__technical_indicators",
-      "mcp__vnstock__fundamentals_snapshot",
-      "mcp__vnstock__ticker_news",
-      "mcp__vnstock__macro_indices",
-      "mcp__vnstock__foreign_flow",
-      "mcp__vnstock__portfolio_list",
-      "mcp__vnstock__journal_append",
-      "mcp__vnstock__journal_read",
-      "mcp__vnstock__discover_tickers",
-      "mcp__vnstock__team_question",
-      "mcp__vnstock__team_analyze",
+      "mcp__azoth__market_quote",
+      "mcp__azoth__market_ohlcv",
+      "mcp__azoth__technical_indicators",
+      "mcp__azoth__fundamentals_snapshot",
+      "mcp__azoth__ticker_news",
+      "mcp__azoth__macro_indices",
+      "mcp__azoth__foreign_flow",
+      "mcp__azoth__portfolio_list",
+      "mcp__azoth__journal_append",
+      "mcp__azoth__journal_read",
+      "mcp__azoth__discover_tickers",
+      "mcp__azoth__team_question",
+      "mcp__azoth__team_analyze",
       ...(cfg.autonomy === "advisory"
         ? []
         : [
-            "mcp__vnstock__place_order",
-            "mcp__vnstock__cancel_order",
-            "mcp__vnstock__list_orders",
-            "mcp__vnstock__broker_state",
+            "mcp__azoth__place_order",
+            "mcp__azoth__cancel_order",
+            "mcp__azoth__list_orders",
+            "mcp__azoth__broker_state",
           ]),
     ],
   };

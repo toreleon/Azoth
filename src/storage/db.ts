@@ -11,7 +11,7 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 export function getDb(): Database.Database {
   if (db) return db;
   const paths = ensureAzothDirs();
-  const path = process.env.VNSTOCK_DB ?? paths.db;
+  const path = process.env.AZOTH_DB ?? paths.db;
   db = new Database(path);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");

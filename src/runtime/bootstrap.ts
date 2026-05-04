@@ -16,6 +16,6 @@ if (existsSync(localEnv)) {
   loadDotenv({ path: localEnv, override: false });
 }
 
-for (const key of ["VNSTOCK_DB", "VNSTOCK_CONFIG", "AZOTH_HOME"] as const) {
+for (const key of ["AZOTH_DB", "AZOTH_CONFIG", "AZOTH_HOME"] as const) {
   if (process.env[key]?.trim() === "") delete process.env[key];
 }

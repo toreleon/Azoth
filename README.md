@@ -215,10 +215,10 @@ Useful environment variables:
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Required model API key. |
 | `AZOTH_HOME` | Override the runtime directory. |
-| `VNSTOCK_CONFIG` | Override the config file path. |
-| `VNSTOCK_DB` | Override the SQLite database path. |
+| `AZOTH_CONFIG` | Override the config file path. |
+| `AZOTH_DB` | Override the SQLite database path. |
 | `AZOTH_ALT_SCREEN=1` | Run the TUI in the alternate screen buffer. |
-| `VNSTOCK_LIVE_TRADING=1` | Explicitly enable live trading paths. |
+| `AZOTH_LIVE_TRADING=1` | Explicitly enable live trading paths. |
 | `DNSE_TEST_LIVE=1` | Run DNSE read-only live probes in tests. |
 
 Default config:
@@ -311,7 +311,7 @@ until the checklist below is complete.
    probes.
 7. Verify `broker_state` and `list_orders` return the expected cash, positions,
    and orders.
-8. Only then set `VNSTOCK_LIVE_TRADING=1`.
+8. Only then set `AZOTH_LIVE_TRADING=1`.
 9. During market hours, place one small 100-share test order on a liquid ticker
    and verify the result with DNSE directly.
 

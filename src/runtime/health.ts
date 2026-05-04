@@ -38,7 +38,7 @@ export async function collectHealth(opts: { probeProviders?: boolean } = {}): Pr
   try {
     const db = getDb();
     db.prepare("SELECT 1").get();
-    rows.push({ name: "database", ok: true, detail: process.env.VNSTOCK_DB ?? paths.db });
+    rows.push({ name: "database", ok: true, detail: process.env.AZOTH_DB ?? paths.db });
   } catch (err) {
     rows.push({ name: "database", ok: false, detail: (err as Error).message });
   }
@@ -46,10 +46,10 @@ export async function collectHealth(opts: { probeProviders?: boolean } = {}): Pr
   if (cfg) {
     rows.push({
       name: "live_trading",
-      ok: cfg.broker !== "dnse" || process.env.VNSTOCK_LIVE_TRADING === "1",
+      ok: cfg.broker !== "dnse" || process.env.AZOTH_LIVE_TRADING === "1",
       detail:
         cfg.broker === "dnse"
-          ? `dnse armed=${process.env.VNSTOCK_LIVE_TRADING === "1"}`
+          ? `dnse armed=${process.env.AZOTH_LIVE_TRADING === "1"}`
           : "paper broker selected",
     });
     try {

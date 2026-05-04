@@ -41,7 +41,7 @@ export function Welcome({ version, autonomy, broker, cwd }: WelcomeProps) {
           <Text key={i} color={theme.accent} bold>{l}</Text>
         ))}
         <Box marginTop={1}>
-          <Text color={theme.muted}>VN-stock copilot — v{version}</Text>
+          <Text color={theme.muted}>Azoth copilot — v{version}</Text>
         </Box>
         <Box marginTop={1} flexDirection="column">
           <Text>

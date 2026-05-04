@@ -30,6 +30,6 @@ ANTHROPIC_API_KEY=
 
 # Optional overrides:
 # AZOTH_HOME=~/.azoth
-# VNSTOCK_CONFIG=/absolute/path/to/config.yaml
-# VNSTOCK_DB=/absolute/path/to/azoth.db
+# AZOTH_CONFIG=/absolute/path/to/config.yaml
+# AZOTH_DB=/absolute/path/to/azoth.db
 `;

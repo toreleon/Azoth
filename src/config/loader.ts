@@ -31,7 +31,7 @@ export type Config = z.infer<typeof ConfigSchema>;
 let cached: Config | null = null;
 
 function configPath(): { path: string; override: boolean } {
-  const configOverride = process.env.VNSTOCK_CONFIG?.trim() || undefined;
+  const configOverride = process.env.AZOTH_CONFIG?.trim() || undefined;
   return {
     path: resolve(configOverride ?? azothPaths().config),
     override: configOverride != null,
@@ -48,7 +48,7 @@ export function loadConfig(): Config {
     }
   }
   if (existsSync(path) && statSync(path).isDirectory()) {
-    throw new Error(`Config path points to a directory: ${path}. Set VNSTOCK_CONFIG to a YAML file path.`);
+    throw new Error(`Config path points to a directory: ${path}. Set AZOTH_CONFIG to a YAML file path.`);
   }
   const raw = readFileSync(path, "utf8");
   const parsed = parseYaml(raw);
@@ -61,7 +61,7 @@ export function saveConfig(next: Config): Config {
   const { path, override } = configPath();
   if (!override) ensureAzothDirs();
   if (existsSync(path) && statSync(path).isDirectory()) {
-    throw new Error(`Config path points to a directory: ${path}. Set VNSTOCK_CONFIG to a YAML file path.`);
+    throw new Error(`Config path points to a directory: ${path}. Set AZOTH_CONFIG to a YAML file path.`);
   }
   writeFileSync(path, stringifyYaml(parsed), { encoding: "utf8", mode: 0o600 });
   cached = parsed;

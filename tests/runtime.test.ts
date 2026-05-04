@@ -20,8 +20,8 @@ let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "azoth-runtime-"));
   process.env.AZOTH_HOME = tmp;
-  delete process.env.VNSTOCK_CONFIG;
-  delete process.env.VNSTOCK_DB;
+  delete process.env.AZOTH_CONFIG;
+  delete process.env.AZOTH_DB;
   resetConfigCacheForTests();
   closeDb();
 });
@@ -30,8 +30,8 @@ afterEach(() => {
   resetConfigCacheForTests();
   closeDb();
   delete process.env.AZOTH_HOME;
-  delete process.env.VNSTOCK_CONFIG;
-  delete process.env.VNSTOCK_DB;
+  delete process.env.AZOTH_CONFIG;
+  delete process.env.AZOTH_DB;
   rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -56,14 +56,14 @@ describe("Azoth config and DB defaults", () => {
     expect(loadConfig().broker).toBe("paper");
   });
 
-  it("treats blank VNSTOCK_CONFIG as unset", () => {
+  it("treats blank AZOTH_CONFIG as unset", () => {
     initializeAzothRuntime();
-    process.env.VNSTOCK_CONFIG = "";
+    process.env.AZOTH_CONFIG = "";
     resetConfigCacheForTests();
     expect(loadConfig().broker).toBe("paper");
   });
 
-  it("honors VNSTOCK_CONFIG override", () => {
+  it("honors AZOTH_CONFIG override", () => {
     const custom = join(tmp, "custom.yaml");
     writeFileSync(custom, [
       "autonomy: confirm",
@@ -77,7 +77,7 @@ describe("Azoth config and DB defaults", () => {
       "  allow_margin: false",
       "",
     ].join("\n"));
-    process.env.VNSTOCK_CONFIG = custom;
+    process.env.AZOTH_CONFIG = custom;
     resetConfigCacheForTests();
     expect(loadConfig().model).toBe("test-model");
   });
@@ -91,14 +91,14 @@ describe("Azoth config and DB defaults", () => {
     expect(readFileSync(azothPaths().config, "utf8")).toContain("autonomy: confirm");
   });
 
-  it("uses AZOTH_HOME database by default and VNSTOCK_DB when provided", () => {
+  it("uses AZOTH_HOME database by default and AZOTH_DB when provided", () => {
     const paths = azothPaths();
     getDb();
     closeDb();
     expect(existsSync(paths.db)).toBe(true);
 
     const custom = join(tmp, "override.db");
-    process.env.VNSTOCK_DB = custom;
+    process.env.AZOTH_DB = custom;
     closeDb();
     getDb();
     closeDb();

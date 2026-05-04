@@ -64,8 +64,8 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async () => {
 const observedRoleOrder: Array<{ role: string; allowedTools: string[]; prompt: string }> = [];
 
 beforeEach(() => {
-  process.env.VNSTOCK_DB = TMP_DB;
-  process.env.VNSTOCK_CONFIG = join(__dirname, "fixtures", "config.team.yaml");
+  process.env.AZOTH_DB = TMP_DB;
+  process.env.AZOTH_CONFIG = join(__dirname, "fixtures", "config.team.yaml");
   ROLE_SCRIPTS.length = 0;
   observedRoleOrder.length = 0;
 });
@@ -96,7 +96,7 @@ describe("runTeamAnalysis", () => {
         "",
       ].join("\n"),
     );
-    process.env.VNSTOCK_CONFIG = viConfig;
+    process.env.AZOTH_CONFIG = viConfig;
     const { resetConfigCacheForTests } = await import("../src/config/loader.js");
     resetConfigCacheForTests();
     const { technicalPrompt, bullPrompt, portfolioPrompt } = await import("../src/agent/team/prompts.js");

@@ -38,8 +38,8 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "azoth-order-confirm-"));
-  process.env.VNSTOCK_CONFIG = join(tmp, "config.yaml");
-  writeFileSync(process.env.VNSTOCK_CONFIG, [
+  process.env.AZOTH_CONFIG = join(tmp, "config.yaml");
+  writeFileSync(process.env.AZOTH_CONFIG, [
     "autonomy: confirm",
     "model: test-model",
     "broker: paper",
@@ -58,7 +58,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetConfigCacheForTests();
-  delete process.env.VNSTOCK_CONFIG;
+  delete process.env.AZOTH_CONFIG;
   rmSync(tmp, { recursive: true, force: true });
 });
 
