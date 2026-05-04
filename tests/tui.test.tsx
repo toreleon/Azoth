@@ -96,7 +96,8 @@ describe("Azoth TUI", () => {
     let unmount: (() => void) | undefined;
     try {
       const completed = vi.fn();
-      const rendered = render(<LlmSetup onComplete={completed} />);
+      const verify = vi.fn().mockResolvedValue(undefined);
+      const rendered = render(<LlmSetup onComplete={completed} verify={verify} />);
       unmount = rendered.unmount;
       await tick();
       expect(strip(rendered.lastFrame() ?? "")).toContain("Azoth first-time LLM setup");
@@ -110,6 +111,12 @@ describe("Azoth TUI", () => {
       const configText = readFileSync(join(setupHome, "config.yaml"), "utf8");
       expect(configText).toContain("api_key: sk-test-setup");
       expect(configText).toContain("base_url: \"\"");
+      expect(verify).toHaveBeenCalledWith({
+        provider: "anthropic",
+        apiKey: "sk-test-setup",
+        baseUrl: "",
+        model: "glm-5.1",
+      });
       expect(strip(rendered.lastFrame() ?? "")).toContain("LLM environment saved");
 
       await enter(rendered.stdin);
@@ -143,7 +150,8 @@ describe("Azoth TUI", () => {
     let unmount: (() => void) | undefined;
     try {
       const completed = vi.fn();
-      const rendered = render(<LlmSetup onComplete={completed} />);
+      const verify = vi.fn().mockResolvedValue(undefined);
+      const rendered = render(<LlmSetup onComplete={completed} verify={verify} />);
       unmount = rendered.unmount;
       await tick();
 
@@ -158,6 +166,12 @@ describe("Azoth TUI", () => {
       expect(configText).toContain("provider: compatible");
       expect(configText).toContain("api_key: zai-key");
       expect(configText).toContain("base_url: https://open.bigmodel.cn/api/anthropic");
+      expect(verify).toHaveBeenCalledWith({
+        provider: "compatible",
+        apiKey: "zai-key",
+        baseUrl: "https://open.bigmodel.cn/api/anthropic",
+        model: "glm-5.1",
+      });
       expect(strip(rendered.lastFrame() ?? "")).toContain("Anthropic-compatible provider");
       expect(strip(rendered.lastFrame() ?? "")).toContain("https://open.bigmodel.cn/api/anthropic");
 
@@ -173,6 +187,42 @@ describe("Azoth TUI", () => {
       else process.env.ANTHROPIC_API_KEY = prevKey;
       if (prevBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
       else process.env.ANTHROPIC_BASE_URL = prevBaseUrl;
+      resetConfigCacheForTests();
+    }
+  });
+
+  it("does not save LLM config when verification fails", async () => {
+    const prevHome = process.env.AZOTH_HOME;
+    const prevDb = process.env.AZOTH_DB;
+    const setupHome = mkdtempSync(join(tmpdir(), "azoth-verify-fail-"));
+    process.env.AZOTH_HOME = setupHome;
+    delete process.env.AZOTH_DB;
+    resetConfigCacheForTests();
+
+    let unmount: (() => void) | undefined;
+    try {
+      const rendered = render(
+        <LlmSetup onComplete={() => {}} verify={vi.fn().mockRejectedValue(new Error("bad endpoint"))} />,
+      );
+      unmount = rendered.unmount;
+      await tick();
+
+      rendered.stdin.write("2");
+      await tick();
+      await type(rendered.stdin, "https://bad.example/api/anthropic");
+      await type(rendered.stdin, "bad-key");
+      await type(rendered.stdin, "glm-5.1");
+
+      const out = strip(rendered.lastFrame() ?? "");
+      expect(out).toContain("bad endpoint");
+      expect(out).toContain("Model");
+      expect(readFileSync(join(setupHome, "config.yaml"), "utf8")).toContain("api_key: \"\"");
+    } finally {
+      unmount?.();
+      if (prevHome === undefined) delete process.env.AZOTH_HOME;
+      else process.env.AZOTH_HOME = prevHome;
+      if (prevDb === undefined) delete process.env.AZOTH_DB;
+      else process.env.AZOTH_DB = prevDb;
       resetConfigCacheForTests();
     }
   });

@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { loadConfig, updateConfig } from "../../config/loader.js";
+import { verifyLlmEnvironment, type LlmVerificationInput } from "../../runtime/llmSetup.js";
 import { azothPaths } from "../../runtime/paths.js";
 import { theme } from "../lib/theme.js";
 import { AZOTH_LOGO } from "./Welcome.js";
 
 type Provider = "anthropic" | "compatible";
-type Step = "provider" | "apiKey" | "baseUrl" | "model" | "done";
+type Step = "provider" | "apiKey" | "baseUrl" | "model" | "verifying" | "done";
 
 const PROVIDERS: Array<{ id: Provider; label: string; detail: string }> = [
   { id: "anthropic", label: "Anthropic API key", detail: "Use Anthropic directly; no base URL needed." },
@@ -16,9 +17,10 @@ const PROVIDERS: Array<{ id: Provider; label: string; detail: string }> = [
 
 export interface LlmSetupProps {
   onComplete: () => void;
+  verify?: (input: LlmVerificationInput) => Promise<void>;
 }
 
-export function LlmSetup({ onComplete }: LlmSetupProps) {
+export function LlmSetup({ onComplete, verify = verifyLlmEnvironment }: LlmSetupProps) {
   const cfg = loadConfig();
   const paths = azothPaths();
   const initialProvider = cfg.llm.provider;
@@ -62,7 +64,7 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
     }
   });
 
-  const submit = (raw: string) => {
+  const submit = async (raw: string) => {
     const value = raw.trim();
     setError(undefined);
 
@@ -91,6 +93,15 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
     if (step === "model") {
       const nextModel = value || cfg.model;
       try {
+        setModel(nextModel);
+        setInput("");
+        setStep("verifying");
+        await verify({
+          provider,
+          apiKey,
+          baseUrl: provider === "compatible" ? baseUrl : "",
+          model: nextModel,
+        });
         updateConfig({
           model: nextModel,
           llm: {
@@ -104,11 +115,10 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
             deep_model: nextModel,
           },
         });
-        setModel(nextModel);
         setSavedConfig(paths.config);
-        setInput("");
         setStep("done");
       } catch (e) {
+        setStep("model");
         setError((e as Error).message);
       }
     }
@@ -163,6 +173,13 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
                 </Text>
               ))}
               <Text dimColor>↑/↓ select · Enter confirm · 1/2 quick select</Text>
+            </Box>
+          ) : null}
+
+          {step === "verifying" ? (
+            <Box marginTop={1} flexDirection="column">
+              <Text color={theme.brand} bold>Verifying LLM connection...</Text>
+              <Text dimColor>Checking endpoint, API key, and model before saving config.</Text>
             </Box>
           ) : null}
 
