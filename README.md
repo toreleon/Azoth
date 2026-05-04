@@ -21,7 +21,7 @@ autonomy and risk settings.
 > real orders against a real account. Use advisory or paper mode until you have
 > verified configuration, data quality, account state, and risk limits.
 
-Latest release: [v0.1.1](docs/releases/v0.1.1.md)
+Latest release: [v0.1.2](docs/releases/v0.1.2.md)
 
 ## Terminal UI
 
@@ -51,7 +51,7 @@ Check market, portfolio, journal, and backtest state:
 /quote VCB
 /positions
 /journal decisions 10
-/backtest 2025-01-03 2025-04-30 1000000000
+/backtest
 ```
 
 ## Highlights
@@ -166,10 +166,23 @@ Check market and portfolio state:
 /journal decisions 10
 ```
 
-Run a backtest:
+Run a backtest for the previous calendar week:
+
+```text
+/backtest
+```
+
+You can still provide an explicit range and starting cash:
 
 ```text
 /backtest 2025-01-03 2025-04-30 1000000000
+```
+
+Backtests default to 30-minute turns. Use `--interval` to choose a slower
+cadence such as `1h` or `2h`:
+
+```text
+/backtest 2025-01-03 2025-04-30 1000000000 --interval 1h
 ```
 
 Manage sessions:
@@ -219,7 +232,7 @@ still stream the full local team flow.
 | --- | --- |
 | `/team <message>` | Run a multi-agent debate on a market or portfolio question. |
 | `/analyze <ticker> [--rounds N]` | Run structured team analysis for one ticker. |
-| `/backtest [start] [end] [cash]` | Run a weekly backtest and render results inline. |
+| `/backtest [start] [end] [cash] [--interval 30m\|1h\|2h]` | Run an interval backtest and render results inline. Defaults to previous calendar week at 30-minute cadence. |
 | `/journal [decisions\|orders\|fills\|alerts] [N]` | Show recent journal rows. |
 | `/quote <ticker>` | Request quote, technicals, and recent news for a ticker. |
 | `/positions` | Summarize current portfolio positions and exposures. |
@@ -325,6 +338,8 @@ reduce repeated network calls.
 
 ## Release Notes
 
+- [v0.1.2](docs/releases/v0.1.2.md) - dynamic stock discovery, last-week
+  default backtests, and configurable interval replay cadence.
 - [v0.1.1](docs/releases/v0.1.1.md) - pipeline-published package release for
   the v0.1 public baseline.
 - [v0.1.0](docs/releases/v0.1.0.md) - consolidated public baseline with chat

@@ -231,7 +231,7 @@ export function traderPrompt(
     "Tools:",
     "- portfolio_list (see existing exposure)",
     "- journal_read (recent decisions on this name)",
-    "- discover_tickers (only if you need to compare alternatives)",
+    "- discover_tickers (compare alternatives by signal/strategy; pass explicit tickers when the user names a basket)",
     "",
     "Analyst reports:",
     renderAnalysts(analysts),

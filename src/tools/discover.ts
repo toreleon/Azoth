@@ -1,6 +1,7 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { getStockOhlcv } from "../data/sources/dnsePublic.js";
+import { getListedEquityTickers, type ListedExchange } from "../data/sources/vndirectFinfo.js";
 import { nowSec } from "../agent/clock.js";
 import { cached } from "../data/cache.js";
 
@@ -9,12 +10,10 @@ function asText(obj: unknown) {
 }
 
 /**
- * Curated liquid universe (~28 tickers): VN30 large caps + the most active
- * mid-caps across banking, real estate, retail, steel, brokers, F&B, energy.
- * The discovery tool ranks within this set so we don't have to scan all
- * ~1,600 listed names. Edit here to expand the search space.
+ * Default liquid universe used when the caller wants a fast scan. The tool can
+ * also scan exchange-wide listed tickers or a caller-provided ticker basket.
  */
-export const DISCOVERY_UNIVERSE: readonly string[] = [
+export const DEFAULT_DISCOVERY_UNIVERSE: readonly string[] = [
   // Banks
   "VCB", "BID", "CTG", "TCB", "MBB", "ACB", "VPB", "STB", "HDB",
   // Real estate
@@ -30,11 +29,13 @@ export const DISCOVERY_UNIVERSE: readonly string[] = [
 ];
 
 export const TICKER_UNIVERSES = {
-  default: DISCOVERY_UNIVERSE,
+  default: DEFAULT_DISCOVERY_UNIVERSE,
   vn30: ["VCB", "BID", "CTG", "TCB", "MBB", "ACB", "VPB", "STB", "HDB", "VHM", "VIC", "HPG", "GAS", "PLX", "VNM", "MWG", "MSN", "SAB", "FPT", "GVR", "POW", "SSI", "PNJ", "NVL"] as const,
   banks: ["VCB", "BID", "CTG", "TCB", "MBB", "ACB", "VPB", "STB", "HDB"] as const,
   bluechip: ["VCB", "FPT", "HPG", "VNM", "VHM", "VIC", "MWG", "GAS"] as const,
 } as const;
+
+export const DISCOVERY_UNIVERSE = DEFAULT_DISCOVERY_UNIVERSE;
 
 interface Candidate {
   ticker: string;
@@ -121,7 +122,22 @@ export type DiscoverCriterion =
   | "top_gainers"
   | "top_losers";
 
-export type DiscoverUniverse = keyof typeof TICKER_UNIVERSES;
+export type DiscoverStrategy =
+  | "trend_following"
+  | "breakout"
+  | "mean_reversion"
+  | "defensive"
+  | "liquidity_surge"
+  | "relative_strength"
+  | "weakness";
+
+export type DiscoverUniverse =
+  | keyof typeof TICKER_UNIVERSES
+  | "hose"
+  | "hnx"
+  | "upcom"
+  | "all_listed"
+  | "custom";
 
 export interface DiscoverResult {
   criterion: DiscoverCriterion;
@@ -140,15 +156,16 @@ export interface DiscoverResult {
 }
 
 export async function discoverTickers(input: {
-  criterion: DiscoverCriterion;
+  criterion?: DiscoverCriterion;
+  strategy?: DiscoverStrategy;
   limit?: number;
   universe?: DiscoverUniverse;
+  tickers?: readonly string[];
 }): Promise<DiscoverResult> {
-  const criterion = input.criterion;
+  const criterion = input.criterion ?? criterionForStrategy(input.strategy) ?? "momentum";
   const limit = input.limit ?? 8;
-  const universe = input.universe ?? "default";
-  const tickers = TICKER_UNIVERSES[universe];
-  const candidates = await Promise.all(tickers.map(buildCandidate));
+  const { universe, tickers } = await resolveUniverse(input.universe, input.tickers);
+  const candidates = await mapLimit(tickers, 12, buildCandidate);
   const valid = candidates.filter((c) => c.latest_close != null);
 
   let scored: Candidate[];
@@ -212,12 +229,86 @@ export async function discoverTickers(input: {
   };
 }
 
+function criterionForStrategy(strategy: DiscoverStrategy | undefined): DiscoverCriterion | undefined {
+  switch (strategy) {
+    case "trend_following":
+      return "momentum";
+    case "breakout":
+      return "breakout";
+    case "mean_reversion":
+      return "oversold";
+    case "defensive":
+      return "low_volatility";
+    case "liquidity_surge":
+      return "high_volume";
+    case "relative_strength":
+      return "top_gainers";
+    case "weakness":
+      return "top_losers";
+    default:
+      return undefined;
+  }
+}
+
+function normalizeTickers(tickers: readonly string[]): string[] {
+  return Array.from(
+    new Set(
+      tickers
+        .map((t) => t.trim().toUpperCase())
+        .filter((t) => /^[A-Z0-9]{2,8}$/.test(t)),
+    ),
+  );
+}
+
+async function listedTickers(floors: readonly ListedExchange[]): Promise<string[]> {
+  const key = `listed-equity-tickers:${floors.join(",")}`;
+  return cached(key, 24 * 3600, () => getListedEquityTickers(floors));
+}
+
+async function resolveUniverse(
+  universe: DiscoverUniverse | undefined,
+  tickers: readonly string[] | undefined,
+): Promise<{ universe: DiscoverUniverse; tickers: string[] }> {
+  const custom = normalizeTickers(tickers ?? []);
+  if (custom.length > 0) return { universe: "custom", tickers: custom };
+
+  const selected = universe ?? "all_listed";
+  if (selected in TICKER_UNIVERSES) {
+    return {
+      universe: selected,
+      tickers: [...TICKER_UNIVERSES[selected as keyof typeof TICKER_UNIVERSES]],
+    };
+  }
+  if (selected === "hose") return { universe: selected, tickers: await listedTickers(["HOSE"]) };
+  if (selected === "hnx") return { universe: selected, tickers: await listedTickers(["HNX"]) };
+  if (selected === "upcom") return { universe: selected, tickers: await listedTickers(["UPCOM"]) };
+  return { universe: "all_listed", tickers: await listedTickers(["HOSE", "HNX", "UPCOM"]) };
+}
+
+async function mapLimit<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const idx = next++;
+      out[idx] = await fn(items[idx]!);
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, worker);
+  await Promise.all(workers);
+  return out;
+}
+
 export const discoverTickersTool = tool(
   "discover_tickers",
   [
-    "Discover Vietnamese stocks matching a strategy criterion. Use this at the START of each turn to build a focused 5–10 ticker candidate set for THIS week.",
-    "Searches a curated liquid universe (~28 names: VN30 + active mid-caps). Returns candidates ranked by the chosen metric, with 1w/1m return, RSI14, and 5d/20d volume ratio.",
-    "Criteria:",
+    "Discover Vietnamese stocks matching a signal or strategy. Use this at the START of each turn to build a focused 5–10 ticker candidate set for THIS week.",
+    "By default this scans listed HOSE/HNX/UPCOM equities, not a fixed index. You may also pass an explicit tickers basket or a faster preset universe.",
+    "Signals / criteria:",
     "- 'momentum': highest 1-month return, breaking out (rsi 50-75, rising vol).",
     "- 'breakout': highest 1-week return with vol_ratio > 1.3.",
     "- 'oversold': lowest RSI14 (mean-reversion candidates).",
@@ -234,12 +325,22 @@ export const discoverTickersTool = tool(
       "high_volume",
       "top_gainers",
       "top_losers",
-    ]),
+    ]).optional(),
+    strategy: z.enum([
+      "trend_following",
+      "breakout",
+      "mean_reversion",
+      "defensive",
+      "liquidity_surge",
+      "relative_strength",
+      "weakness",
+    ]).optional(),
     limit: z.number().int().min(3).max(15).default(8),
-    universe: z.enum(["default", "vn30", "banks", "bluechip"]).default("default"),
+    universe: z.enum(["all_listed", "hose", "hnx", "upcom", "default", "vn30", "banks", "bluechip"]).default("all_listed"),
+    tickers: z.array(z.string()).min(1).max(250).optional(),
   },
-  async ({ criterion, limit, universe }) => {
-    const result = await discoverTickers({ criterion, limit, universe });
+  async ({ criterion, strategy, limit, universe, tickers }) => {
+    const result = await discoverTickers({ criterion, strategy, limit, universe, tickers });
     return asText(result);
   },
 );

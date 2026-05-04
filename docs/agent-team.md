@@ -137,18 +137,20 @@ The top-level chat agent can also route automatically:
 
 Azoth's `/backtest` command reuses the same team analysis engine in replay
 mode. Instead of asking the team to analyze one live ticker, the backtest runner
-walks through historical Friday closes, discovers candidates, runs the team on
-each candidate as of that historical date, converts final decisions into paper
-broker orders, and records the resulting equity curve.
+walks through historical interval closes, discovers candidates, runs the team
+on each candidate as of that historical timestamp, converts final decisions into
+paper broker orders, and records the resulting equity curve. The default
+interval is 30 minutes; `/backtest --interval 1h` or `--interval 2h` can be used
+to slow the replay cadence.
 
 ```mermaid
 flowchart TD
-  User["User: /backtest START END CASH"] --> Init["Create backtest run"]
+  User["User: /backtest [START END CASH]"] --> Init["Create backtest run"]
   Init --> Broker["Create isolated paper broker"]
   Init --> Data["Load universe OHLCV and VNINDEX"]
-  Data --> Fridays["Find Friday trading turns"]
+  Data --> Intervals["Find interval turns"]
 
-  Fridays --> Turn["Weekly turn"]
+  Intervals --> Turn["Interval turn"]
   Turn --> AsOf["Set simulated as-of date"]
   AsOf --> Discovery["Discover momentum candidates"]
   Discovery --> Held["Include existing holdings"]
@@ -168,7 +170,7 @@ flowchart TD
   Persist --> Drawdown{"Drawdown above floor?"}
   Drawdown -- yes --> Freeze["Freeze new buys next turn"]
   Drawdown -- no --> Continue["Continue normally"]
-  Freeze --> Next{"More Fridays?"}
+  Freeze --> Next{"More intervals?"}
   Continue --> Next
   Next -- yes --> Turn
   Next -- no --> Summary["Return summary: return, benchmark, max DD, trades, rejected trades, tokens, cost"]
@@ -176,9 +178,15 @@ flowchart TD
 
 The backtest loop has several important constraints:
 
-- The active clock is pinned to the historical Friday turn, so market tools do
-  not see future bars.
-- Candidate discovery defaults to a momentum scan over Azoth's default universe.
+- The active clock is pinned to each historical interval close, so market tools
+  do not see future bars.
+- When no date range is supplied, `/backtest` uses the previous calendar week.
+- The strategy makes decisions one configured interval at a time. It does not
+  batch the whole day or week into one decision.
+- Team prompts and operating rules treat Vietnam listed equity settlement as
+  T+2 and prohibit same-day round trips.
+- Candidate discovery can scan listed equities or a caller-provided ticker
+  basket; backtests use the default liquid universe to keep replay cost bounded.
 - Each candidate receives a one-round team analysis to keep replay cost bounded.
 - Web search is disabled during backtests so historical turns rely on Azoth's
   market data and cached/local tools rather than current open-web context.
@@ -194,9 +202,9 @@ The backtest loop has several important constraints:
 Backtest persistence uses the same local SQLite runtime:
 
 - `backtest_runs` stores strategy name, start/end dates, initial cash, universe,
-  model, broker name, candidate limit, and risk settings.
+  model, broker name, interval, candidate limit, and risk settings.
 - `backtest_turns` stores the prompt, team response summary, token usage, and
-  cost for each historical turn.
+  cost for each historical interval turn.
 - `backtest_equity` stores cash, mark-to-market equity, and benchmark equity.
 - Broker tables store paper orders, fills, rejects, positions, and cash.
 - Team-run tables store the role outputs generated during candidate analysis.

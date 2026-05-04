@@ -17,7 +17,7 @@ const TIPS = [
   ["/positions", "portfolio · PnL · exposures"],
   ["/autonomy", "persist advisory · confirm · auto"],
   ["/health", "runtime · broker · provider checks"],
-  ["/backtest", "team-driven weekly simulation"],
+  ["/backtest", "team-driven interval simulation"],
   ["/journal", "decisions · orders · fills · alerts"],
 ];
 

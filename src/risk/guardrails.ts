@@ -92,8 +92,8 @@ export async function checkOrder(
   }
 
   // Backtest mode (per-run broker pinned via ALS): skip wall-clock checks.
-  // The harness only fires on simulated Friday closes, which by definition
-  // sit outside live trading hours of the real wall clock.
+  // The harness fires on simulated historical interval closes, which are
+  // independent of the real wall clock.
   if (inBacktest) {
     return { ok: reasons.length === 0, reasons };
   }

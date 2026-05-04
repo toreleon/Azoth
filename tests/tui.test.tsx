@@ -4,7 +4,7 @@ import { join } from "node:path";
 import React from "react";
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { render } from "ink-testing-library";
-import { App } from "../src/tui/App.js";
+import { App, previousWeekRange } from "../src/tui/App.js";
 import { LlmSetup } from "../src/tui/components/LlmSetup.js";
 import { sparkline } from "../src/tui/lib/sparkline.js";
 import { vnColor, pctColor } from "../src/tui/lib/colors.js";
@@ -28,6 +28,7 @@ vi.mock("../src/agent/team/index.js", () => ({
 }));
 
 vi.mock("../src/agent/backtestRunner.js", () => ({
+  BACKTEST_DEFAULT_INTERVAL: "30m",
   runBacktestSession: runnerMocks.runBacktestSession,
 }));
 
@@ -269,7 +270,15 @@ describe("Azoth TUI", () => {
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("/backtest");
     expect(out).toContain("[YYYY-MM-DD start]");
+    expect(out).toContain("previous calendar week");
     unmount();
+  });
+
+  it("computes the previous calendar week for default backtests", () => {
+    expect(previousWeekRange(new Date(2026, 4, 4))).toEqual({
+      start: "2026-04-27",
+      end: "2026-05-03",
+    });
   });
 
   it("/autonomy persists mode and updates the UI", async () => {
@@ -505,6 +514,8 @@ describe("Azoth TUI", () => {
         runId: "bt-run-12345678",
         strategy: "team-default",
         brokerName: "paper-bt-test",
+        interval: "1h",
+        turns: [1, 2],
         fridays: [1, 2],
         universe: ["HPG", "VCB", "FPT"],
       });
@@ -581,6 +592,9 @@ describe("Azoth TUI", () => {
         totalCost: 0.0025,
         totalInTokens: 10,
         totalOutTokens: 20,
+        interval: "1h",
+        intervals: 1,
+        sessions: 1,
         weeks: 1,
         trades: 2,
         rejectedTrades: 0,
@@ -590,7 +604,7 @@ describe("Azoth TUI", () => {
 
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
-    await type(stdin, "/backtest 2025-01-03 2025-01-10 1000000000");
+    await type(stdin, "/backtest 2025-01-03 2025-01-10 1000000000 --interval 1h");
     await tick();
 
     expect(runnerMocks.runBacktestSession).toHaveBeenCalledWith(
@@ -598,6 +612,7 @@ describe("Azoth TUI", () => {
         start: "2025-01-03",
         end: "2025-01-10",
         initialCash: 1_000_000_000,
+        interval: "1h",
         maxCandidates: undefined,
       },
       expect.objectContaining({
@@ -613,8 +628,9 @@ describe("Azoth TUI", () => {
     expect(out).toContain("/backtest 2025-01-03");
     expect(out).toContain("Ready");
     expect(out).toContain("3 tickers");
-    expect(out).toContain("team analyzes 3/week");
-    expect(out).toContain("team analysis");
+    expect(out).toContain("1h intervals");
+    expect(out).toContain("team analyzes 3/interval");
+    expect(out).toContain("interval analysis");
     expect(out).toContain("[HPG]");
     expect(out).toContain("technical WebSearch: HPG steel demand Vietnam 2025");
     expect(out).toContain("technical WebSearch result received: Search result: steel demand");
@@ -625,6 +641,59 @@ describe("Azoth TUI", () => {
     expect(out).toContain("Backtest 2025");
     expect(out).toContain("trades");
     expect(out).toContain("+1.00%");
+    unmount();
+  });
+
+  it("/backtest defaults to the previous week when no dates are supplied", async () => {
+    runnerMocks.runBacktestSession.mockImplementationOnce(async (opts: any, cb: any) => {
+      cb.onStart?.({
+        runId: "bt-run-default",
+        strategy: "team-default",
+        brokerName: "paper-bt-test",
+        interval: "30m",
+        turns: [1],
+        fridays: [1],
+        universe: ["HPG"],
+      });
+      return {
+        runId: "bt-run-default",
+        strategy: "team-default",
+        start: opts.start,
+        end: opts.end,
+        initialCash: opts.initialCash,
+        finalMtm: opts.initialCash,
+        finalBench: opts.initialCash,
+        totalReturn: 0,
+        benchReturn: 0,
+        maxDD: 0,
+        totalCost: 0,
+        totalInTokens: 0,
+        totalOutTokens: 0,
+        interval: "30m",
+        intervals: 0,
+        sessions: 0,
+        weeks: 0,
+        trades: 0,
+        rejectedTrades: 0,
+        reportPath: null,
+      };
+    });
+
+    const expected = previousWeekRange();
+    const { stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/backtest");
+    await tick();
+
+    expect(runnerMocks.runBacktestSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start: expected.start,
+        end: expected.end,
+        initialCash: 1_000_000_000,
+        interval: "30m",
+      }),
+      expect.any(Object),
+    );
     unmount();
   });
 

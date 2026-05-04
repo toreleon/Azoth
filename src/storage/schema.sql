@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS backtest_runs (
   persona         TEXT NOT NULL,
   start_date      INTEGER NOT NULL,
   end_date        INTEGER NOT NULL,
-  cadence         TEXT NOT NULL,         -- "weekly"
+  cadence         TEXT NOT NULL,         -- e.g. "30m", "1h", "2h"
   initial_cash_vnd INTEGER NOT NULL,
   config_json     TEXT NOT NULL,
   created_at      INTEGER NOT NULL,
