@@ -1,9 +1,23 @@
 {
   "name": "@toreleon/azoth",
   "version": "0.1.2",
-  "description": "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations",
+  "description": "AI stock trading assistant CLI for Vietnam equity research, portfolio analysis, backtesting, paper trading, and DNSE broker workflows",
   "type": "module",
   "license": "MIT",
+  "keywords": [
+    "vietnam stock market",
+    "ai trading assistant",
+    "equity research",
+    "stock analysis",
+    "portfolio management",
+    "backtesting",
+    "paper trading",
+    "terminal cli",
+    "dnse",
+    "hose",
+    "hnx",
+    "upcom"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/toreleon/Azoth.git"
