@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { azothHome, azothPaths, encodeProjectKey, ensureAzothDirs, projectDir } from "../src/runtime/paths.js";
 import { initializeAzothRuntime } from "../src/runtime/init.js";
 import { loadConfig, resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
+import { verifyLlmEnvironment } from "../src/runtime/llmSetup.js";
 import { closeDb, getDb } from "../src/storage/db.js";
 import {
   activateSession,
@@ -27,12 +28,52 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   resetConfigCacheForTests();
   closeDb();
   delete process.env.AZOTH_HOME;
   delete process.env.AZOTH_CONFIG;
   delete process.env.AZOTH_DB;
   rmSync(tmp, { recursive: true, force: true });
+});
+
+describe("LLM setup verification", () => {
+  it("verifies compatible providers through /models without generation", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "glm-5.1" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await verifyLlmEnvironment({
+      provider: "compatible",
+      apiKey: "test-key",
+      baseUrl: "https://open.bigmodel.cn/api/anthropic",
+      model: "glm-5.1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe("https://open.bigmodel.cn/api/anthropic/v1/models");
+    expect((init as RequestInit).method).toBe("GET");
+  });
+
+  it("rejects when /models does not include the selected model", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "other-model" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(verifyLlmEnvironment({
+      provider: "anthropic",
+      apiKey: "test-key",
+      baseUrl: "",
+      model: "glm-5.1",
+    })).rejects.toThrow("was not found");
+  });
 });
 
 describe("Azoth runtime paths", () => {
