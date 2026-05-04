@@ -98,15 +98,64 @@ describe("Azoth TUI", () => {
       unmount = rendered.unmount;
       await tick();
       expect(strip(rendered.lastFrame() ?? "")).toContain("Azoth first-time LLM setup");
+      expect(strip(rendered.lastFrame() ?? "")).toContain("Select provider");
+      expect(strip(rendered.lastFrame() ?? "")).toContain("Anthropic API key");
 
-      await type(rendered.stdin, "sk-test-setup");
       await enter(rendered.stdin);
+      await type(rendered.stdin, "sk-test-setup");
       await type(rendered.stdin, "glm-5.1");
 
       const envPath = join(setupHome, ".env");
       expect(existsSync(envPath)).toBe(true);
       expect(readFileSync(envPath, "utf8")).toContain("ANTHROPIC_API_KEY=sk-test-setup");
       expect(strip(rendered.lastFrame() ?? "")).toContain("LLM environment saved");
+
+      await enter(rendered.stdin);
+      expect(completed).toHaveBeenCalled();
+    } finally {
+      unmount?.();
+      if (prevHome === undefined) delete process.env.AZOTH_HOME;
+      else process.env.AZOTH_HOME = prevHome;
+      if (prevDb === undefined) delete process.env.AZOTH_DB;
+      else process.env.AZOTH_DB = prevDb;
+      if (prevKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = prevKey;
+      if (prevBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
+      else process.env.ANTHROPIC_BASE_URL = prevBaseUrl;
+      resetConfigCacheForTests();
+    }
+  });
+
+  it("collects base URL for Anthropic-compatible provider setup", async () => {
+    const prevHome = process.env.AZOTH_HOME;
+    const prevDb = process.env.AZOTH_DB;
+    const prevKey = process.env.ANTHROPIC_API_KEY;
+    const prevBaseUrl = process.env.ANTHROPIC_BASE_URL;
+    const setupHome = mkdtempSync(join(tmpdir(), "azoth-compatible-"));
+    process.env.AZOTH_HOME = setupHome;
+    delete process.env.AZOTH_DB;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_BASE_URL;
+    resetConfigCacheForTests();
+
+    let unmount: (() => void) | undefined;
+    try {
+      const completed = vi.fn();
+      const rendered = render(<LlmSetup onComplete={completed} />);
+      unmount = rendered.unmount;
+      await tick();
+
+      rendered.stdin.write("2");
+      await tick();
+      await type(rendered.stdin, "zai-key");
+      await type(rendered.stdin, "https://open.bigmodel.cn/api/anthropic");
+      await type(rendered.stdin, "glm-5.1");
+
+      const envText = readFileSync(join(setupHome, ".env"), "utf8");
+      expect(envText).toContain("ANTHROPIC_API_KEY=zai-key");
+      expect(envText).toContain("ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic");
+      expect(strip(rendered.lastFrame() ?? "")).toContain("Anthropic-compatible provider");
+      expect(strip(rendered.lastFrame() ?? "")).toContain("https://open.bigmodel.cn/api/anthropic");
 
       await enter(rendered.stdin);
       expect(completed).toHaveBeenCalled();

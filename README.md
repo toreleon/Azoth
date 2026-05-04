@@ -60,8 +60,10 @@ npx @toreleon/azoth init
 npx @toreleon/azoth
 ```
 
-On a fresh machine, the TUI opens a first-time LLM setup screen. It writes
-`~/.azoth/.env` and updates the model fields in `~/.azoth/config.yaml`.
+On a fresh machine, the TUI opens a first-time LLM setup screen with the Azoth
+header. Choose either a direct Anthropic API key or an Anthropic-compatible
+provider. Compatible providers also ask for `ANTHROPIC_BASE_URL`. The setup
+writes `~/.azoth/.env` and updates the model fields in `~/.azoth/config.yaml`.
 
 Manual setup is still supported:
 

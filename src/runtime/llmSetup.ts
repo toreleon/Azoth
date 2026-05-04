@@ -15,6 +15,10 @@ function upsertEnvLine(lines: string[], key: string, value: string): string[] {
   return next;
 }
 
+function removeEnvLine(lines: string[], key: string): string[] {
+  return lines.filter((line) => !line.trimStart().startsWith(`${key}=`));
+}
+
 export function hasLlmEnvironment(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 }
@@ -29,10 +33,11 @@ export function saveLlmEnvironment(input: LlmEnvironmentInput): string {
 
   lines = upsertEnvLine(lines, "ANTHROPIC_API_KEY", apiKey);
   if (input.baseUrl?.trim()) lines = upsertEnvLine(lines, "ANTHROPIC_BASE_URL", input.baseUrl.trim());
+  else lines = removeEnvLine(lines, "ANTHROPIC_BASE_URL");
 
   writeFileSync(paths.env, `${lines.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
   process.env.ANTHROPIC_API_KEY = apiKey;
   if (input.baseUrl?.trim()) process.env.ANTHROPIC_BASE_URL = input.baseUrl.trim();
+  else delete process.env.ANTHROPIC_BASE_URL;
   return paths.env;
 }
-

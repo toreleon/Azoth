@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import { theme } from "../lib/theme.js";
 
-const LOGO = [
+export const AZOTH_LOGO = [
   " █████╗ ███████╗ ██████╗ ████████╗██╗  ██╗",
   "██╔══██╗╚══███╔╝██╔═══██╗╚══██╔══╝██║  ██║",
   "███████║  ███╔╝ ██║   ██║   ██║   ███████║",
@@ -37,7 +37,7 @@ export function Welcome({ version, autonomy, broker, cwd }: WelcomeProps) {
       paddingX={1}
     >
       <Box flexDirection="column" width={48} flexShrink={0} marginRight={2}>
-        {LOGO.map((l, i) => (
+        {AZOTH_LOGO.map((l, i) => (
           <Text key={i} color={theme.accent} bold>{l}</Text>
         ))}
         <Box marginTop={1}>
