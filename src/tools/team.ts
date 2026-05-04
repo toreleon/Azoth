@@ -1,6 +1,7 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { runTeamAnalysis, runTeamQuestion } from "../agent/team/index.js";
+import { emitTeamToolEvent } from "../agent/team/toolEventBus.js";
 
 function asText(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj) }] };
@@ -17,7 +18,10 @@ export const teamQuestionTool = tool(
     question: z.string().min(1),
   },
   async ({ question }) => {
-    const result = await runTeamQuestion(question, { allowWebSearch: true });
+    const result = await runTeamQuestion(question, {
+      allowWebSearch: true,
+      emit: (event) => emitTeamToolEvent({ tool: "team_question", event }),
+    });
     return asText({
       ok: true,
       type: "team_question",
@@ -48,7 +52,10 @@ export const teamAnalyzeTool = tool(
         debateRounds: debate_rounds,
         asOfDateIso: as_of_date,
       },
-      { allowWebSearch: true },
+      {
+        allowWebSearch: true,
+        emit: (event) => emitTeamToolEvent({ tool: "team_analyze", event }),
+      },
     );
     return asText({
       ok: true,

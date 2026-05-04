@@ -1,6 +1,6 @@
 {
   "name": "azoth",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations",
   "type": "module",
   "private": true,

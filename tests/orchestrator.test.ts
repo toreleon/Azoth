@@ -54,6 +54,8 @@ describe("outer agent team delegation", () => {
     const prompt = buildSystemPrompt();
     expect(prompt).toContain("team_question");
     expect(prompt).toContain("team_analyze");
+    expect(prompt).toContain("wait for that team tool to finish");
+    expect(prompt).toContain("Do not call duplicate market/fundamental/news/technical tools in parallel");
 
     const opts = buildOptions();
     expect(opts.allowedTools).toContain("mcp__vnstock__team_question");

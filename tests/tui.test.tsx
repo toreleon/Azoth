@@ -13,6 +13,7 @@ import { getDb } from "../src/storage/db.js";
 import { appendSessionRecord, createSession, latestSession, readSessionRecords } from "../src/runtime/sessionStore.js";
 import { resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
 import { resetBrokerCache } from "../src/broker/index.js";
+import { emitTeamToolEvent } from "../src/agent/team/toolEventBus.js";
 
 const runnerMocks = vi.hoisted(() => ({
   runTeamAnalysis: vi.fn(),
@@ -215,6 +216,68 @@ describe("Azoth TUI", () => {
         expect.objectContaining({ type: "assistant", text: expect.stringContaining("Recommendation: Selective Overweight") }),
       ]),
     );
+    unmount();
+  });
+
+  it("collapses automatic MCP team events to subagent status and final summary", async () => {
+    const { lastFrame, unmount } = render(<App />);
+    await tick();
+    emitTeamToolEvent({
+      tool: "team_analyze",
+      event: { type: "run_start", runId: "team-run-12345678", ticker: "FPT" },
+    });
+    emitTeamToolEvent({
+      tool: "team_analyze",
+      event: { type: "role_start", role: "technical" },
+    });
+    emitTeamToolEvent({
+      tool: "team_analyze",
+      event: {
+        type: "role_tool",
+        role: "technical",
+        tool: "market_quote",
+        input: JSON.stringify({ ticker: "FPT" }),
+      },
+    });
+    emitTeamToolEvent({
+      tool: "team_analyze",
+      event: {
+        type: "role_tool_result",
+        role: "technical",
+        tool: "market_quote",
+        content: "very noisy raw quote payload",
+      },
+    });
+    emitTeamToolEvent({
+      tool: "team_analyze",
+      event: {
+        type: "role_end",
+        role: "technical",
+        output: { score: 0.2, summary: "base building but no confirmed breakout" },
+      },
+    });
+    emitTeamToolEvent({
+      tool: "team_analyze",
+      event: {
+        type: "final",
+        decision: {
+          ticker: "FPT",
+          rating: "Hold",
+          sizingPct: 0,
+          rationale: "Wait for confirmation",
+          teamRunId: "team-run-12345678",
+          asOfDateIso: "2026-05-04",
+        },
+      },
+    });
+    await tick();
+
+    const out = strip(lastFrame() ?? "");
+    expect(out).toContain("analyze subagents finished");
+    expect(out).toContain("analyze technical");
+    expect(out).toContain("final: Hold");
+    expect(out).not.toContain("very noisy raw quote payload");
+    expect(out).not.toContain("market_quote");
     unmount();
   });
 

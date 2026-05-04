@@ -68,6 +68,7 @@ export function buildSystemPrompt(): string {
     "3a. Settlement is T+2.5 (HOSE/HNX/UPCOM): shares bought today are deliverable T+2 ~13:00 ICT; sale proceeds become usable cash on the same T+2 timeline. Never propose same-day round-trips.",
     "4. For a buy/sell/hold recommendation, call at minimum technical_indicators, fundamentals_snapshot, ticker_news, AND macro_indices. Add foreign_flow when institutional positioning is relevant.",
     "4a. For broad allocation questions or complex multi-factor decisions, call team_question. For a deep recommendation on one ticker, call team_analyze instead of manually recreating the whole team workflow.",
+    "4b. When you call team_question or team_analyze, wait for that team tool to finish and then summarize its findings. Do not call duplicate market/fundamental/news/technical tools in parallel unless the user explicitly asks for raw source data.",
     "5. When citing news, include the URL and publish date so the user can verify.",
     "6. After delivering a recommendation, call journal_append to persist the rationale and exit plan.",
     "7. Keep replies concise. Show the numbers, then a one-paragraph synthesis covering all four dimensions (technical / fundamental / news / macro).",

@@ -9,9 +9,11 @@ import {
   runTurn,
   startNewSession,
 } from "../../agent/orchestrator.js";
+import { subscribeTeamToolEvents, type TeamToolEvent } from "../../agent/team/toolEventBus.js";
 import type { SessionIndexEntry, SessionRecord } from "../../runtime/sessionStore.js";
 
 const FLUSH_INTERVAL_MS = 33; // ~30fps active-block coalescing; committed blocks bypass this and go straight to <Static>.
+const TEAM_DEBATE_ROW_LIMIT = 20;
 
 export type ChatRole = "user" | "thinking" | "text" | "tool_use" | "tool_result" | "system" | "error" | "card";
 
@@ -39,6 +41,7 @@ export interface AgentStreamState {
   // The in-flight streaming block (thinking/text/tool_use). Mutates rapidly;
   // render in the dynamic region only. Null between blocks and when idle.
   active: ChatBlock | null;
+  teamDebateRows: string[];
   streaming: boolean;
   cumulative: TurnStats;
   send: (prompt: string) => Promise<void>;
@@ -105,6 +108,70 @@ function statsFromRecords(records: SessionRecord[]): TurnStats {
   }, { inTokens: 0, outTokens: 0, costUsd: 0 });
 }
 
+function truncateText(value: string, max = 120): string {
+  return value.length <= max ? value : `${value.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function describeTeamOutput(output: unknown): string {
+  if (!output || typeof output !== "object") return "done";
+  const obj = output as Record<string, unknown>;
+  if ("score" in obj) return `score=${Number(obj.score).toFixed(2)} ${truncateText(String(obj.summary ?? ""), 70)}`.trim();
+  if ("rating" in obj) return `${obj.rating} size=${(Number(obj.sizingPct ?? 0) * 100).toFixed(1)}%`;
+  if ("recommendation" in obj) return truncateText(String(obj.recommendation), 90);
+  if ("answer" in obj) return truncateText(String(obj.answer), 90);
+  if ("approved" in obj) return `approved=${obj.approved}`;
+  if ("thesis" in obj) return truncateText(String(obj.thesis), 90);
+  return "done";
+}
+
+function teamToolLabel(tool: TeamToolEvent["tool"]): string {
+  return tool === "team_question" ? "team" : "analyze";
+}
+
+function formatTeamRunning({ tool, event }: TeamToolEvent): string | null {
+  const label = teamToolLabel(tool);
+  if (event.type === "run_start") return `◇ ${label} subagents running (${event.runId.slice(0, 8)})`;
+  if (event.type === "role_start") {
+    const tag = event.round != null ? `${event.role}#${event.round}` : event.role;
+    return `◇ ${label} subagents running · ${tag}`;
+  }
+  return null;
+}
+
+function formatTeamRoleSummary({ tool, event }: TeamToolEvent): string | null {
+  if (event.type !== "role_end") return null;
+  const label = teamToolLabel(tool);
+  const tag = event.round != null ? `${event.role}#${event.round}` : event.role;
+  return `  ${label} ${tag}: ${describeTeamOutput(event.output)}`;
+}
+
+function formatTeamFinished({ tool, event }: TeamToolEvent, summaries: string[]): string[] | null {
+  const label = teamToolLabel(tool);
+  if (event.type === "final") {
+    return [
+      `✓ ${label} subagents finished`,
+      ...summaries.slice(-8),
+      `  final: ${describeTeamOutput(event.decision)}`,
+    ].slice(-TEAM_DEBATE_ROW_LIMIT);
+  }
+  if (event.type === "error") {
+    return [
+      `✗ ${label} subagents failed${event.role ? ` at ${event.role}` : ""}: ${event.message}`,
+    ];
+  }
+  return null;
+}
+
+function formatTeamToolEvent(event: TeamToolEvent, summaries: string[]): string[] | null {
+  if (event.event.type === "role_delta" || event.event.type === "role_tool" || event.event.type === "role_tool_result") {
+    return null;
+  }
+  const finished = formatTeamFinished(event, summaries);
+  if (finished) return finished;
+  const running = formatTeamRunning(event);
+  return running ? [running] : null;
+}
+
 interface View {
   committed: ChatBlock[];
   active: ChatBlock | null;
@@ -115,12 +182,14 @@ export function useAgentStream(): AgentStreamState {
   // are one setState instead of three. Multiple setStates per microtask
   // were causing Ink's reconciler to throw "Should not already be working".
   const [view, setView] = useState<View>({ committed: [], active: null });
+  const [teamDebateRows, setTeamDebateRows] = useState<string[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [cumulative, setCumulative] = useState<TurnStats>({ inTokens: 0, outTokens: 0, costUsd: 0 });
   const abortRef = useRef(false);
   const turnAbortRef = useRef<AbortController | null>(null);
   const localPromptRef = useRef<string | undefined>(undefined);
   const localTextRef = useRef("");
+  const teamSummaryRef = useRef<string[]>([]);
 
   // Coalesce active-block delta writes: mutate a ref mirror and flush to
   // React state on a fixed cadence so per-token deltas don't each trigger a
@@ -157,6 +226,14 @@ export function useAgentStream(): AgentStreamState {
   useEffect(() => {
     startNewSession();
   }, []);
+
+  useEffect(() => subscribeTeamToolEvents((event) => {
+    if (event.event.type === "run_start") teamSummaryRef.current = [];
+    const roleSummary = formatTeamRoleSummary(event);
+    if (roleSummary) teamSummaryRef.current = [...teamSummaryRef.current, roleSummary].slice(-12);
+    const rows = formatTeamToolEvent(event, teamSummaryRef.current);
+    if (rows) setTeamDebateRows(rows);
+  }), []);
 
   // Append a finalized block straight to the committed list. <Static> in the
   // consumer renders and forgets it — no further repaints for this block.
@@ -202,6 +279,8 @@ export function useAgentStream(): AgentStreamState {
   const send = useCallback(async (prompt: string) => {
     if (!prompt.trim()) return;
     abortRef.current = false;
+    teamSummaryRef.current = [];
+    setTeamDebateRows([]);
     turnAbortRef.current = new AbortController();
     setStreaming(true);
     appendCommitted({ id: nextId(), role: "user", text: prompt });
@@ -314,6 +393,7 @@ export function useAgentStream(): AgentStreamState {
     activeRef.current = null;
     activeDirty.current = false;
     cancelFlushTimer();
+    setTeamDebateRows([]);
     setView({ committed: [], active: null });
   };
 
@@ -377,6 +457,7 @@ export function useAgentStream(): AgentStreamState {
   return {
     committed: view.committed,
     active: view.active,
+    teamDebateRows,
     streaming,
     cumulative,
     send,

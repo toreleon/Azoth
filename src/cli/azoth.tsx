@@ -13,6 +13,11 @@ function main() {
   loadConfig();
   getDb();
 
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error("Azoth TUI requires an interactive terminal (TTY). Run it from a normal shell session.");
+    process.exit(1);
+  }
+
   // Keep the app in the main screen buffer by default so Ink's <Static>
   // history is available in normal terminal scrollback. The alternate screen
   // can still be useful for demos or constrained terminals, but it hides old

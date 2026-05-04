@@ -67,10 +67,11 @@ export async function collectHealth(opts: { probeProviders?: boolean } = {}): Pr
     detail: session.open ? `open ${session.session} (${session.ictTime} ICT)` : `closed (${session.ictTime} ICT: ${session.reason})`,
   });
 
+  const envFileExists = existsSync(paths.env);
   rows.push({
     name: "env_file",
-    ok: existsSync(paths.env),
-    detail: existsSync(paths.env) ? paths.env : `${paths.env} not found; using process env only`,
+    ok: envFileExists || Boolean(process.env.ANTHROPIC_API_KEY),
+    detail: envFileExists ? paths.env : `${paths.env} not found; using process env only`,
   });
 
   if (opts.probeProviders) {
@@ -100,4 +101,3 @@ export function renderHealth(report: HealthReport): string {
     ...report.rows.map((r) => `${r.ok ? "✓" : "✗"} ${r.name}: ${r.detail}`),
   ].join("\n");
 }
-

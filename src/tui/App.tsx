@@ -523,7 +523,7 @@ function AppInner() {
           <Box key={it.key} flexDirection="column" marginBottom={it.kind === "block" ? 1 : 0}>
             {it.kind === "welcome" ? (
               <Welcome
-                version="0.1.0"
+                version="0.0.1"
                 autonomy={autonomy}
                 broker={cfg.broker}
                 cwd={process.cwd()}
@@ -536,6 +536,13 @@ function AppInner() {
       </Static>
       <Box flexDirection="column" marginTop={stream.active || stream.streaming ? 1 : 0}>
         {stream.active ? renderBlock(stream.active, toolResults, columns) : null}
+        {stream.teamDebateRows.length ? (
+          <Box flexDirection="column">
+            {stream.teamDebateRows.map((line, i) => (
+              <Text key={i} color={theme.muted}>{line}</Text>
+            ))}
+          </Box>
+        ) : null}
         {stream.streaming ? (
           <Box>
             <Text color={theme.thinking}>{thinkingDots} </Text>
