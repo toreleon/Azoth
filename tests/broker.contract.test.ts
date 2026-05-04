@@ -8,26 +8,37 @@
  *  place orders.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { unlinkSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { PaperBroker } from "../src/broker/paper.js";
 import { DNSEBroker } from "../src/broker/dnse.js";
+import { closeDb } from "../src/storage/db.js";
 import type { Broker } from "../src/broker/types.js";
 
-const TEST_DB = ".test-broker.db";
+const TEST_DB = join(".azoth", "test-broker.db");
 process.env.AZOTH_DB = TEST_DB;
 
-beforeAll(() => {
-  if (existsSync(TEST_DB)) unlinkSync(TEST_DB);
-});
-
-afterAll(() => {
-  if (existsSync(TEST_DB)) unlinkSync(TEST_DB);
-});
+function removeTestDb() {
+  for (const file of [TEST_DB, `${TEST_DB}-shm`, `${TEST_DB}-wal`]) {
+    if (existsSync(file)) unlinkSync(file);
+  }
+}
 
 describe("PaperBroker contract", () => {
-  const broker = new PaperBroker(500_000_000);
-  broker.reset(500_000_000);
-  broker.setPriceOverride(() => 30.0);
+  let broker: PaperBroker;
+
+  beforeAll(() => {
+    mkdirSync(".azoth", { recursive: true });
+    removeTestDb();
+    broker = new PaperBroker(500_000_000);
+    broker.reset(500_000_000);
+    broker.setPriceOverride(() => 30.0);
+  });
+
+  afterAll(() => {
+    closeDb();
+    removeTestDb();
+  });
 
   it("rejects sub-lot quantities", async () => {
     const o = await broker.placeOrder({

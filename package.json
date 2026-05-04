@@ -1,6 +1,6 @@
 {
   "name": "@toreleon/azoth",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations",
   "type": "module",
   "license": "MIT",
@@ -16,27 +16,18 @@
     "node": ">=20"
   },
   "bin": {
-    "azoth": "dist/src/cli/azoth.js",
-    "azoth-init": "dist/src/cli/azoth-init.js",
-    "azoth-analyze": "dist/src/cli/analyze.js",
-    "azoth-team": "dist/src/cli/team.js",
-    "azoth-backtest": "dist/src/cli/agent-backtest.js"
+    "azoth": "dist/src/cli/azoth.js"
   },
   "files": [
     "dist/src",
     "assets",
-    "docs/releases",
+    "docs",
     "README.md",
     "package.json"
   ],
   "scripts": {
     "azoth": "tsx src/cli/azoth.tsx",
-    "azoth:init": "tsx src/cli/azoth-init.ts",
-    "analyze": "tsx src/cli/analyze.ts",
-    "team": "tsx src/cli/team.ts",
-    "team:chat": "tsx src/cli/team.ts",
-    "backtest": "tsx src/cli/agent-backtest.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "prepack": "pnpm build",

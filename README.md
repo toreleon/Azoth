@@ -1,9 +1,14 @@
-# Azoth
+```text
+ █████╗ ███████╗ ██████╗ ████████╗██╗  ██╗
+██╔══██╗╚══███╔╝██╔═══██╗╚══██╔══╝██║  ██║
+███████║  ███╔╝ ██║   ██║   ██║   ███████║
+██╔══██║ ███╔╝  ██║   ██║   ██║   ██╔══██║
+██║  ██║███████╗╚██████╔╝   ██║   ██║  ██║
+╚═╝  ╚═╝╚══════╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝
+```
 
 Azoth is a professional agent CLI for Vietnam equity research, portfolio
 workflow, and broker-aware trading operations.
-
-![Azoth terminal UI](assets/azoth-tui.svg)
 
 It combines an interactive terminal UI, Claude Agent SDK orchestration,
 market-data tools, multi-agent research, local journaling, paper trading,
@@ -16,7 +21,38 @@ autonomy and risk settings.
 > real orders against a real account. Use advisory or paper mode until you have
 > verified configuration, data quality, account state, and risk limits.
 
-Latest release: [v0.0.1](docs/releases/v0.0.1.md)
+Latest release: [v0.1.0](docs/releases/v0.1.0.md)
+
+## Terminal UI
+
+![Azoth terminal UI showing team analysis, tool calls, and slash commands](assets/azoth-tui.svg)
+
+Azoth opens as a chat-first terminal workspace. Market data, team analysis,
+portfolio state, journal rows, and backtest results render inline, so the
+conversation remains the primary workflow.
+
+### TUI Examples
+
+Run a full team analysis:
+
+```text
+/analyze FPT
+```
+
+Ask a portfolio-level question:
+
+```text
+/team Should we rotate from steel into banks this month?
+```
+
+Check market, portfolio, journal, and backtest state:
+
+```text
+/quote VCB
+/positions
+/journal decisions 10
+/backtest 2025-01-03 2025-04-30 1000000000
+```
 
 ## Highlights
 
@@ -56,7 +92,6 @@ Requirements:
 One-shot usage with `npx`:
 
 ```bash
-npx @toreleon/azoth init
 npx @toreleon/azoth
 ```
 
@@ -73,7 +108,6 @@ Install globally if you prefer a persistent command:
 
 ```bash
 npm install -g @toreleon/azoth
-azoth init
 azoth
 ```
 
@@ -81,23 +115,18 @@ Install from source for development:
 
 ```bash
 pnpm install
-pnpm azoth:init
+pnpm azoth
 ```
 
-Packaged CLI binaries:
+Packaged CLI command:
 
 ```bash
-azoth            # TUI
-azoth init       # initialize ~/.azoth
-azoth-init       # same initializer as a direct bin
-azoth-analyze    # standalone single-ticker team analysis
-azoth-team       # standalone team question CLI
-azoth-backtest   # standalone backtest CLI
+azoth
 ```
 
 The TUI requires an interactive terminal. In non-TTY environments, use the
-standalone commands such as `azoth init`, `pnpm test`, `pnpm build`, or
-programmatic health checks.
+development commands such as `pnpm test`, `pnpm build`, or programmatic health
+checks.
 
 ## Feature Overview
 
@@ -156,6 +185,12 @@ Manage sessions:
 
 Azoth is designed so the top-level chat agent delegates complex investment work
 to a structured team instead of improvising a long single-agent answer.
+
+The team design is documented in more detail in
+[docs/agent-team.md](docs/agent-team.md). It is inspired by the
+[TradingAgents](https://github.com/TauricResearch/TradingAgents) multi-agent
+trading-firm pattern and adapted for Azoth's Vietnam-market data, local TUI,
+SQLite runtime, and broker guardrails.
 
 ```text
 User prompt
@@ -290,12 +325,10 @@ reduce repeated network calls.
 
 ## Release Notes
 
-- [v0.0.2](docs/releases/v0.0.2.md) - packaging update with native SQLite CI
-  install support, npm CLI bin metadata cleanup, and outdated internal docs
-  removed.
-- [v0.0.1](docs/releases/v0.0.1.md) - first packaged release with chat TUI,
-  multi-agent desk, data tools, paper broker, guardrails, backtesting, and DNSE
-  integration foundations.
+- [v0.1.0](docs/releases/v0.1.0.md) - consolidated public baseline with chat
+  TUI, multi-agent desk, Vietnam market tools, local journaling, paper broker,
+  guardrails, backtesting, DNSE integration foundations, npm packaging, and
+  automated release support.
 
 ## Contributing and Releases
 
@@ -337,15 +370,15 @@ The first `place_order` in a live session may trigger an email OTP prompt.
 
 ## Backtesting
 
-Run the team-driven agent backtest:
+Run the team-driven agent backtest from inside the TUI:
 
-```bash
-pnpm backtest
+```text
+/backtest
 ```
 
 Backtests use the paper broker and simulated time. They are intended to validate
-data feeds, accounting behavior, lot sizing, fees, strategy assumptions, and
-risk guardrails before using live broker tools.
+data feeds, accounting behavior, lot sizing, fees, the built-in team replay
+strategy, and risk guardrails before using live broker tools.
 
 ## Development
 
@@ -353,9 +386,6 @@ Common commands:
 
 ```bash
 pnpm azoth          # run the Ink TUI
-pnpm azoth:init     # initialize ~/.azoth
-pnpm analyze        # run the standalone analysis CLI
-pnpm backtest       # run agent backtest
 pnpm test           # run Vitest
 pnpm typecheck      # run TypeScript type checks
 pnpm build          # compile to dist/
