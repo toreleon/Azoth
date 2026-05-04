@@ -8,6 +8,22 @@ export interface GuardrailResult {
   reasons: string[];
 }
 
+const ESTIMATED_ORDER_FEE_PCT = 0.002;
+
+function equityValue(
+  snapshot: Awaited<ReturnType<Broker["snapshot"]>>,
+  ticker: string,
+  refPriceVnd: number,
+): number {
+  return (
+    snapshot.cashVnd +
+    snapshot.positions.reduce((sum, p) => {
+      const px = p.ticker.toUpperCase() === ticker ? refPriceVnd : p.avgCost;
+      return sum + px * p.quantity * 1000;
+    }, 0)
+  );
+}
+
 /**
  * Pre-trade checks for order-capable autonomy modes. `confirm` adds a human
  * gate after these checks pass; `advisory` never reaches the broker.
@@ -21,6 +37,8 @@ export async function checkOrder(
   const reasons: string[] = [];
   const ticker = input.ticker.toUpperCase();
   const notionalVnd = refPriceVnd * input.quantity * 1000;
+  const snapshot = await broker.snapshot();
+  const portfolioValue = equityValue(snapshot, ticker, refPriceVnd);
 
   if (notionalVnd > cfg.risk.max_order_notional_vnd) {
     reasons.push(
@@ -38,14 +56,30 @@ export async function checkOrder(
     reasons.push("drawdown circuit breaker active: BUY orders are frozen this turn");
   }
 
-  if (input.side === "BUY") {
-    const snapshot = await broker.snapshot();
-    const portfolioValue =
-      snapshot.cashVnd +
-      snapshot.positions.reduce(
-        (sum, p) => sum + p.avgCost * p.quantity * 1000,
-        0,
+  if (!cfg.risk.allow_margin) {
+    if ((snapshot.marginUsedVnd ?? 0) > 0) {
+      reasons.push("margin is disabled by risk.allow_margin=false but broker reports margin usage");
+    }
+    if (input.side === "BUY") {
+      const requiredCashVnd = notionalVnd * (1 + ESTIMATED_ORDER_FEE_PCT);
+      if (snapshot.cashVnd < requiredCashVnd) {
+        reasons.push(
+          `margin disabled: BUY requires about ${requiredCashVnd.toFixed(0)} VND cash, available ${snapshot.cashVnd.toFixed(0)} VND`,
+        );
+      }
+    }
+  }
+
+  if (snapshot.initialCashVnd != null && snapshot.initialCashVnd > 0) {
+    const lossPct = 1 - portfolioValue / snapshot.initialCashVnd;
+    if (lossPct > cfg.risk.max_daily_loss_pct) {
+      reasons.push(
+        `loss ${(lossPct * 100).toFixed(1)}% exceeds max_daily_loss_pct ${(cfg.risk.max_daily_loss_pct * 100).toFixed(1)}%; trading halted`,
       );
+    }
+  }
+
+  if (input.side === "BUY") {
     const existing = snapshot.positions.find((p) => p.ticker === ticker);
     const projectedVnd =
       ((existing?.quantity ?? 0) + input.quantity) * refPriceVnd * 1000;

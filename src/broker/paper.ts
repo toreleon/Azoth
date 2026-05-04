@@ -353,6 +353,12 @@ export class PaperBroker implements Broker {
       quantity: r.quantity,
       avgCost: r.avg_cost,
     }));
-    return { broker: this.name, cashVnd: state.cash_vnd, positions };
+    return {
+      broker: this.name,
+      cashVnd: state.cash_vnd,
+      positions,
+      initialCashVnd: this.initialCashVnd,
+      marginUsedVnd: 0,
+    };
   }
 }

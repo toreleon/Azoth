@@ -38,6 +38,10 @@ export interface BrokerSnapshot {
   broker: string;
   cashVnd: number;
   positions: BrokerPosition[];
+  /** Optional equity baseline used for loss guardrails. VND. */
+  initialCashVnd?: number;
+  /** Optional broker-reported margin usage. VND. */
+  marginUsedVnd?: number;
 }
 
 export interface Broker {

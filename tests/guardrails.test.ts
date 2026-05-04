@@ -75,3 +75,42 @@ describe("guardrails in backtest mode", () => {
     expect(result.reasons.join(" ")).not.toContain("ticker_whitelist");
   });
 });
+
+describe("configured trading risk", () => {
+  it("blocks buys that would require margin when margin is disabled", async () => {
+    const result = await checkOrder(
+      {
+        ...broker,
+        async snapshot() {
+          return { broker: "paper", cashVnd: 1_000_000, positions: [] };
+        },
+      },
+      { ticker: "FPT", side: "BUY", type: "MARKET", quantity: 100 },
+      30,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.reasons.join(" ")).toContain("margin disabled");
+  });
+
+  it("halts trading when the broker baseline is past max_daily_loss_pct", async () => {
+    const result = await checkOrder(
+      {
+        ...broker,
+        async snapshot() {
+          return {
+            broker: "paper",
+            cashVnd: 900_000_000,
+            positions: [],
+            initialCashVnd: 1_000_000_000,
+          };
+        },
+      },
+      { ticker: "FPT", side: "SELL", type: "MARKET", quantity: 100 },
+      30,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.reasons.join(" ")).toContain("max_daily_loss_pct");
+  });
+});

@@ -13,6 +13,7 @@ export interface RoleRunOptions<T> {
   emit: (ev: TeamEvent) => void;
   modelOverride?: string;
   allowWebSearch?: boolean;
+  signal?: AbortSignal;
 }
 
 interface RawResult {
@@ -57,11 +58,20 @@ function buildOptions(
   return opts;
 }
 
+function abortControllerFromSignal(signal: AbortSignal | undefined): AbortController {
+  const ctrl = new AbortController();
+  if (signal?.aborted) ctrl.abort(signal.reason);
+  else signal?.addEventListener("abort", () => ctrl.abort(signal.reason), { once: true });
+  return ctrl;
+}
+
 export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; raw: RawResult }> {
-  const { role, systemPrompt, userPrompt, schema, round, emit, modelOverride, allowWebSearch } = opts;
+  const { role, systemPrompt, userPrompt, schema, round, emit, modelOverride, allowWebSearch, signal } = opts;
+  if (signal?.aborted) throw new Error("aborted");
   emit({ type: "role_start", role, round });
 
   const sdkOpts = buildOptions(role, systemPrompt, modelOverride, allowWebSearch);
+  sdkOpts.abortController = abortControllerFromSignal(signal);
   const stream = query({ prompt: userPrompt, options: sdkOpts });
 
   let text = "";
@@ -73,6 +83,7 @@ export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; 
   let sessionId: string | undefined;
 
   for await (const message of stream) {
+    if (signal?.aborted) throw new Error("aborted");
     if (message.type === "stream_event") {
       const ev = (message as { event: any }).event;
       if (ev?.type === "content_block_start") {

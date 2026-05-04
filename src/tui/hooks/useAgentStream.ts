@@ -118,6 +118,7 @@ export function useAgentStream(): AgentStreamState {
   const [streaming, setStreaming] = useState(false);
   const [cumulative, setCumulative] = useState<TurnStats>({ inTokens: 0, outTokens: 0, costUsd: 0 });
   const abortRef = useRef(false);
+  const turnAbortRef = useRef<AbortController | null>(null);
   const localPromptRef = useRef<string | undefined>(undefined);
   const localTextRef = useRef("");
 
@@ -201,11 +202,12 @@ export function useAgentStream(): AgentStreamState {
   const send = useCallback(async (prompt: string) => {
     if (!prompt.trim()) return;
     abortRef.current = false;
+    turnAbortRef.current = new AbortController();
     setStreaming(true);
     appendCommitted({ id: nextId(), role: "user", text: prompt });
 
     try {
-      for await (const m of runTurn(prompt)) {
+      for await (const m of runTurn(prompt, { signal: turnAbortRef.current.signal })) {
         if (abortRef.current) break;
         if (m.type === "stream_event") {
           const ev = (m as { event: any }).event;
@@ -275,6 +277,7 @@ export function useAgentStream(): AgentStreamState {
     } finally {
       finalizeActive();
       setStreaming(false);
+      turnAbortRef.current = null;
     }
   }, []);
 
@@ -304,6 +307,7 @@ export function useAgentStream(): AgentStreamState {
 
   const abort = useCallback(() => {
     abortRef.current = true;
+    turnAbortRef.current?.abort();
   }, []);
 
   const clearAll = () => {

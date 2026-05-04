@@ -111,12 +111,13 @@ export function buildMcpServer() {
   });
 }
 
-export function buildOptions(opts: { resume?: string } = {}): Options {
+export function buildOptions(opts: { resume?: string; abortController?: AbortController } = {}): Options {
   const cfg = loadConfig();
   return {
     model: cfg.model,
     systemPrompt: buildSystemPrompt(),
     ...(opts.resume ? { resume: opts.resume } : {}),
+    ...(opts.abortController ? { abortController: opts.abortController } : {}),
     mcpServers: {
       vnstock: buildMcpServer(),
     },
@@ -274,8 +275,12 @@ function recordSessionId(sdkSessionId: string, cfg: ReturnType<typeof loadConfig
   });
 }
 
-export async function* runTurn(prompt: string) {
+export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = {}) {
   const cfg = loadConfig();
+  const abortController = new AbortController();
+  const abortFromSignal = () => abortController.abort(opts.signal?.reason);
+  if (opts.signal?.aborted) abortFromSignal();
+  else opts.signal?.addEventListener("abort", abortFromSignal, { once: true });
   const session = ensureActiveChatSession(prompt);
   activeLocalSessionId = session.id;
   activeSessionId = session.sdkSessionId;
@@ -305,7 +310,7 @@ export async function* runTurn(prompt: string) {
   // find that conversation (subprocess exits with code 1 on startup), drop
   // the stale id and retry once with a fresh session.
   const startStream = (resume: string | undefined) =>
-    query({ prompt: sdkPrompt, options: buildOptions({ resume }) });
+    query({ prompt: sdkPrompt, options: buildOptions({ resume, abortController }) });
   type TextBlock = { type: "assistant" | "thinking"; text: string };
   type ToolBlock = { type: "tool_use"; toolName?: string; toolUseId?: string; toolInput: string };
   let currentBlock: TextBlock | ToolBlock | null = null;
@@ -347,9 +352,10 @@ export async function* runTurn(prompt: string) {
   let attempt: AsyncGenerator<any, void, void> = consume(activeSessionId);
   let triedFreshRetry = activeSessionId == null;
 
-  while (true) {
-    try {
-      for await (const message of attempt) {
+  try {
+    while (true) {
+      try {
+        for await (const message of attempt) {
     if (message.type === "stream_event") {
       const ev = (message as { event: any }).event;
       if (ev?.type === "content_block_start") {
@@ -438,20 +444,23 @@ export async function* runTurn(prompt: string) {
         });
       }
     }
-    yield message;
+      yield message;
+        }
+        break;
+      } catch (err) {
+        const msg = (err as Error)?.message ?? "";
+        if (!triedFreshRetry && /exited with code 1|No conversation found/i.test(msg)) {
+          triedFreshRetry = true;
+          activeSessionId = undefined;
+          currentBlock = null;
+          attempt = consume(undefined);
+          continue;
+        }
+        throw err;
       }
-      break;
-    } catch (err) {
-      const msg = (err as Error)?.message ?? "";
-      if (!triedFreshRetry && /exited with code 1|No conversation found/i.test(msg)) {
-        triedFreshRetry = true;
-        activeSessionId = undefined;
-        currentBlock = null;
-        attempt = consume(undefined);
-        continue;
-      }
-      throw err;
     }
+  } finally {
+    opts.signal?.removeEventListener("abort", abortFromSignal);
+    flushCurrentBlock();
   }
-  flushCurrentBlock();
 }

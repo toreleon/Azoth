@@ -63,6 +63,11 @@ export interface RunTeamOptions {
   emit?: (ev: TeamEvent) => void;
   modelOverride?: string;
   allowWebSearch?: boolean;
+  signal?: AbortSignal;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error("aborted");
 }
 
 const PortfolioOutputSchema = z.object({
@@ -111,6 +116,7 @@ export async function runTeamAnalysis(
 
   recordTeamRunStart(runId, ticker, asOfDateIso);
   emit({ type: "run_start", runId, ticker });
+  throwIfAborted(opts.signal);
 
   const state: TeamState = {
     runId,
@@ -131,6 +137,7 @@ export async function runTeamAnalysis(
         emit,
         modelOverride: opts.modelOverride,
         allowWebSearch: opts.allowWebSearch,
+        signal: opts.signal,
       });
       const report: AnalystReport = {
         role: def.role,
@@ -146,6 +153,7 @@ export async function runTeamAnalysis(
 
   // Phase 2: bull/bear debate, N rounds.
   for (let round = 1; round <= debateRounds; round++) {
+    throwIfAborted(opts.signal);
     const { output: bullOut, raw: bullRaw } = await runRole({
       role: "bull",
       systemPrompt: SYSTEM_OPERATING_RULES,
@@ -155,6 +163,7 @@ export async function runTeamAnalysis(
       emit,
       modelOverride: opts.modelOverride,
       allowWebSearch: opts.allowWebSearch,
+      signal: opts.signal,
     });
     const bullReport: ResearchReport = {
       role: "bull",
@@ -174,6 +183,7 @@ export async function runTeamAnalysis(
       emit,
       modelOverride: opts.modelOverride,
       allowWebSearch: opts.allowWebSearch,
+      signal: opts.signal,
     });
     const bearReport: ResearchReport = {
       role: "bear",
@@ -194,6 +204,7 @@ export async function runTeamAnalysis(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   const researchPlan = {
     recommendation: researchPlanOut.recommendation,
@@ -212,6 +223,7 @@ export async function runTeamAnalysis(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   const trader: TraderDecision = {
     rating: traderOut.rating,
@@ -232,6 +244,7 @@ export async function runTeamAnalysis(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   const risk: RiskReview = {
     approved: riskOut.approved,
@@ -258,6 +271,7 @@ export async function runTeamAnalysis(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   recordRoleOutput(runId, "portfolio", 0, pmOut, pmRaw.usage);
 
@@ -305,6 +319,7 @@ export async function runTeamQuestion(
 
   recordTeamRunStart(runId, "TEAM", asOfDateIso);
   emit({ type: "run_start", runId, ticker: "TEAM" });
+  throwIfAborted(opts.signal);
 
   const state: TeamQuestionState = {
     runId,
@@ -322,6 +337,7 @@ export async function runTeamQuestion(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   const bullReport: ResearchReport = {
     role: "bull",
@@ -341,6 +357,7 @@ export async function runTeamQuestion(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   const bearReport: ResearchReport = {
     role: "bear",
@@ -359,6 +376,7 @@ export async function runTeamQuestion(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   const risk: RiskReview = {
     approved: riskOut.approved,
@@ -377,6 +395,7 @@ export async function runTeamQuestion(
     emit,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
+    signal: opts.signal,
   });
   const decision: TeamQuestionDecision = {
     answer: finalOut.answer,

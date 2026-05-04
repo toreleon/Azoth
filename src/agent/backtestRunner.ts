@@ -90,6 +90,10 @@ function positionValue(p: BrokerPosition, price: number | null): number {
   return (price ?? p.avgCost) * p.quantity * 1000;
 }
 
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error("aborted");
+}
+
 async function markToMarket(
   broker: Awaited<ReturnType<typeof getBacktestBroker>>,
   priceAt: (ticker: string) => number | null,
@@ -255,107 +259,112 @@ export async function runBacktestSession(
   let peakMtm = opts.initialCash;
   let freezeBuys = false;
 
-  for (const asOf of fridays) {
-    if (cb.signal?.aborted) break;
-    const dateIso = dateOf(asOf);
-    const priceOverride = (sym: string): number | null => {
-      const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
-      return series.length ? series[series.length - 1]!.close : null;
-    };
-    broker.setPriceOverride(priceOverride);
-    cb.onTurnStart?.({ asOf, dateIso });
+  try {
+    for (const asOf of fridays) {
+      throwIfAborted(cb.signal);
+      const dateIso = dateOf(asOf);
+      const priceOverride = (sym: string): number | null => {
+        const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
+        return series.length ? series[series.length - 1]!.close : null;
+      };
+      broker.setPriceOverride(priceOverride);
+      cb.onTurnStart?.({ asOf, dateIso });
 
-    const prompt = `Team backtest ${dateIso}: discover ${profile.params.discoveryCriterion}/${profile.params.preferredUniverse}, analyze candidates, execute broker orders from final decisions.`;
-    let response = "";
-    let inTokens = 0;
-    let outTokens = 0;
-    let costUsd = 0;
+      const prompt = `Team backtest ${dateIso}: discover ${profile.params.discoveryCriterion}/${profile.params.preferredUniverse}, analyze candidates, execute broker orders from final decisions.`;
+      let response = "";
+      let inTokens = 0;
+      let outTokens = 0;
+      let costUsd = 0;
 
-    try {
-      setActiveAsOf({ asOfSec: asOf, brokerName, freezeBuys });
-      const discovery = await discoverTickers({
-        criterion: profile.params.discoveryCriterion,
-        universe: profile.params.preferredUniverse,
-        limit: maxCandidates,
-      });
-      const held = (await broker.snapshot()).positions.map((p) => p.ticker);
-      const tickers = Array.from(
-        new Set([...held, ...discovery.candidates.map((c) => c.ticker)]),
-      ).slice(0, maxCandidates);
-
-      const decisions: FinalDecision[] = [];
-      for (const ticker of tickers) {
-        if (cb.signal?.aborted) break;
-        const result = await runTeamAnalysis(
-          { ticker, asOfDateIso: dateIso, debateRounds: 1 },
-          {
-            allowWebSearch: false,
-            emit: (ev) => {
-              cb.onTeamEvent?.(ev, { asOf, dateIso, ticker });
-              if (ev.type === "role_end") {
-                const usage = ev.usage ?? {};
-                inTokens += usage.inputTokens ?? 0;
-                outTokens += usage.outputTokens ?? 0;
-                costUsd += usage.costUsd ?? 0;
-              }
-            },
-          },
-        );
-        decisions.push(result.decision);
-        response += `[${ticker}] ${result.decision.rating} ${(result.decision.sizingPct * 100).toFixed(1)}%: ${result.decision.rationale}\n`;
-
-        const equity = await markToMarket(broker, priceOverride);
-        const order = await applyTeamDecision({
-          broker,
-          decision: result.decision,
-          equityVnd: equity,
-          price: priceOverride(ticker),
-          maxPositionPct: Math.min(profile.params.maxPositionPct, cfg.risk.max_position_pct),
-          freezeBuys,
+      try {
+        setActiveAsOf({ asOfSec: asOf, brokerName, freezeBuys });
+        const discovery = await discoverTickers({
+          criterion: profile.params.discoveryCriterion,
+          universe: profile.params.preferredUniverse,
+          limit: maxCandidates,
         });
-        if (order) cb.onOrder?.(order, { asOf, dateIso, decision: result.decision });
+        const held = (await broker.snapshot()).positions.map((p) => p.ticker);
+        const tickers = Array.from(
+          new Set([...held, ...discovery.candidates.map((c) => c.ticker)]),
+        ).slice(0, maxCandidates);
+
+        const decisions: FinalDecision[] = [];
+        for (const ticker of tickers) {
+          throwIfAborted(cb.signal);
+          const result = await runTeamAnalysis(
+            { ticker, asOfDateIso: dateIso, debateRounds: 1 },
+            {
+              allowWebSearch: false,
+              signal: cb.signal,
+              emit: (ev) => {
+                cb.onTeamEvent?.(ev, { asOf, dateIso, ticker });
+                if (ev.type === "role_end") {
+                  const usage = ev.usage ?? {};
+                  inTokens += usage.inputTokens ?? 0;
+                  outTokens += usage.outputTokens ?? 0;
+                  costUsd += usage.costUsd ?? 0;
+                }
+              },
+            },
+          );
+          throwIfAborted(cb.signal);
+          decisions.push(result.decision);
+          response += `[${ticker}] ${result.decision.rating} ${(result.decision.sizingPct * 100).toFixed(1)}%: ${result.decision.rationale}\n`;
+
+          const equity = await markToMarket(broker, priceOverride);
+          const order = await applyTeamDecision({
+            broker,
+            decision: result.decision,
+            equityVnd: equity,
+            price: priceOverride(ticker),
+            maxPositionPct: Math.min(profile.params.maxPositionPct, cfg.risk.max_position_pct),
+            freezeBuys,
+          });
+          if (order) cb.onOrder?.(order, { asOf, dateIso, decision: result.decision });
+        }
+      } catch (err) {
+        if ((err as Error).message === "aborted") throw err;
+        cb.onTurnError?.(err as Error, { asOf, dateIso });
+      } finally {
+        setActiveAsOf(null);
       }
-    } catch (err) {
-      cb.onTurnError?.(err as Error, { asOf, dateIso });
-    } finally {
-      setActiveAsOf(null);
+
+      db.prepare(
+        `INSERT OR REPLACE INTO backtest_turns
+           (run_id, as_of, session_id, prompt, response, in_tokens, out_tokens, cost_usd,
+            cache_read_tokens, cache_creation_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(runId, asOf, null, prompt, response, inTokens, outTokens, costUsd, 0, 0);
+
+      const snap = await broker.snapshot();
+      let mtm = snap.cashVnd;
+      for (const p of snap.positions) {
+        const px = priceOverride(p.ticker);
+        if (px != null) mtm += px * p.quantity * 1000;
+      }
+      const idxNow = vnindexAt(asOf) ?? vnindexBaseline;
+      const benchmarkMtm = opts.initialCash * (idxNow / vnindexBaseline);
+
+      db.prepare(
+        `INSERT OR REPLACE INTO backtest_equity
+           (run_id, as_of, cash_vnd, mtm_vnd, benchmark_mtm_vnd)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).run(runId, asOf, snap.cashVnd, mtm, benchmarkMtm);
+
+      cb.onEquity?.({ asOf, dateIso, cashVnd: snap.cashVnd, mtmVnd: mtm, benchmarkMtmVnd: benchmarkMtm });
+
+      peakMtm = Math.max(peakMtm, mtm);
+      const drawdown = 1 - mtm / peakMtm;
+      freezeBuys = drawdown > profile.params.maxDrawdownFloor;
     }
-
-    db.prepare(
-      `INSERT OR REPLACE INTO backtest_turns
-         (run_id, as_of, session_id, prompt, response, in_tokens, out_tokens, cost_usd,
-          cache_read_tokens, cache_creation_tokens)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(runId, asOf, null, prompt, response, inTokens, outTokens, costUsd, 0, 0);
-
-    const snap = await broker.snapshot();
-    let mtm = snap.cashVnd;
-    for (const p of snap.positions) {
-      const px = priceOverride(p.ticker);
-      if (px != null) mtm += px * p.quantity * 1000;
-    }
-    const idxNow = vnindexAt(asOf) ?? vnindexBaseline;
-    const benchmarkMtm = opts.initialCash * (idxNow / vnindexBaseline);
-
-    db.prepare(
-      `INSERT OR REPLACE INTO backtest_equity
-         (run_id, as_of, cash_vnd, mtm_vnd, benchmark_mtm_vnd)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(runId, asOf, snap.cashVnd, mtm, benchmarkMtm);
-
-    cb.onEquity?.({ asOf, dateIso, cashVnd: snap.cashVnd, mtmVnd: mtm, benchmarkMtmVnd: benchmarkMtm });
-
-    peakMtm = Math.max(peakMtm, mtm);
-    const drawdown = 1 - mtm / peakMtm;
-    freezeBuys = drawdown > profile.params.maxDrawdownFloor;
+  } finally {
+    broker.setPriceOverride(null);
+    setActiveAsOf(null);
+    db.prepare("UPDATE backtest_runs SET finished_at = ? WHERE id = ?").run(
+      Math.floor(Date.now() / 1000),
+      runId,
+    );
   }
-
-  broker.setPriceOverride(null);
-  setActiveAsOf(null);
-  db.prepare("UPDATE backtest_runs SET finished_at = ? WHERE id = ?").run(
-    Math.floor(Date.now() / 1000),
-    runId,
-  );
 
   const equityRows = db
     .prepare("SELECT as_of, mtm_vnd, benchmark_mtm_vnd FROM backtest_equity WHERE run_id = ? ORDER BY as_of")
@@ -375,11 +384,11 @@ export async function runBacktestSession(
   const finalBench = last?.benchmark_mtm_vnd ?? opts.initialCash;
   const totalReturn = (finalMtm / opts.initialCash - 1) * 100;
   const benchReturn = (finalBench / opts.initialCash - 1) * 100;
-  const peak = equityRows.reduce((m, r) => Math.max(m, r.mtm_vnd), opts.initialCash);
-  const maxDD =
-    equityRows.length === 0
-      ? 0
-      : equityRows.reduce((mn, r) => Math.min(mn, r.mtm_vnd / peak - 1), 0);
+  let runningPeak = opts.initialCash;
+  const maxDD = equityRows.reduce((mn, r) => {
+    runningPeak = Math.max(runningPeak, r.mtm_vnd);
+    return Math.min(mn, r.mtm_vnd / runningPeak - 1);
+  }, 0);
   const totalCost = turnRows.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
   const totalIn = turnRows.reduce((s, r) => s + (r.in_tokens ?? 0), 0);
   const totalOut = turnRows.reduce((s, r) => s + (r.out_tokens ?? 0), 0);
