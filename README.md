@@ -290,6 +290,9 @@ reduce repeated network calls.
 
 ## Release Notes
 
+- [v0.0.2](docs/releases/v0.0.2.md) - packaging update with native SQLite CI
+  install support, npm CLI bin metadata cleanup, and outdated internal docs
+  removed.
 - [v0.0.1](docs/releases/v0.0.1.md) - first packaged release with chat TUI,
   multi-agent desk, data tools, paper broker, guardrails, backtesting, and DNSE
   integration foundations.
