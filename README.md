@@ -7,15 +7,16 @@
 ╚═╝  ╚═╝╚══════╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝
 ```
 
-Azoth is a professional agent CLI for Vietnam equity research, portfolio
-workflow, and broker-aware trading operations.
+Azoth is an AI stock trading assistant and terminal CLI for the Vietnam stock
+market, built for equity research, portfolio analysis, backtesting, paper
+trading, and broker-aware trading workflows.
 
 It combines an interactive terminal UI, Claude Agent SDK orchestration,
-market-data tools, multi-agent research, local journaling, paper trading,
-backtesting, and optional DNSE Entrade X live broker integration. Azoth is
-designed for disciplined decision support: every recommendation should be
-grounded in tool output, written to a journal, and constrained by explicit
-autonomy and risk settings.
+Vietnam market-data tools, multi-agent stock research, local journaling,
+configurable interval backtests, and optional DNSE Entrade X live broker
+integration. Azoth is designed for disciplined decision support across HOSE,
+HNX, and UPCOM: every recommendation should be grounded in tool output, written
+to a journal, and constrained by explicit autonomy and risk settings.
 
 > Azoth is investment software, not financial advice. Live trading can place
 > real orders against a real account. Use advisory or paper mode until you have
