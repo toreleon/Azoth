@@ -149,8 +149,9 @@ describe("Azoth TUI", () => {
 
       rendered.stdin.write("2");
       await tick();
-      await type(rendered.stdin, "zai-key");
+      expect(strip(rendered.lastFrame() ?? "")).toContain("Custom endpoint base URL");
       await type(rendered.stdin, "https://open.bigmodel.cn/api/anthropic");
+      await type(rendered.stdin, "zai-key");
       await type(rendered.stdin, "glm-5.1");
 
       const configText = readFileSync(join(setupHome, "config.yaml"), "utf8");

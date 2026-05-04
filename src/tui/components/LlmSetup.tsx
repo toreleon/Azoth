@@ -21,10 +21,19 @@ export interface LlmSetupProps {
 export function LlmSetup({ onComplete }: LlmSetupProps) {
   const cfg = loadConfig();
   const paths = azothPaths();
-  const [step, setStep] = useState<Step>("provider");
-  const [provider, setProvider] = useState<Provider>("anthropic");
-  const [providerIdx, setProviderIdx] = useState(0);
-  const [apiKey, setApiKey] = useState("");
+  const initialProvider = cfg.llm.provider;
+  const initialStep: Step =
+    cfg.llm.api_key.trim()
+      ? initialProvider === "compatible" && !cfg.llm.base_url.trim()
+        ? "baseUrl"
+        : "provider"
+      : initialProvider === "compatible"
+        ? "baseUrl"
+        : "provider";
+  const [step, setStep] = useState<Step>(initialStep);
+  const [provider, setProvider] = useState<Provider>(initialProvider);
+  const [providerIdx, setProviderIdx] = useState(initialProvider === "compatible" ? 1 : 0);
+  const [apiKey, setApiKey] = useState(cfg.llm.api_key);
   const [baseUrl, setBaseUrl] = useState(cfg.llm.base_url);
   const [model, setModel] = useState(cfg.model);
   const [input, setInput] = useState("");
@@ -38,7 +47,7 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
       if (key.return) {
         const selected = PROVIDERS[providerIdx]!;
         setProvider(selected.id);
-        setStep("apiKey");
+        setStep(selected.id === "compatible" ? "baseUrl" : "apiKey");
       }
       if (inp === "1" || inp.toLowerCase() === "a") {
         setProvider("anthropic");
@@ -48,7 +57,7 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
       if (inp === "2" || inp.toLowerCase() === "c") {
         setProvider("compatible");
         setProviderIdx(1);
-        setStep("apiKey");
+        setStep("baseUrl");
       }
     }
   });
@@ -64,7 +73,7 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
       }
       setApiKey(value);
       setInput("");
-      setStep(provider === "compatible" ? "baseUrl" : "model");
+      setStep("model");
       return;
     }
 
@@ -75,7 +84,7 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
       }
       setBaseUrl(value);
       setInput("");
-      setStep("model");
+      setStep(apiKey.trim() ? "model" : "apiKey");
       return;
     }
 
@@ -159,6 +168,9 @@ export function LlmSetup({ onComplete }: LlmSetupProps) {
 
           {step !== "provider" && step !== "done" ? (
             <Box marginTop={1} flexDirection="column">
+              {provider === "compatible" ? (
+                <Text dimColor>Setup order: custom endpoint → API key → model</Text>
+              ) : null}
               <Text color={theme.brand} bold>{label}</Text>
               <Box borderStyle="round" borderColor={error ? theme.down : theme.muted} paddingX={1}>
                 <TextInput
