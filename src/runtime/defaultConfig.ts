@@ -23,6 +23,19 @@ team:
 # Broker selection.
 broker: paper
 
+# FHSC broker settings. Use /setup-fhsc in the TUI to fill these safely.
+fhsc:
+  sub_account_id: ""
+  account_id: ""
+  base_url: https://api.vinasecurities.com
+  access_token: ""
+  access_key: ""
+  device_id: ""
+  user_id: ""
+  cust_id: ""
+  api_key: ""
+  api_secret: ""
+
 # Risk guardrails.
 risk:
   max_position_pct: 0.15

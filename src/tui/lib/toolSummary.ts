@@ -83,13 +83,15 @@ export function summarizeToolResult(name: string, raw: string | undefined): stri
         const positions = obj.positions?.length ?? 0;
         return `cash ${formatBigVnd(cash)} · ${positions} positions`;
       }
-      case "journal_read": {
-        const rows = obj.rows ?? obj;
-        if (Array.isArray(rows)) return `${rows.length} entries`;
-        break;
+      case "portfolio_list": {
+        const positions = obj.positions?.length ?? 0;
+        const equity = obj.total_equity_vnd ?? obj.totals?.market_value_vnd;
+        return `equity ${formatBigVnd(equity)} · cash ${formatBigVnd(obj.cash_vnd)} · ${positions} positions`;
       }
-      case "journal_append":
-        return obj.ok ? "appended" : "ok";
+      case "account_history": {
+        const counts = obj.counts ?? obj;
+        return `orders ${counts.orders ?? 0} · fills ${counts.fills ?? 0} · tx ${counts.transactions ?? 0} · rights ${counts.rights ?? 0}`;
+      }
     }
   } catch {}
 

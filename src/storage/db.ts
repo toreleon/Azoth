@@ -41,7 +41,7 @@ function migrate(d: Database.Database) {
 
   const decisionCols = d.prepare("PRAGMA table_info(decisions)").all() as { name: string }[];
   const haveDecisions = new Set(decisionCols.map((c) => c.name));
-  if (!haveDecisions.has("rating")) {
+  if (decisionCols.length > 0 && !haveDecisions.has("rating")) {
     d.exec("ALTER TABLE decisions ADD COLUMN rating TEXT");
   }
 

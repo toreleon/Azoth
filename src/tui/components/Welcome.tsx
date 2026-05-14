@@ -18,7 +18,6 @@ const TIPS = [
   ["/autonomy", "persist advisory · confirm · auto"],
   ["/health", "runtime · broker · provider checks"],
   ["/backtest", "team-driven interval simulation"],
-  ["/journal", "decisions · orders · fills · alerts"],
 ];
 
 export interface WelcomeProps {
@@ -76,7 +75,7 @@ export function Welcome({ version, autonomy, broker, cwd }: WelcomeProps) {
         <Box marginTop={1} flexDirection="column">
           <Text color={theme.accent} bold>What&apos;s new</Text>
           <Text dimColor>· Chat-first layout — market data flows into chat, no dashboard grid.</Text>
-          <Text dimColor>· /team, /analyze, /quote, /positions, /journal, /backtest render inline.</Text>
+          <Text dimColor>· /team, /analyze, /quote, /positions, and /backtest render inline.</Text>
           <Text dimColor>· /autonomy persists advisory, confirm, or auto mode.</Text>
         </Box>
       </Box>

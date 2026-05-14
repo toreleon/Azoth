@@ -6,19 +6,6 @@ export const SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS kv_cache (
 
 CREATE INDEX IF NOT EXISTS kv_cache_expires_idx ON kv_cache(expires_at);
 
-CREATE TABLE IF NOT EXISTS decisions (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  created_at  INTEGER NOT NULL,
-  ticker      TEXT NOT NULL,
-  action      TEXT NOT NULL,
-  rating      TEXT,
-  rationale   TEXT NOT NULL,
-  exit_plan   TEXT,
-  source_run  TEXT
-);
-
-CREATE INDEX IF NOT EXISTS decisions_ticker_idx ON decisions(ticker, created_at);
-
 CREATE TABLE IF NOT EXISTS broker_state (
   broker     TEXT PRIMARY KEY,
   cash_vnd   REAL NOT NULL,
@@ -98,11 +85,4 @@ CREATE TABLE IF NOT EXISTS backtest_equity (
   PRIMARY KEY (run_id, as_of)
 );
 
-CREATE TABLE IF NOT EXISTS alerts (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  created_at  INTEGER NOT NULL,
-  ticker      TEXT,
-  level       TEXT NOT NULL,
-  message     TEXT NOT NULL
-);
 `;

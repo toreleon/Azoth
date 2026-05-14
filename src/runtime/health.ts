@@ -51,7 +51,9 @@ export async function collectHealth(opts: { probeProviders?: boolean } = {}): Pr
       detail:
         cfg.broker === "dnse"
           ? `dnse armed=${process.env.AZOTH_LIVE_TRADING === "1"}`
-          : "paper broker selected",
+          : cfg.broker === "fhsc"
+            ? `fhsc read-only sub_account=${Boolean(cfg.fhsc.sub_account_id || process.env.FHSC_SUB_ACCOUNT_ID) ? "set" : "missing"}`
+            : "paper broker selected",
     });
     try {
       const broker = getBroker();

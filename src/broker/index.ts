@@ -1,5 +1,6 @@
 import { PaperBroker } from "./paper.js";
 import { DNSEBroker } from "./dnse.js";
+import { FHSCBroker } from "./fhsc.js";
 import type { Broker } from "./types.js";
 import { loadConfig } from "../config/loader.js";
 import { currentBrokerName } from "../agent/clock.js";
@@ -29,6 +30,9 @@ export function getBroker(): Broker {
       return cached;
     case "dnse":
       cached = new DNSEBroker();
+      return cached;
+    case "fhsc":
+      cached = new FHSCBroker();
       return cached;
   }
 }

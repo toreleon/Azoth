@@ -6,19 +6,6 @@ CREATE TABLE IF NOT EXISTS kv_cache (
 
 CREATE INDEX IF NOT EXISTS kv_cache_expires_idx ON kv_cache(expires_at);
 
-CREATE TABLE IF NOT EXISTS decisions (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  created_at  INTEGER NOT NULL,
-  ticker      TEXT NOT NULL,
-  action      TEXT NOT NULL,         -- legacy BUY | SELL | HOLD
-  rating      TEXT,                  -- Buy | Overweight | Hold | Underweight | Sell
-  rationale   TEXT NOT NULL,         -- 4-dimension synthesis
-  exit_plan   TEXT,                  -- thresholds for stop/take-profit
-  source_run  TEXT                   -- session id, optional
-);
-
-CREATE INDEX IF NOT EXISTS decisions_ticker_idx ON decisions(ticker, created_at);
-
 -- Paper / live broker state (Phase 4+)
 
 CREATE TABLE IF NOT EXISTS broker_state (
@@ -100,12 +87,4 @@ CREATE TABLE IF NOT EXISTS backtest_equity (
   mtm_vnd           REAL NOT NULL,
   benchmark_mtm_vnd REAL NOT NULL,
   PRIMARY KEY (run_id, as_of)
-);
-
-CREATE TABLE IF NOT EXISTS alerts (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  created_at  INTEGER NOT NULL,
-  ticker      TEXT,
-  level       TEXT NOT NULL,         -- info | warn | critical
-  message     TEXT NOT NULL
 );

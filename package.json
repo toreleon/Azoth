@@ -1,6 +1,6 @@
 {
   "name": "@toreleon/azoth",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "AI stock trading assistant CLI for Vietnam equity research, portfolio analysis, backtesting, paper trading, and DNSE broker workflows",
   "type": "module",
   "license": "MIT",
@@ -36,16 +36,18 @@
     "dist/src",
     "assets",
     "docs",
+    "ROADMAP.md",
     "README.md",
     "package.json"
   ],
   "scripts": {
     "azoth": "tsx src/cli/azoth.tsx",
-    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json && chmod +x dist/src/cli/azoth.js",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "prepack": "pnpm build",
     "release": "pnpm build && pnpm publish --access public --provenance",
+    "smoke:packaged": "pnpm build && node dist/src/cli/azoth.js --version",
     "start": "node dist/src/cli/azoth.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"

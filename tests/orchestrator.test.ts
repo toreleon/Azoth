@@ -3,6 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+vi.setConfig({ testTimeout: 15_000 });
+
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   tool: (name: string, _desc: string, _schema: unknown, handler: unknown) => ({
     name,
@@ -54,6 +56,7 @@ describe("outer agent team delegation", () => {
     const prompt = buildSystemPrompt();
     expect(prompt).toContain("team_question");
     expect(prompt).toContain("team_analyze");
+    expect(prompt).toContain("account_history");
     expect(prompt).toContain("wait for that team tool to finish");
     expect(prompt).toContain("Do not call duplicate market/fundamental/news/technical tools in parallel");
     expect(prompt).toContain("Formal settlement");
@@ -63,10 +66,11 @@ describe("outer agent team delegation", () => {
     const opts = buildOptions();
     expect(opts.allowedTools).toContain("mcp__azoth__team_question");
     expect(opts.allowedTools).toContain("mcp__azoth__team_analyze");
+    expect(opts.allowedTools).toContain("mcp__azoth__account_history");
 
     const server = opts.mcpServers?.azoth as unknown as { tools: Array<{ name?: string }> };
     expect(server.tools.map((t) => t.name)).toEqual(
-      expect.arrayContaining(["team_question", "team_analyze"]),
+      expect.arrayContaining(["team_question", "team_analyze", "account_history"]),
     );
   });
 });

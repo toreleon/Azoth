@@ -118,7 +118,7 @@ describe("runTeamAnalysis", () => {
     expect(pm).toContain("Write the user-facing summary, rationale, and narrative fields in Vietnamese");
   });
 
-  it("runs analysts → debate → trader → risk → portfolio in order and writes a journal entry", async () => {
+  it("runs analysts → debate → trader → risk → portfolio in order and records team outputs", async () => {
     pushResponse("technical", { summary: "uptrend with RSI 62", score: 0.4, detail: { rsi: 62 } });
     pushResponse("fundamentals", { summary: "P/E 12, ROE 18", score: 0.3, detail: { pe: 12 } });
     pushResponse("news", { summary: "no negative catalysts", score: 0.1, detail: {} });
@@ -180,22 +180,21 @@ describe("runTeamAnalysis", () => {
       "portfolio#",
     ]);
 
-    // Final decision matches portfolio output, persisted to decisions.
+    // Final decision matches portfolio output.
     expect(decision.rating).toBe("Overweight");
     expect(decision.sizingPct).toBeCloseTo(0.04, 5);
-    expect(decision.journalId).toBeTypeOf("number");
     expect(state.analysts).toHaveLength(4);
     expect(state.research).toHaveLength(4);
     expect(state.researchPlan?.recommendation).toBe("Overweight");
 
     const db = getDb();
-    const rows = db
-      .prepare("SELECT ticker, action, rating, source_run FROM decisions WHERE source_run = ?")
-      .all(state.runId) as Array<{ ticker: string; action: string; rating: string; source_run: string }>;
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.ticker).toBe("FPT");
-    expect(rows[0]!.action).toBe("BUY");
-    expect(rows[0]!.rating).toBe("Overweight");
+    const runs = db
+      .prepare("SELECT ticker, final_action, final_rating FROM team_runs WHERE id = ?")
+      .all(state.runId) as Array<{ ticker: string; final_action: string; final_rating: string }>;
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.ticker).toBe("FPT");
+    expect(runs[0]!.final_action).toBe("BUY");
+    expect(runs[0]!.final_rating).toBe("Overweight");
 
     const roleRows = db
       .prepare("SELECT role FROM team_role_outputs WHERE run_id = ?")

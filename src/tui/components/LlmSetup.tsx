@@ -49,16 +49,19 @@ export function LlmSetup({ onComplete, verify = verifyLlmEnvironment }: LlmSetup
       if (key.return) {
         const selected = PROVIDERS[providerIdx]!;
         setProvider(selected.id);
+        setInput(selected.id === "compatible" ? baseUrl : "");
         setStep(selected.id === "compatible" ? "baseUrl" : "apiKey");
       }
       if (inp === "1" || inp.toLowerCase() === "a") {
         setProvider("anthropic");
         setProviderIdx(0);
+        setInput("");
         setStep("apiKey");
       }
       if (inp === "2" || inp.toLowerCase() === "c") {
         setProvider("compatible");
         setProviderIdx(1);
+        setInput(baseUrl);
         setStep("baseUrl");
       }
     }
@@ -86,7 +89,7 @@ export function LlmSetup({ onComplete, verify = verifyLlmEnvironment }: LlmSetup
       }
       setBaseUrl(value);
       setInput("");
-      setStep(apiKey.trim() ? "model" : "apiKey");
+      setStep("apiKey");
       return;
     }
 

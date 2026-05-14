@@ -12,11 +12,11 @@ market, built for equity research, portfolio analysis, backtesting, paper
 trading, and broker-aware trading workflows.
 
 It combines an interactive terminal UI, Claude Agent SDK orchestration,
-Vietnam market-data tools, multi-agent stock research, local journaling,
+Vietnam market-data tools, multi-agent stock research,
 configurable interval backtests, and optional DNSE Entrade X live broker
 integration. Azoth is designed for disciplined decision support across HOSE,
-HNX, and UPCOM: every recommendation should be grounded in tool output, written
-to a journal, and constrained by explicit autonomy and risk settings.
+HNX, and UPCOM: every recommendation should be grounded in tool output and
+constrained by explicit autonomy and risk settings.
 
 > Azoth is investment software, not financial advice. Live trading can place
 > real orders against a real account. Use advisory or paper mode until you have
@@ -29,7 +29,7 @@ Latest release: [v0.1.2](docs/releases/v0.1.2.md)
 ![Azoth terminal UI showing team analysis, tool calls, and slash commands](assets/azoth-tui.svg)
 
 Azoth opens as a chat-first terminal workspace. Market data, team analysis,
-portfolio state, journal rows, and backtest results render inline, so the
+portfolio state, and backtest results render inline, so the
 conversation remains the primary workflow.
 
 ### TUI Examples
@@ -46,12 +46,11 @@ Ask a portfolio-level question:
 /team Should we rotate from steel into banks this month?
 ```
 
-Check market, portfolio, journal, and backtest state:
+Check market, portfolio, and backtest state:
 
 ```text
 /quote VCB
 /positions
-/journal decisions 10
 /backtest
 ```
 
@@ -60,26 +59,27 @@ Check market, portfolio, journal, and backtest state:
 - **Agent-native CLI**: run Azoth from the terminal with a rich Ink-based UI,
   streaming model output, tool chips, status bar, slash commands, and resumable
   project sessions.
-- **Chat-first workflow**: market data, team analysis, journals, backtests, and
+- **Chat-first workflow**: market data, team analysis, backtests, and
   broker state render inline in the conversation instead of a pinned dashboard.
 - **Automatic subagent routing**: broad portfolio questions use `team_question`;
   deep single-ticker recommendations use `team_analyze`; the outer agent waits
   for the team and summarizes role findings.
 - **VN market research tools**: quote, OHLCV, technical indicators,
   fundamentals, company news, macro indices, foreign flow, ticker discovery,
-  portfolio state, and decision journal.
+  and live portfolio state.
 - **Multi-agent desk**: structured analyst workflow with technical,
   fundamentals, news, sentiment, bull, bear, research manager, trader, risk,
   and portfolio roles.
 - **Broker-aware execution**: advisory, confirm, and auto autonomy modes with
-  paper broker support and DNSE Entrade X integration for live accounts.
+  explicit user approval before broker calls, paper broker support, and DNSE
+  Entrade X integration for live accounts.
 - **Risk controls**: position sizing limits, order notional limits, optional
   ticker whitelist checks, market-session checks, margin-disabled enforcement,
   daily-loss halt, and drawdown buy-freeze support.
 - **Backtesting**: replay strategy behavior with the paper broker to validate
   feeds, accounting, lot sizing, fees, and guardrails before using live tools.
 - **Local-first state**: configuration, SQLite cache, broker records,
-  journals, broker records, team runs, and session logs live under `~/.azoth`
+  team runs, and session logs live under `~/.azoth`
   by default.
 
 ## Quick Start
@@ -123,6 +123,8 @@ Packaged CLI command:
 
 ```bash
 azoth
+azoth --version
+azoth version
 ```
 
 The TUI requires an interactive terminal. In non-TTY environments, use the
@@ -137,7 +139,7 @@ checks.
 | Agent orchestration | Claude Agent SDK, constrained MCP tool server, resumable sessions, local context replay, abortable turns. |
 | Team desk | Technical, fundamentals, news, sentiment, bull, bear, research manager, trader, risk, and portfolio roles. |
 | Market data | Quotes, OHLCV, technical indicators, fundamentals, CafeF news, macro indices, foreign flow, and ticker discovery. |
-| Portfolio and journal | Broker state, positions, cash, unrealized P&L, decision journal, orders, fills, alerts. |
+| Portfolio | Broker state, sub-accounts, positions, cash, market value, and unrealized P&L. |
 | Execution | Paper broker, optional DNSE broker, advisory/confirm/auto autonomy, human confirmation gate. |
 | Risk | Notional cap, concentration cap, whitelist, market session, no-margin cash check, daily-loss halt, drawdown buy freeze. |
 | Backtesting | Weekly team-driven replay, paper fills, fees, rejected guardrail orders, benchmark comparison, running-peak max drawdown. |
@@ -164,7 +166,6 @@ Check market and portfolio state:
 ```text
 /quote VCB
 /positions
-/journal decisions 10
 ```
 
 Run a backtest for the previous calendar week:
@@ -234,11 +235,13 @@ still stream the full local team flow.
 | `/team <message>` | Run a multi-agent debate on a market or portfolio question. |
 | `/analyze <ticker> [--rounds N]` | Run structured team analysis for one ticker. |
 | `/backtest [start] [end] [cash] [--interval 30m\|1h\|2h]` | Run an interval backtest and render results inline. Defaults to previous calendar week at 30-minute cadence. |
-| `/journal [decisions\|orders\|fills\|alerts] [N]` | Show recent journal rows. |
 | `/quote <ticker>` | Request quote, technicals, and recent news for a ticker. |
 | `/positions` | Summarize current portfolio positions and exposures. |
+| `/setup-llm` | Change LLM provider, API key, endpoint, and model after first-time setup. |
+| `/setup-fhsc` | Configure FHSC broker access and switch `broker` to `fhsc`. |
 | `/autonomy <advisory\|confirm\|auto>` | Persist the autonomy mode and rebuild tool access for new turns. |
 | `/health [--probe]` | Check API key, config, DB, broker state, live-trading arm flag, market session, and optionally data providers. |
+| `/about` | Show version, runtime paths, broker, provider, and release references. |
 | `/new` | Start a new resumable session. |
 | `/resume [id]` | Resume the latest session or a specific session. |
 | `/sessions` | List recent project sessions. |
@@ -251,7 +254,7 @@ Azoth stores runtime state in `~/.azoth` unless `AZOTH_HOME` is set.
 A fresh runtime contains:
 
 - `~/.azoth/config.yaml` - user configuration
-- `~/.azoth/azoth.db` - SQLite cache, journal, broker, and run database
+- `~/.azoth/azoth.db` - SQLite cache, broker, team, and run database
 - `~/.azoth/projects/<encoded-cwd>/*.jsonl` - per-project session logs
 
 Useful environment variables:
@@ -264,6 +267,7 @@ Useful environment variables:
 | `AZOTH_ALT_SCREEN=1` | Run the TUI in the alternate screen buffer. |
 | `AZOTH_LIVE_TRADING=1` | Explicitly enable live trading paths. |
 | `DNSE_TEST_LIVE=1` | Run DNSE read-only live probes in tests. |
+| `FHSC_TEST_LIVE=1` | Run FHSC read-only live probes in tests. |
 
 Default config:
 
@@ -283,6 +287,18 @@ team:
 
 broker: paper
 
+fhsc:
+  sub_account_id: ""
+  account_id: ""
+  base_url: https://api.vinasecurities.com
+  access_token: ""
+  access_key: ""
+  device_id: ""
+  user_id: ""
+  cust_id: ""
+  api_key: ""
+  api_secret: ""
+
 risk:
   max_position_pct: 0.15
   max_daily_loss_pct: 0.03
@@ -294,13 +310,17 @@ risk:
 Autonomy modes:
 
 - `advisory`: no order tools are exposed. Azoth recommends; the user executes.
-- `confirm`: order tools are available, but each order requires CLI approval.
-- `auto`: order tools run through configured guardrails before submission.
+- `confirm`: broker tools are available, but each broker read/write requires
+  CLI approval before Azoth contacts the broker.
+- `auto`: broker tools still require CLI approval before Azoth contacts the
+  broker; approved orders then run through configured guardrails before
+  submission.
 
 Broker modes:
 
 - `paper`: local paper broker backed by SQLite.
 - `dnse`: DNSE Entrade X / LightSpeed integration for live accounts.
+- `fhsc`: Finhay Securities/FHSC read-only account integration.
 
 ## Data Sources
 
@@ -316,7 +336,8 @@ Azoth uses public and broker APIs for Vietnam market context:
 - **News and disclosures**: CafeF company news, industry news, and filings.
 - **Macro indices**: VNINDEX, VN30, HNXINDEX, and UPCOMINDEX.
 - **Foreign flow**: per-ticker foreign buy, sell, net flow, and ownership.
-- **Portfolio data**: local paper broker or DNSE account snapshots.
+- **Portfolio data**: local paper broker, DNSE account snapshots, or FHSC
+  account snapshots.
 - **Open web context**: model WebSearch for current context not covered by the
   built-in market tools; responses should cite URLs and dates.
 
@@ -328,14 +349,15 @@ reduce repeated network calls.
 | Integration | Purpose |
 | --- | --- |
 | Claude Agent SDK | Top-level agent orchestration, streaming, MCP tool hosting, and tool restrictions. |
-| MCP tools | Azoth exposes market, portfolio, journal, team, and broker tools through a local SDK MCP server. |
+| MCP tools | Azoth exposes market, portfolio, team, and broker tools through a local SDK MCP server. |
 | Ink | Rich terminal UI with chat, slash commands, cards, status, and keyboard handling. |
-| SQLite / better-sqlite3 | Local cache, journal, broker state, orders, sessions, team runs, and backtest records. |
+| SQLite / better-sqlite3 | Local cache, broker state, orders, sessions, team runs, and backtest records. |
 | DNSE public APIs | Market OHLCV and optional live broker adapter support. |
 | SSI iBoard | Public quote and reference price data. |
 | VNDirect Finfo | Fundamentals and valuation snapshots. |
 | CafeF | News, disclosures, and historical financial ratios. |
 | DNSE Entrade X / LightSpeed | Optional live account reads and order submission. |
+| FHSC OpenAPI | Optional read-only account, portfolio, and order-history adapter. |
 
 ## Release Notes
 
@@ -344,7 +366,7 @@ reduce repeated network calls.
 - [v0.1.1](docs/releases/v0.1.1.md) - pipeline-published package release for
   the v0.1 public baseline.
 - [v0.1.0](docs/releases/v0.1.0.md) - consolidated public baseline with chat
-  TUI, multi-agent desk, Vietnam market tools, local journaling, paper broker,
+  TUI, multi-agent desk, Vietnam market tools, paper broker,
   guardrails, backtesting, DNSE integration foundations, npm packaging, and
   automated release support.
 
@@ -375,7 +397,8 @@ until the checklist below is complete.
    `GET https://api.dnse.com.vn/margin-service/loan-products` with the JWT and
    choose the correct loan product id for your equity sub-account.
 4. Set `broker: dnse` in `~/.azoth/config.yaml`.
-5. Set `autonomy: confirm` first, so every order prompts for approval.
+5. Set `autonomy: confirm` first while testing. All broker calls prompt for
+   approval in both `confirm` and `auto`.
 6. Run `pnpm test` and then `DNSE_TEST_LIVE=1 pnpm test` for read-only live
    probes.
 7. Verify `broker_state` and `list_orders` return the expected cash, positions,
@@ -384,7 +407,31 @@ until the checklist below is complete.
 9. During market hours, place one small 100-share test order on a liquid ticker
    and verify the result with DNSE directly.
 
-The first `place_order` in a live session may trigger an email OTP prompt.
+The first `place_order` in a DNSE live session may trigger an email OTP prompt.
+
+## FHSC Account Integration
+
+FHSC integration is read-only by default. It supports portfolio snapshots,
+recent order/fill history, cash transaction history, and dividend/rights issue
+events through the account endpoints used by the FHSC web app; real order
+placement is rejected until an official trading API contract is provided.
+
+1. Log in to `https://invest.fhsc.com.vn` in Chrome, then run
+   `pnpm exec tsx scripts/fhsc-import-browser-session.ts` to import the
+   browser-session credentials into `~/.azoth/config.yaml` without printing
+   secret values.
+2. Alternatively, run `/setup-fhsc` in the TUI and choose either FHSC browser
+   session credentials or OpenAPI key/secret. The FHSC `/trade/...` portfolio
+   and history routes currently reject OpenAPI key/secret alone, so
+   browser-session credentials are the practical option for account reads.
+3. Environment variables still override config for deployments that use a
+   secret manager: `FHSC_SUB_ACCOUNT_ID`, `FHSC_API_KEY`, `FHSC_API_SECRET`,
+   `FHSC_ACCESS_TOKEN`, `FHSC_ACCESS_KEY`, `FHSC_DEVICE_ID`,
+   `FHSC_USER_ID`, or `FHSC_CUST_ID`.
+4. Optionally set `FHSC_BASE_URL`; the default is
+   `https://api.vinasecurities.com`.
+5. Run `FHSC_TEST_LIVE=1 pnpm test -- tests/broker.contract.test.ts` to verify
+   read access before using the broker in Azoth.
 
 ## Backtesting
 
@@ -417,7 +464,7 @@ src/
   tui/                     TUI components, hooks, cards, theme, commands
   agent/orchestrator.ts    Agent SDK prompt, tools, sessions
   agent/team/              multi-agent research desk
-  tools/                   market, portfolio, journal, broker tools
+  tools/                   market, portfolio, broker tools
   data/sources/            DNSE, SSI, CafeF, VNDirect clients
   broker/                  paper and DNSE broker implementations
   risk/                    pre-trade guardrails
@@ -440,6 +487,6 @@ Azoth is built around a few explicit constraints:
 - Buy, sell, or hold recommendations should include technicals, fundamentals,
   news, and macro context.
 - News citations should include source URL and publish date.
-- Decisions should be persisted to the local journal with rationale and an exit
-  plan.
-- Order placement is disabled in advisory mode and guarded in auto mode.
+- Order placement is disabled in advisory mode. In confirm/auto modes, every
+  broker call requires user approval before Azoth contacts the broker, and
+  approved orders still run through guardrails.

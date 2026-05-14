@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { ToolChip } from "./components/ToolChip.js";
 import { Welcome } from "./components/Welcome.js";
 import { LlmSetup } from "./components/LlmSetup.js";
+import { FhscSetup } from "./components/FhscSetup.js";
 import { SLASH_COMMANDS, SlashSuggest, matchSlash } from "./components/SlashSuggest.js";
 import { AgentStreamProvider, useAgentStreamCtx } from "./hooks/useAgentStreamContext.js";
 import { type ChatBlock } from "./hooks/useAgentStream.js";
@@ -13,7 +14,8 @@ import { useNow } from "./hooks/useNow.js";
 import { loadConfig, updateConfig } from "../config/loader.js";
 import { resetBrokerCache } from "../broker/index.js";
 import { collectHealth, renderHealth } from "../runtime/health.js";
-import { hasLlmEnvironment } from "../runtime/llmSetup.js";
+import { hasLlmEnvironment, type LlmVerificationInput } from "../runtime/llmSetup.js";
+import { azothPaths } from "../runtime/paths.js";
 import { packageVersion } from "../runtime/version.js";
 import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, formatPct, truncate } from "./lib/format.js";
@@ -21,10 +23,13 @@ import { theme, glyph } from "./lib/theme.js";
 import { BACKTEST_DEFAULT_INTERVAL, runBacktestSession, type EquityPayload, type SummaryPayload } from "../agent/backtestRunner.js";
 import { runTeamAnalysis, runTeamQuestion } from "../agent/team/index.js";
 import type { FinalDecision, TeamEvent, TeamState } from "../agent/team/state.js";
-import { loadJournal, type JournalTab } from "./lib/journal.js";
-import { JournalCard } from "./lib/cards.js";
+import { setBrokerConsentHandler, type BrokerConsentRequest } from "../tools/brokerConsent.js";
 
 type Autonomy = "advisory" | "confirm" | "auto";
+
+type PendingBrokerConsent = BrokerConsentRequest & {
+  resolve: (approved: boolean) => void;
+};
 
 const THINKING_ANIMATION_INTERVAL_MS = 80;
 const BT_DEFAULTS = { cash: 1_000_000_000 };
@@ -92,7 +97,7 @@ function renderAnalyzeResult(state: TeamState, decision: FinalDecision) {
   const lines = [
     "",
     `Final: ${decision.rating} ${(decision.sizingPct * 100).toFixed(1)}% ${decision.ticker}`,
-    `Run: ${decision.teamRunId.slice(0, 8)}${decision.journalId ? `  journal #${decision.journalId}` : ""}`,
+    `Run: ${decision.teamRunId.slice(0, 8)}`,
   ];
   if (state.analysts.length) {
     lines.push("", "Analysts:");
@@ -154,6 +159,25 @@ function renderBacktestResult(start: string, end: string, initialCash: number, s
   ].join("\n");
 }
 
+function renderAbout(): string {
+  const cfg = loadConfig();
+  const paths = azothPaths();
+  return [
+    `Azoth ${PACKAGE_VERSION}`,
+    "Professional agent CLI for Vietnam equity research, portfolio workflow, and broker-aware trading operations.",
+    "",
+    `Runtime: ${paths.home}`,
+    `Config: ${process.env.AZOTH_CONFIG ?? paths.config}`,
+    `Database: ${process.env.AZOTH_DB ?? paths.db}`,
+    `Broker: ${cfg.broker}`,
+    `Autonomy: ${cfg.autonomy}`,
+    `LLM: ${cfg.llm.provider}${cfg.llm.provider === "compatible" && cfg.llm.base_url ? " (custom base_url set)" : ""}`,
+    "",
+    "Release: docs/releases/v0.1.0.md",
+    "Roadmap: ROADMAP.md",
+  ].join("\n");
+}
+
 function renderBlock(b: ChatBlock, toolResults: Map<string, string>, columns = 80): React.ReactNode {
   switch (b.role) {
     case "user": {
@@ -204,12 +228,16 @@ function renderBlock(b: ChatBlock, toolResults: Map<string, string>, columns = 8
   }
 }
 
-export function App() {
+export interface AppProps {
+  verifyLlm?: (input: LlmVerificationInput) => Promise<void>;
+}
+
+export function App({ verifyLlm }: AppProps = {}) {
   const [llmReady, setLlmReady] = useState(hasLlmEnvironment());
   if (!llmReady) {
     return (
       <ErrorBoundary>
-        <LlmSetup onComplete={() => setLlmReady(true)} />
+        <LlmSetup onComplete={() => setLlmReady(true)} verify={verifyLlm} />
       </ErrorBoundary>
     );
   }
@@ -217,13 +245,13 @@ export function App() {
   return (
     <AgentStreamProvider>
       <ErrorBoundary>
-        <AppInner />
+        <AppInner verifyLlm={verifyLlm} />
       </ErrorBoundary>
     </AgentStreamProvider>
   );
 }
 
-function AppInner() {
+function AppInner({ verifyLlm }: AppProps) {
   const cfg = loadConfig();
   useApp();
   const stream = useAgentStreamCtx();
@@ -235,6 +263,10 @@ function AppInner() {
   const [input, setInput] = useState("");
   const [suggestSel, setSuggestSel] = useState(0);
   const [tick, setTick] = useState(0);
+  const [setupLlm, setSetupLlm] = useState(false);
+  const [setupFhsc, setSetupFhsc] = useState(false);
+  const [pendingBrokerConsent, setPendingBrokerConsent] = useState<PendingBrokerConsent | null>(null);
+  const [brokerConsentSel, setBrokerConsentSel] = useState(1);
 
   const now = useNow(30_000);
   const session = classifySession(now);
@@ -253,6 +285,14 @@ function AppInner() {
     const id = setInterval(() => setTick((t) => t + 1), THINKING_ANIMATION_INTERVAL_MS);
     return () => clearInterval(id);
   }, [stream.streaming]);
+
+  useEffect(() => {
+    setBrokerConsentHandler((request) => new Promise<boolean>((resolve) => {
+      setBrokerConsentSel(1);
+      setPendingBrokerConsent({ ...request, resolve });
+    }));
+    return () => setBrokerConsentHandler(null);
+  }, []);
 
   const thinkingDots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"][tick % 10];
 
@@ -354,22 +394,6 @@ function AppInner() {
       stream.appendLocalResponse(`Team error: ${(e as Error).message}`);
     } finally {
       stream.finishLocalResponse();
-    }
-  };
-
-  const runJournal = (args: string[]) => {
-    const validTabs: JournalTab[] = ["decisions", "orders", "fills", "alerts"];
-    let tab: JournalTab = "decisions";
-    let limit = 10;
-    for (const a of args) {
-      if ((validTabs as string[]).includes(a)) tab = a as JournalTab;
-      else if (/^\d+$/.test(a)) limit = Number.parseInt(a, 10);
-    }
-    try {
-      const rows = loadJournal(tab, limit);
-      stream.appendCard(<JournalCard tab={tab} rows={rows} />);
-    } catch (e) {
-      stream.systemMessage(`✗ journal error: ${(e as Error).message}`);
     }
   };
 
@@ -490,7 +514,34 @@ function AppInner() {
     }
   };
 
+  const resolveBrokerConsent = (approved: boolean) => {
+    pendingBrokerConsent?.resolve(approved);
+    setPendingBrokerConsent(null);
+    setBrokerConsentSel(1);
+  };
+
   useInput((inp, key) => {
+    if (pendingBrokerConsent) {
+      if (key.ctrl && inp === "c") {
+        resolveBrokerConsent(false);
+        stream.abort();
+        return;
+      }
+      if (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow || key.tab) {
+        setBrokerConsentSel((sel) => (sel === 0 ? 1 : 0));
+        return;
+      }
+      const normalized = inp.toLowerCase();
+      if (normalized === "y") {
+        resolveBrokerConsent(true);
+        return;
+      }
+      if (normalized === "n" || key.escape || key.return) {
+        resolveBrokerConsent(key.return ? brokerConsentSel === 0 : false);
+        return;
+      }
+      return;
+    }
     if (key.ctrl && inp === "c" && stream.streaming) stream.abort();
     if (key.ctrl && inp === "b" && backtestRef.current?.running) {
       backtestRef.current.ctrl.abort();
@@ -507,11 +558,13 @@ function AppInner() {
   });
 
   const handleChange = (next: string) => {
+    if (pendingBrokerConsent) return;
     setInput(next);
     setSuggestSel(0);
   };
 
   const handleSubmit = (raw: string) => {
+    if (pendingBrokerConsent) return;
     const v = raw.trim();
     setInput("");
     setSuggestSel(0);
@@ -537,9 +590,11 @@ function AppInner() {
       else if (cmd === "team") void runTeamChat(arg);
       else if (cmd === "analyze") void runAnalyze(rest);
       else if (cmd === "backtest") void runBacktest(rest);
-      else if (cmd === "journal") runJournal(rest);
+      else if (cmd === "setup-llm") setSetupLlm(true);
+      else if (cmd === "setup-fhsc") setSetupFhsc(true);
       else if (cmd === "autonomy") runAutonomy(rest);
       else if (cmd === "health") void runHealth(rest);
+      else if (cmd === "about" || cmd === "version") stream.systemMessage(renderAbout());
       else if (cmd === "quote" && arg) void stream.send(`Give me a market quote with technicals and recent news for ${arg.toUpperCase()}.`);
       else if (cmd === "positions") void stream.send("Summarize my current portfolio positions, unrealized PnL, and exposures.");
       else if (cmd === "help") {
@@ -553,6 +608,30 @@ function AppInner() {
   };
 
   const inputBorder = stream.streaming ? theme.thinking : theme.accent;
+
+  if (setupLlm) {
+    return (
+      <LlmSetup
+        verify={verifyLlm}
+        onComplete={() => {
+          setSetupLlm(false);
+          stream.systemMessage("LLM setup saved. New turns will use the updated model configuration.");
+        }}
+      />
+    );
+  }
+
+  if (setupFhsc) {
+    return (
+      <FhscSetup
+        onComplete={() => {
+          resetBrokerCache();
+          setSetupFhsc(false);
+          stream.systemMessage("FHSC setup saved. Broker set to fhsc.");
+        }}
+      />
+    );
+  }
 
   return (
     <Box flexDirection="column">
@@ -589,13 +668,42 @@ function AppInner() {
           </Box>
         ) : null}
       </Box>
+      {pendingBrokerConsent ? (
+        <Box borderStyle="round" borderColor={theme.flat} paddingX={1} flexDirection="column" marginTop={1}>
+          <Text color={theme.flat} bold>Allow broker action?</Text>
+          <Text><Text dimColor>action   </Text>{pendingBrokerConsent.action}</Text>
+          <Text><Text dimColor>broker   </Text>{pendingBrokerConsent.broker}</Text>
+          <Text><Text dimColor>autonomy </Text>{pendingBrokerConsent.autonomy}</Text>
+          {pendingBrokerConsent.detail ? <Text><Text dimColor>detail   </Text>{pendingBrokerConsent.detail}</Text> : null}
+          <Box marginTop={1} flexDirection="column">
+            {[
+              { label: "Yes, allow once", hint: "Run this broker action now." },
+              { label: "No, deny", hint: "Do not contact the broker." },
+            ].map((option, i) => {
+              const active = brokerConsentSel === i;
+              return (
+                <Text key={option.label}>
+                  <Text color={active ? theme.accent : theme.muted} bold>{active ? "› " : "  "}</Text>
+                  <Text color={active ? "white" : undefined} bold={active}>{option.label}</Text>
+                  <Text dimColor>  {option.hint}</Text>
+                </Text>
+              );
+            })}
+          </Box>
+          <Text dimColor>↑/↓ select · Enter confirm · y allow · n deny · Esc deny</Text>
+        </Box>
+      ) : null}
       {showSuggest ? <SlashSuggest input={input} selected={suggestSel} /> : null}
       <Box borderStyle="round" borderColor={inputBorder} paddingX={1}>
         <Text color={inputBorder} bold>{"› "}</Text>
         <Box flexGrow={1}>
-          <TextInput value={input} onChange={handleChange} onSubmit={handleSubmit} placeholder="Ask the agent — type / for commands" />
+          {pendingBrokerConsent ? (
+            <Text color={theme.muted}>broker approval pending</Text>
+          ) : (
+            <TextInput value={input} onChange={handleChange} onSubmit={handleSubmit} placeholder="Ask the agent — type / for commands" />
+          )}
         </Box>
-        <Text dimColor>↵ send · / cmds</Text>
+        <Text dimColor>{pendingBrokerConsent ? "↑↓ select · ↵ confirm" : "↵ send · / cmds"}</Text>
       </Box>
       <StatusBar
         broker={cfg.broker}

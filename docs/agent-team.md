@@ -27,8 +27,8 @@ structure of a trading firm:
 
 The upstream project also emphasizes persistence and recovery through a
 decision log and checkpoint resume. Azoth uses the same general idea of
-durable audit trails, but stores decisions, role outputs, journals, broker
-state, and session logs in the local Azoth SQLite runtime.
+durable runtime state, but stores role outputs, broker state, team runs, and
+session logs in the local Azoth SQLite runtime.
 
 ## Azoth Team Roles
 
@@ -45,7 +45,7 @@ Azoth's structured single-ticker analysis uses these roles:
 | Synthesis | Research Manager | Weighs the debate and produces a clear investment plan. |
 | Execution | Head Trader | Converts the research plan into rating, sizing, entry band, and exit plan. |
 | Control | Risk Manager | Applies concentration, macro, liquidity, market-session, and guardrail concerns. |
-| Final | Portfolio Manager | Produces the final rating, allocation, rationale, and journal-ready decision. |
+| Final | Portfolio Manager | Produces the final rating, allocation, rationale, and exit plan. |
 
 Azoth uses a five-tier rating scale:
 
@@ -88,8 +88,8 @@ flowchart TD
   ResearchManager --> Trader["Head Trader proposal"]
   Trader --> Risk["Risk Manager review"]
   Risk --> Portfolio["Portfolio Manager final decision"]
-  Portfolio --> Journal["Persist team outputs and journal entry"]
-  Journal --> TUI["Render final answer in TUI"]
+  Portfolio --> Persist["Persist team outputs"]
+  Persist --> TUI["Render final answer in TUI"]
 ```
 
 ```text
@@ -99,8 +99,8 @@ single ticker
   -> research manager synthesizes a plan
   -> trader sizes the idea and proposes an entry/exit view
   -> risk manager approves, rejects, or adjusts sizing
-  -> portfolio manager writes the final decision
-  -> Azoth persists role outputs and journal records locally
+  -> portfolio manager writes the final recommendation
+  -> Azoth persists role outputs locally
 ```
 
 For `/team <question>`, Azoth uses a lighter question-oriented flow:
@@ -251,10 +251,10 @@ flowchart LR
   Sentiment --> ForeignFlow["foreign_flow"]
 
   Trader --> PortfolioList["portfolio_list"]
+  Trader --> AccountHistory["account_history"]
   Trader --> Discover["discover_tickers"]
-  Trader --> JournalRead["journal_read"]
-
   Risk --> PortfolioList
+  Risk --> AccountHistory
   Risk --> Macro
   Risk --> ForeignFlow
 
@@ -271,9 +271,9 @@ flowchart LR
 | News | `ticker_news`, `macro_indices` |
 | Sentiment | `ticker_news`, `foreign_flow` |
 | Bull, Bear, Research Manager | No direct tools; synthesize prior evidence. |
-| Trader | `portfolio_list`, `discover_tickers`, `journal_read` |
-| Risk | `portfolio_list`, `macro_indices`, `foreign_flow` |
-| Portfolio | No direct tools; final synthesis and journal-ready decision. |
+| Trader | `portfolio_list`, `account_history`, `discover_tickers` |
+| Risk | `portfolio_list`, `account_history`, `macro_indices`, `foreign_flow` |
+| Portfolio | No direct tools; final synthesis. |
 
 This differs from a free-form agent that can call every tool at any time. The
 goal is to keep each role accountable for a narrow part of the decision process
@@ -300,8 +300,7 @@ Azoth writes team activity to local SQLite:
 
 - Team run start and completion metadata.
 - Role outputs and usage details.
-- Final decisions.
-- Journal entries.
+- Final team recommendations.
 - Broker orders, fills, rejects, cash, and positions.
 - Project session logs for TUI resume.
 
@@ -333,7 +332,7 @@ configured.
 | Orchestration | LangGraph-based trading graph | Claude Agent SDK roles with local MCP tools |
 | Market focus | General stock-market research framework | Vietnam equities and DNSE/SSI/VNDirect/CafeF data |
 | UI | Interactive CLI screens | Chat-first terminal workspace |
-| Persistence | Decision log and checkpoint resume | SQLite cache, journals, broker records, team runs, and session logs |
+| Persistence | Decision log and checkpoint resume | SQLite cache, broker records, team runs, and session logs |
 | Execution | Simulated exchange flow in framework | Paper broker plus optional DNSE live broker adapter |
 | Safety | Research framework warning and portfolio approval | Explicit autonomy modes, broker arming, and runtime guardrails |
 
