@@ -27,8 +27,7 @@ function ensureTeamTables(): void {
       final_action    TEXT,
       final_rating    TEXT,
       final_sizing    REAL,
-      final_rationale TEXT,
-      decision_id     INTEGER
+      final_rationale TEXT
     );
 
     CREATE TABLE IF NOT EXISTS team_role_outputs (
@@ -113,29 +112,13 @@ export function finalizeTeamRun(args: FinalizeArgs): FinalDecision {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
   const legacyAction = legacyActionFromRating(args.final.rating);
-  const info = db
-    .prepare(
-      `INSERT INTO decisions (created_at, ticker, action, rating, rationale, exit_plan, source_run)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      now,
-      args.ticker.toUpperCase(),
-      legacyAction,
-      args.final.rating,
-      args.final.rationale,
-      args.final.exitPlan ?? null,
-      args.runId,
-    );
-  const decisionId = Number(info.lastInsertRowid);
   db.prepare(
     `UPDATE team_runs
        SET finished_at = ?,
            final_action = ?,
            final_rating = ?,
            final_sizing = ?,
-           final_rationale = ?,
-           decision_id = ?
+           final_rationale = ?
      WHERE id = ?`,
   ).run(
     now,
@@ -143,7 +126,6 @@ export function finalizeTeamRun(args: FinalizeArgs): FinalDecision {
     args.final.rating,
     args.final.sizingPct,
     args.final.rationale,
-    decisionId,
     args.runId,
   );
   return {
@@ -152,7 +134,6 @@ export function finalizeTeamRun(args: FinalizeArgs): FinalDecision {
     sizingPct: args.final.sizingPct,
     rationale: args.final.rationale,
     exitPlan: args.final.exitPlan,
-    journalId: decisionId,
     teamRunId: args.runId,
   };
 }

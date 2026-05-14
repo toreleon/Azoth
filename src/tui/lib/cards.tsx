@@ -3,7 +3,6 @@ import { Panel } from "../components/Panel.js";
 import { theme } from "./theme.js";
 import { pctColor, pnlColor } from "./colors.js";
 import { formatBigVnd, formatPct, truncate } from "./format.js";
-import type { JournalTab, JournalRow } from "./journal.js";
 import type { SummaryPayload } from "../../agent/backtestRunner.js";
 import type { FinalDecision, TeamState } from "../../agent/team/state.js";
 
@@ -66,7 +65,7 @@ export function TeamDecisionCard({ data }: { data: TeamDecisionCardInput }) {
     <Panel
       title={`TEAM ${decision.ticker}  ${state.asOfDateIso}`}
       borderColor={ratingColor}
-      badge={`#${decision.journalId ?? "?"}`}
+      badge={decision.teamRunId.slice(0, 8)}
     >
       <Box>
         <Text bold color={ratingColor}>{decision.rating}</Text>
@@ -153,35 +152,6 @@ export function TeamQuestionCard({ data }: { data: TeamQuestionCardInput }) {
           </Box>
         ) : null}
       </Box>
-    </Panel>
-  );
-}
-
-const HEADER: Record<JournalTab, string> = {
-  decisions: "DECISIONS",
-  orders: "ORDERS",
-  fills: "FILLS",
-  alerts: "ALERTS",
-};
-
-export function JournalCard({ tab, rows }: { tab: JournalTab; rows: JournalRow[] }) {
-  return (
-    <Panel
-      title={`${HEADER[tab]}  (latest ${rows.length})`}
-      borderColor={theme.accentSoft}
-      badge={rows.length === 0 ? "no rows" : undefined}
-    >
-      {rows.length === 0 ? (
-        <Text dimColor>—</Text>
-      ) : (
-        rows.map((r) => (
-          <Box key={String(r.id)}>
-            <Text dimColor>{r.secondary.padEnd(12)} </Text>
-            <Text color={r.color ?? "white"}>{truncate(r.primary, 26).padEnd(26)} </Text>
-            <Text dimColor>{truncate(r.detail.replace(/\s+/g, " "), 60)}</Text>
-          </Box>
-        ))
-      )}
     </Panel>
   );
 }

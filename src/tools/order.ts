@@ -1,4 +1,3 @@
-import * as readline from "node:readline/promises";
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { getBroker } from "../broker/index.js";
@@ -7,6 +6,7 @@ import { checkOrder } from "../risk/guardrails.js";
 import { getStockOhlcv } from "../data/sources/dnsePublic.js";
 import type { OrderStatus, PlaceOrderInput } from "../broker/types.js";
 import { nowSec, currentBrokerName } from "../agent/clock.js";
+import { requireBrokerConsent } from "./brokerConsent.js";
 
 function asText(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj) }] };
@@ -19,22 +19,9 @@ async function lastClose(ticker: string): Promise<number | null> {
   return bars.length ? bars[bars.length - 1]!.close : null;
 }
 
-async function confirmOnCli(prompt: string): Promise<boolean> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    const ans = (await rl.question(prompt)).trim().toLowerCase();
-    return ans === "y" || ans === "yes";
-  } finally {
-    rl.close();
-  }
-}
-
 export const placeOrderTool = tool(
   "place_order",
-  "Place a paper or live broker order. Quantity must be a multiple of 100 (HOSE lot). limit_price is in thousand VND (e.g. 28.5 = 28,500 VND). In 'confirm' autonomy the user is prompted in the CLI before submission; in 'auto' the order is run through risk guardrails and then submitted. Always call journal_append after a successful fill to record the rationale.",
+  "Place a paper or live broker order. Quantity must be a multiple of 100 (HOSE lot). limit_price is in thousand VND (e.g. 28.5 = 28,500 VND). Outside backtests, the user is always prompted in the CLI before any broker call. If approved, the order is run through risk guardrails before submission.",
   {
     ticker: z.string(),
     side: z.enum(["BUY", "SELL"]),
@@ -53,7 +40,6 @@ export const placeOrderTool = tool(
       });
     }
 
-    const broker = getBroker();
     const input: PlaceOrderInput = {
       ticker: ticker.toUpperCase(),
       side,
@@ -64,6 +50,22 @@ export const placeOrderTool = tool(
     };
 
     const refPrice = (await lastClose(input.ticker)) ?? input.limitPrice ?? null;
+    const px =
+      refPrice != null ? `${refPrice} (last close/reference)` : "(price unavailable)";
+
+    if (!inBacktest) {
+      const ok = await requireBrokerConsent(
+        "place_order",
+        `${side} ${quantity} ${input.ticker} ${type}` +
+          (limit_price ? ` @ ${limit_price}` : "") +
+          ` ref=${px}`,
+      );
+      if (!ok) {
+        return asText({ ok: false, error: "user_declined" });
+      }
+    }
+
+    const broker = getBroker();
 
     if (inBacktest || cfg.autonomy === "auto" || cfg.autonomy === "confirm") {
       if (refPrice == null) {
@@ -85,20 +87,6 @@ export const placeOrderTool = tool(
       }
     }
 
-    if (!inBacktest && cfg.autonomy === "confirm") {
-      const px =
-        refPrice != null ? `${refPrice} (last close)` : "(price unavailable)";
-      const ok = await confirmOnCli(
-        `\n  >> ${side} ${quantity} ${input.ticker} ${type}` +
-          (limit_price ? ` @ ${limit_price}` : "") +
-          `  ref=${px}` +
-          `\n  proceed? [y/N]: `,
-      );
-      if (!ok) {
-        return asText({ ok: false, error: "user_declined" });
-      }
-    }
-
     const order = await broker.placeOrder(input);
     return asText({
       ok: order.status === "FILLED" || order.status === "PENDING",
@@ -109,9 +97,21 @@ export const placeOrderTool = tool(
 
 export const cancelOrderTool = tool(
   "cancel_order",
-  "Cancel a pending broker order by id.",
+  "Cancel a pending broker order by id. Outside backtests, the user is always prompted in the CLI before any broker call.",
   { id: z.string() },
   async ({ id }) => {
+    const cfg = loadConfig();
+    const inBacktest = currentBrokerName() != null;
+    if (!inBacktest && cfg.autonomy === "advisory") {
+      return asText({
+        ok: false,
+        error: "autonomy=advisory; cancel_order is disabled.",
+      });
+    }
+    if (!inBacktest) {
+      const ok = await requireBrokerConsent("cancel_order", `order_id=${id}`);
+      if (!ok) return asText({ ok: false, error: "user_declined" });
+    }
     const broker = getBroker();
     const order = await broker.cancelOrder(id);
     return asText({ ok: order.status === "CANCELLED", order });
@@ -120,13 +120,22 @@ export const cancelOrderTool = tool(
 
 export const listOrdersTool = tool(
   "list_orders",
-  "List recent broker orders (paper or live), optionally filtered by ticker or status.",
+  "List recent broker orders (paper or live), optionally filtered by ticker or status. Outside backtests, the user is always prompted in the CLI before any broker call.",
   {
     ticker: z.string().optional(),
     status: z.enum(["PENDING", "FILLED", "CANCELLED", "REJECTED"]).optional(),
     limit: z.number().int().min(1).max(200).default(20),
   },
   async ({ ticker, status, limit }) => {
+    if (currentBrokerName() == null) {
+      const detail = [
+        ticker ? `ticker=${ticker.toUpperCase()}` : "",
+        status ? `status=${status}` : "",
+        `limit=${limit}`,
+      ].filter(Boolean).join(" ");
+      const ok = await requireBrokerConsent("list_orders", detail);
+      if (!ok) return asText({ ok: false, error: "user_declined" });
+    }
     const broker = getBroker();
     const orders = await broker.listOrders({
       ticker,
@@ -139,9 +148,13 @@ export const listOrdersTool = tool(
 
 export const brokerStateTool = tool(
   "broker_state",
-  "Get the broker's current cash + open positions (paper or live).",
+  "Get the broker's current cash + open positions (paper or live). Outside backtests, the user is always prompted in the CLI before any broker call.",
   {},
   async () => {
+    if (currentBrokerName() == null) {
+      const ok = await requireBrokerConsent("broker_state", "read cash and positions");
+      if (!ok) return asText({ ok: false, error: "user_declined" });
+    }
     const broker = getBroker();
     const snap = await broker.snapshot();
     return asText(snap);

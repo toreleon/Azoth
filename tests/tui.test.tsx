@@ -12,9 +12,10 @@ import { classifySession } from "../src/tui/lib/marketSession.js";
 import { formatBigVnd, formatPct, formatPrice } from "../src/tui/lib/format.js";
 import { getDb } from "../src/storage/db.js";
 import { appendSessionRecord, createSession, latestSession, readSessionRecords } from "../src/runtime/sessionStore.js";
-import { resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
+import { loadConfig, resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
 import { resetBrokerCache } from "../src/broker/index.js";
 import { emitTeamToolEvent } from "../src/agent/team/toolEventBus.js";
+import { requireBrokerConsent } from "../src/tools/brokerConsent.js";
 
 const runnerMocks = vi.hoisted(() => ({
   runTeamAnalysis: vi.fn(),
@@ -254,15 +255,6 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("/journal prints rows inline in chat", async () => {
-    const { lastFrame, stdin, unmount } = render(<App />);
-    await tick();
-    await type(stdin, "/journal decisions 5");
-    const out = strip(lastFrame() ?? "");
-    expect(out).toContain("DECISIONS");
-    unmount();
-  });
-
   it("/backtest help prints usage in chat", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
@@ -291,6 +283,104 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
+  it("/setup-llm reopens LLM setup after first-time setup", async () => {
+    const verify = vi.fn().mockResolvedValue(undefined);
+    const { lastFrame, stdin, unmount } = render(<App verifyLlm={verify} />);
+    await tick();
+    await type(stdin, "/setup-llm");
+    expect(strip(lastFrame() ?? "")).toContain("Azoth first-time LLM setup");
+    expect(strip(lastFrame() ?? "")).toContain("Select provider");
+
+    await enter(stdin);
+    await type(stdin, "sk-updated");
+    await type(stdin, "glm-5.1-updated");
+
+    const saved = strip(lastFrame() ?? "");
+    expect(saved).toContain("LLM environment saved.");
+    expect(saved).toContain("glm-5.1-updated");
+
+    await enter(stdin);
+    const cfg = loadConfig();
+    expect(cfg.llm.provider).toBe("anthropic");
+    expect(cfg.llm.api_key).toBe("sk-updated");
+    expect(cfg.model).toBe("glm-5.1-updated");
+    expect(verify).toHaveBeenCalledWith({
+      provider: "anthropic",
+      apiKey: "sk-updated",
+      baseUrl: "",
+      model: "glm-5.1-updated",
+    });
+    expect(strip(lastFrame() ?? "")).toContain("LLM setup saved");
+    unmount();
+  });
+
+  it("/setup-llm asks for API key when reconfiguring a compatible provider", async () => {
+    updateConfig({
+      model: "old-model",
+      llm: {
+        provider: "compatible",
+        api_key: "old-key",
+        base_url: "https://provider.example.com/api/anthropic",
+      },
+    });
+    const verify = vi.fn().mockResolvedValue(undefined);
+    const { lastFrame, stdin, unmount } = render(<App verifyLlm={verify} />);
+    await tick();
+    await type(stdin, "/setup-llm");
+    expect(strip(lastFrame() ?? "")).toContain("Select provider");
+
+    await enter(stdin);
+    expect(strip(lastFrame() ?? "")).toContain("Custom endpoint base URL");
+    await enter(stdin);
+    expect(strip(lastFrame() ?? "")).toContain("API key for Anthropic-compatible provider");
+
+    await type(stdin, "new-key");
+    await type(stdin, "new-compatible-model");
+
+    await enter(stdin);
+    const cfg = loadConfig();
+    expect(cfg.llm.provider).toBe("compatible");
+    expect(cfg.llm.api_key).toBe("new-key");
+    expect(cfg.llm.base_url).toBe("https://provider.example.com/api/anthropic");
+    expect(cfg.model).toBe("new-compatible-model");
+    unmount();
+  });
+
+  it("/setup-fhsc collects FHSC config and switches broker", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/setup-fhsc");
+    expect(strip(lastFrame() ?? "")).toContain("FHSC broker setup");
+    expect(strip(lastFrame() ?? "")).toContain("Authentication method");
+
+    await type(stdin, "2");
+    await type(stdin, "123456");
+    await type(stdin, "fhsc-key");
+    await type(stdin, "fhsc-secret");
+    await enter(stdin);
+    await enter(stdin);
+
+    const saved = strip(lastFrame() ?? "");
+    expect(saved).toContain("FHSC broker saved.");
+    expect(saved).toContain("123456");
+    expect(saved).toContain("https://api.vinasecurities.com");
+
+    await enter(stdin);
+    const cfg = loadConfig();
+    expect(cfg.broker).toBe("fhsc");
+    expect(cfg.fhsc.sub_account_id).toBe("123456");
+    expect(cfg.fhsc.api_key).toBe("fhsc-key");
+    expect(cfg.fhsc.api_secret).toBe("fhsc-secret");
+    expect(cfg.fhsc.access_token).toBe("");
+    expect(cfg.fhsc.access_key).toBe("");
+    expect(cfg.fhsc.device_id).toBe("");
+    expect(cfg.fhsc.user_id).toBe("");
+    expect(cfg.fhsc.cust_id).toBe("");
+    expect(cfg.fhsc.base_url).toBe("https://api.vinasecurities.com");
+    expect(strip(lastFrame() ?? "")).toContain("FHSC setup saved");
+    unmount();
+  });
+
   it("/health prints local runtime checks", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
@@ -301,6 +391,28 @@ describe("Azoth TUI", () => {
     expect(out).toContain("llm:");
     expect(out).toContain("database:");
     expect(out).toContain("data_provider:");
+    unmount();
+  });
+
+  it("renders broker consent as a selectable TUI prompt", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+
+    const decision = requireBrokerConsent("portfolio_list", "read cash, positions, and exposure");
+    await tick();
+    let out = strip(lastFrame() ?? "");
+    expect(out).toContain("Allow broker action?");
+    expect(out).toContain("Yes, allow once");
+    expect(out).toContain("No, deny");
+    expect(out).toContain("↑/↓ select");
+    expect(out).toContain("› No, deny");
+
+    stdin.write("\u001B[A");
+    await tick();
+    out = strip(lastFrame() ?? "");
+    expect(out).toContain("› Yes, allow once");
+    await enter(stdin);
+    await expect(decision).resolves.toBe(true);
     unmount();
   });
 
@@ -483,7 +595,6 @@ describe("Azoth TUI", () => {
           rationale: "Momentum and fundamentals justify a modest overweight.",
           exitPlan: "Cut if trend breaks.",
           teamRunId: "team-run-87654321",
-          journalId: 12,
         },
       };
     });
@@ -706,7 +817,7 @@ describe("Azoth TUI", () => {
     expect(out).toContain("/team");
     expect(out).toContain("/analyze");
     expect(out).toContain("/backtest");
-    expect(out).toContain("/journal");
+    expect(out).not.toContain("/journal");
     expect(out).not.toContain("/chart");
     expect(out).not.toContain("/alerts");
     expect(out).toContain("Tab to complete");
@@ -724,17 +835,6 @@ describe("Azoth TUI", () => {
     unmount();
   });
 
-  it("/journal renders as a bordered card", async () => {
-    const { lastFrame, stdin, unmount } = render(<App />);
-    await tick();
-    await type(stdin, "/journal decisions 5");
-    const out = strip(lastFrame() ?? "");
-    expect(out).toContain("DECISIONS");
-    // Panel uses round borders; assert at least one border glyph appears with the card.
-    expect(out).toMatch(/[╭╮╰╯─│]/);
-    unmount();
-  });
-
   it("/help prints local slash command help", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
@@ -742,7 +842,22 @@ describe("Azoth TUI", () => {
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("/team <message>");
     expect(out).toContain("/analyze <ticker>");
-    expect(out).toContain("/journal [decisions|orders|fills|alerts]");
+    expect(out).not.toContain("/journal");
+    expect(out).toContain("/about");
+    unmount();
+  });
+
+  it("/about prints version and runtime context", async () => {
+    const { lastFrame, stdin, unmount } = render(<App />);
+    await tick();
+    await type(stdin, "/about");
+    const out = strip(lastFrame() ?? "");
+    expect(out).toMatch(/Azoth 0\.1\.\d+/);
+    expect(out).toContain("Runtime:");
+    expect(out).toContain("Database:");
+    expect(out).toContain("Broker: paper");
+    expect(out).toContain("Autonomy: advisory");
+    expect(out).toContain("Roadmap: ROADMAP.md");
     unmount();
   });
 

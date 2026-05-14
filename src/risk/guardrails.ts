@@ -25,8 +25,9 @@ function equityValue(
 }
 
 /**
- * Pre-trade checks for order-capable autonomy modes. `confirm` adds a human
- * gate after these checks pass; `advisory` never reaches the broker.
+ * Pre-trade checks for order-capable autonomy modes. Live/user-facing flows
+ * obtain explicit broker consent before reaching this function because the
+ * checks read broker state.
  */
 export async function checkOrder(
   broker: Broker,

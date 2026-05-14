@@ -1,6 +1,7 @@
-# Azoth Roadmap
+# Azoth 12-Month Product Roadmap
 
-This roadmap describes planned product direction for Azoth. It is not a
+This roadmap sequences Azoth from the current `v0.1.0` public baseline into a
+daily-use Vietnam equity workflow product over May 2026-April 2027. It is not a
 commitment to ship every item in order; priorities may change based on broker
 API behavior, market data reliability, user feedback, and safety review.
 
@@ -15,7 +16,7 @@ API behavior, market data reliability, user feedback, and safety review.
 
 ## Current Baseline
 
-Azoth v0.1.0 provides the public baseline:
+Azoth v0.1.0, released on May 4, 2026, provides the public baseline:
 
 - Chat-first Ink TUI with slash commands and resumable local sessions.
 - Claude Agent SDK orchestration with Azoth market, portfolio, journal, team,
@@ -29,111 +30,87 @@ Azoth v0.1.0 provides the public baseline:
 - Optional DNSE Entrade X / LightSpeed live broker integration.
 - Public npm packaging and automated release workflow.
 
-## Near Term
+## Release Sequence
 
-### Release And Install Quality
+### v0.2 - Stabilization And Install Quality
 
-- Publish `v0.1.0` as the stable public baseline.
-- Keep the TUI version sourced from installed package metadata.
-- Add a lightweight `azoth --version` / `azoth version` command.
-- Add post-install smoke checks for packaged CLI binaries.
-- Keep release docs consolidated and aligned with Changesets output.
-
-### Runtime Reliability
-
-- Move all test and runtime scratch artifacts under `~/.azoth`, `.azoth`, or
-  temp directories.
-- Harden SQLite lifecycle handling for tests, CLI shutdown, and interrupted
-  sessions.
-- Add safer migration coverage for existing user databases.
-- Improve `/health` output for missing config, unavailable providers, and
-  broker-state inconsistencies.
-
-### TUI Workflow
-
-- Improve first-run setup validation and provider error messages.
-- Add clearer session resume and session deletion flows.
-- Add compact command output for repeated `/quote`, `/positions`, and
-  `/journal` workflows.
-- Add a dedicated `/version` or `/about` card with package, runtime path, DB
-  path, broker, provider, and release link.
-
-### Documentation
-
+- Ship `azoth --version`, `azoth -v`, and `azoth version`.
+- Add packaged CLI smoke checks for the compiled binary.
+- Harden SQLite lifecycle handling for tests, CLI shutdown, interrupted
+  sessions, and user database migrations.
+- Improve `/health` for missing config, unavailable providers, broker-state
+  inconsistencies, live-trading arming, and provider probes.
+- Improve first-run provider validation and error messages.
 - Expand live trading setup docs with explicit DNSE read-only validation steps.
-- Document the local SQLite schema at a high level.
-- Add troubleshooting docs for npm install, native SQLite builds, provider
-  setup, and TTY requirements.
-- Add example workflows for research, portfolio review, backtesting, and paper
-  trading.
 
-## Mid Term
+### v0.3 - Daily Workflow Foundation
 
-### Market Data
+- Improve compact `/quote`, `/positions`, and `/journal` output for repeated
+  daily use.
+- Add `/about` with package version, runtime path, DB path, broker, provider,
+  and release references.
+- Add clearer session resume and session deletion flows.
+- Add journal import/export for decisions, orders, fills, and alerts.
+- Add workflow docs for morning review, watchlist review, end-of-day journaling,
+  paper trading, and backtesting.
 
-- Add provider health scoring and fallback diagnostics.
-- Track source timestamps and freshness in rendered quote and analysis output.
-- Improve ticker discovery with exchange, sector, liquidity, and watchlist
-  filters.
-- Add richer corporate-action and disclosure context where reliable sources are
-  available.
-- Add more cache controls for stale data, forced refresh, and provider probes.
+### v0.4 - Watchlists, Alerts, And Data Trust
 
-### Research And Team Desk
+- Add watchlist-aware ticker discovery with exchange, sector, liquidity, and
+  saved-list filters.
+- Add provider health scoring, fallback diagnostics, source timestamps, and
+  freshness display in quote and analysis output.
+- Add cache controls for stale data, forced refresh, and provider probes.
+- Add alert rules for position size, loss limits, stale data, and market session
+  boundaries.
+- Persist alert events locally so alerts are auditable alongside journal rows.
 
-- Make analyst role configuration easier to tune from config.
-- Persist full team artifacts in a more inspectable form.
+### v0.5 - Portfolio Review And Comparison
+
 - Add comparison workflows for pairs, sectors, and portfolio candidates.
-- Improve synthesis quality with structured evidence tables and source
-  timestamps.
-- Add configurable model choices per role for cost and latency control.
-
-### Portfolio And Risk
-
-- Add configurable risk presets for conservative, balanced, and aggressive
-  operation.
 - Improve drawdown, realized P&L, turnover, exposure, and concentration
   reporting.
 - Add pre-trade impact previews before confirm or auto execution.
-- Add alerting rules for position size, loss limits, stale data, and market
-  session boundaries.
-- Add paper/live broker parity checks where APIs allow safe comparison.
+- Add configurable risk presets for conservative, balanced, and aggressive
+  operation.
+- Improve team synthesis with structured evidence tables and source timestamps.
+- Add configurable model choices per role for cost and latency control.
 
-### Backtesting
+### v0.6 - Backtesting And Operations Depth
 
 - Add repeatable scenario files for backtests.
 - Store and compare backtest runs in the TUI.
 - Add benchmark and sector-relative analytics.
 - Improve fill assumptions, fee models, and rejected-order reporting.
 - Add export support for run summaries and journal evidence.
+- Add paper/live broker parity checks where APIs allow safe comparison.
+- Add order preview, dry-run, emergency stop, and stronger live-trading preflight
+  commands.
 
-## Later
+## Public Interfaces
 
-### Live Trading Operations
+- CLI: `azoth --version`, `azoth -v`, and `azoth version`.
+- TUI: `/about`, watchlist-aware discovery flows, backtest scenario selection,
+  backtest run comparison, alert management, and order preview/dry-run.
+- Config: risk presets, data freshness/cache controls, alert rules, watchlists,
+  and optional per-role model settings.
+- Storage: provider health/freshness metadata, watchlists, alert rules/events,
+  inspectable team artifacts, backtest scenarios, and comparable backtest
+  summaries.
 
-- Add stronger live-trading arming workflows with explicit preflight checklists.
-- Add order preview, dry-run, and emergency stop commands.
-- Add reconciliation between local records and broker-reported orders/fills.
-- Add richer handling for broker outages, expired sessions, and partial fills.
-- Add optional notification hooks for fills, rejects, and risk halts.
+## Validation
 
-### Data And Integrations
+- Keep every release gated by `pnpm typecheck`, `pnpm test`, `pnpm build`, and
+  packaged CLI smoke validation.
+- Add focused tests for each new slash command, config migration, SQLite schema
+  migration, stale-data behavior, alert trigger, risk preset, and backtest
+  scenario.
+- Keep DNSE live validation read-only by default; require explicit live env flags
+  for any broker integration checks.
+- Add regression prompts for team output structure, evidence timestamps, tool
+  routing, and backtest consistency once `v0.5` begins.
 
-- Add optional import/export for journals, portfolios, and sessions.
-- Support additional Vietnam-market data providers when licensing and quality
-  allow.
-- Add optional document/context ingestion for company notes and user research.
-- Add connector-style integration points without making cloud storage required.
-
-### Evaluation And Quality
-
-- Add evaluation datasets for team analysis, tool routing, and backtest
-  consistency.
-- Add regression checks for prompts and role outputs.
-- Add benchmark prompts for latency, token usage, and answer structure.
-- Add more deterministic tests around risk controls and broker accounting.
-
-## Not Planned For Now
+## Not Planned For This Roadmap
 
 - Fully autonomous live trading without explicit user arming and risk gates.
 - Custody of user credentials outside the local runtime or user-managed secret

@@ -5,7 +5,7 @@ import { fundamentalsTool } from "../../tools/fundamentals.js";
 import { newsTool } from "../../tools/news.js";
 import { indicesTool, foreignFlowTool } from "../../tools/macro.js";
 import { listPositionsTool } from "../../tools/portfolio.js";
-import { journalReadTool } from "../../tools/journal.js";
+import { accountHistoryTool } from "../../tools/accountHistory.js";
 import { discoverTickersTool } from "../../tools/discover.js";
 import type { RoleName } from "./state.js";
 
@@ -20,15 +20,13 @@ const TOOL_BY_NAME: Record<string, AnyTool> = {
   macro_indices: indicesTool as unknown as AnyTool,
   foreign_flow: foreignFlowTool as unknown as AnyTool,
   portfolio_list: listPositionsTool as unknown as AnyTool,
-  journal_read: journalReadTool as unknown as AnyTool,
+  account_history: accountHistoryTool as unknown as AnyTool,
   discover_tickers: discoverTickersTool as unknown as AnyTool,
 };
 
 /**
  * Whitelist of tool names each role can call. Researcher / portfolio-manager
- * roles get nothing — their job is synthesis over prior state. Journal-append
- * is performed by the runner after the portfolio role decides, not as a tool
- * call, so it is intentionally absent everywhere.
+ * roles get nothing — their job is synthesis over prior state.
  */
 export const ROLE_TOOLS: Record<RoleName, string[]> = {
   technical: ["market_quote", "market_ohlcv", "technical_indicators"],
@@ -38,8 +36,8 @@ export const ROLE_TOOLS: Record<RoleName, string[]> = {
   bull: [],
   bear: [],
   researchManager: [],
-  trader: ["portfolio_list", "discover_tickers", "journal_read"],
-  risk: ["portfolio_list", "macro_indices", "foreign_flow"],
+  trader: ["portfolio_list", "account_history", "discover_tickers"],
+  risk: ["portfolio_list", "account_history", "macro_indices", "foreign_flow"],
   portfolio: [],
 };
 

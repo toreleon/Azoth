@@ -6,12 +6,19 @@
  *    AZOTH_LIVE_TRADING=1
  *  For DNSE the live test is read-only (snapshot, listOrders) — it does NOT
  *  place orders.
+ *
+ * FHSCBroker runs only when:
+ *    FHSC_TEST_LIVE=1
+ *    FHSC_SUB_ACCOUNT_ID set
+ *    FHSC_ACCESS_TOKEN or FHSC_API_KEY / FHSC_API_SECRET set
+ *  The live test is read-only (snapshot, listOrders) — it does NOT place orders.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { PaperBroker } from "../src/broker/paper.js";
 import { DNSEBroker } from "../src/broker/dnse.js";
+import { FHSCBroker } from "../src/broker/fhsc.js";
 import { closeDb } from "../src/storage/db.js";
 import type { Broker } from "../src/broker/types.js";
 
@@ -138,6 +145,27 @@ describe.skipIf(!liveDnse)("DNSEBroker (read-only, requires live env)", () => {
   it("snapshot returns cash + positions", async () => {
     const snap = await broker.snapshot();
     expect(snap.broker).toBe("dnse");
+    expect(typeof snap.cashVnd).toBe("number");
+    expect(Array.isArray(snap.positions)).toBe(true);
+  });
+
+  it("listOrders returns today's orders", async () => {
+    const orders = await broker.listOrders({ limit: 5 });
+    expect(Array.isArray(orders)).toBe(true);
+  });
+});
+
+const liveFhsc = process.env.FHSC_TEST_LIVE === "1";
+
+describe.skipIf(!liveFhsc)("FHSCBroker (read-only, requires live env)", () => {
+  let broker: Broker;
+  beforeAll(() => {
+    broker = new FHSCBroker();
+  });
+
+  it("snapshot returns cash + positions", async () => {
+    const snap = await broker.snapshot();
+    expect(snap.broker).toBe("fhsc");
     expect(typeof snap.cashVnd).toBe("number");
     expect(Array.isArray(snap.positions)).toBe(true);
   });

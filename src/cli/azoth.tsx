@@ -1,11 +1,31 @@
 #!/usr/bin/env node
-import "../runtime/bootstrap.js";
 import { render } from "ink";
 import { App } from "../tui/App.js";
 import { getDb, closeDb } from "../storage/db.js";
 import { loadConfig } from "../config/loader.js";
+import { initializeAzothRuntime } from "../runtime/init.js";
+import { packageVersion } from "../runtime/version.js";
+import { isVersionCommand } from "./args.js";
+
+function sanitizeRuntimeEnv() {
+  for (const key of ["AZOTH_DB", "AZOTH_CONFIG", "AZOTH_HOME"] as const) {
+    if (process.env[key]?.trim() === "") delete process.env[key];
+  }
+}
+
+function printVersion() {
+  console.log(`azoth ${packageVersion()}`);
+}
 
 function main() {
+  const args = process.argv.slice(2);
+  if (isVersionCommand(args)) {
+    printVersion();
+    return;
+  }
+
+  sanitizeRuntimeEnv();
+  initializeAzothRuntime();
   loadConfig();
   getDb();
 

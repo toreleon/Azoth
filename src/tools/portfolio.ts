@@ -3,6 +3,7 @@ import { getStockOhlcv } from "../data/sources/dnsePublic.js";
 import { nowSec } from "../agent/clock.js";
 import { getBroker } from "../broker/index.js";
 import type { BrokerSnapshot } from "../broker/types.js";
+import { requireBrokerConsent } from "./brokerConsent.js";
 
 function asText(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj) }] };
@@ -21,18 +22,20 @@ export async function shapeBrokerPortfolio(
 ) {
   const positions = await Promise.all(
     snap.positions.map(async (p) => {
-      const px = await priceFor(p.ticker);
+      const px = p.lastPrice ?? await priceFor(p.ticker);
       const cost_basis_vnd = p.avgCost * p.quantity * 1000;
-      const market_value_vnd = px != null ? px * p.quantity * 1000 : null;
+      const market_value_vnd = p.marketValueVnd ?? (px != null ? px * p.quantity * 1000 : null);
       const unrealized_pnl_vnd =
-        px != null ? (px - p.avgCost) * p.quantity * 1000 : null;
+        p.unrealizedPnlVnd ?? (px != null ? (px - p.avgCost) * p.quantity * 1000 : null);
       const unrealized_pnl_pct =
-        px != null && p.avgCost > 0
+        p.unrealizedPnlPct ?? (px != null && p.avgCost > 0
           ? ((px - p.avgCost) / p.avgCost) * 100
-          : null;
+          : null);
       return {
         ticker: p.ticker,
         quantity: p.quantity,
+        sub_account_id: p.subAccountId ?? null,
+        custody_code: p.custodyCode ?? null,
         avg_cost_thousand_vnd: p.avgCost,
         last_close_thousand_vnd: px,
         cost_basis_vnd,
@@ -52,10 +55,14 @@ export async function shapeBrokerPortfolio(
     },
     { cost_basis_vnd: 0, market_value_vnd: 0, unrealized_pnl_vnd: 0 },
   );
+  const total_equity_vnd = snap.cashVnd + totals.market_value_vnd;
 
   return {
     broker: snap.broker,
     cash_vnd: snap.cashVnd,
+    total_equity_vnd,
+    margin_used_vnd: snap.marginUsedVnd ?? 0,
+    sub_accounts: snap.subAccounts ?? [],
     positions,
     totals,
   };
@@ -63,9 +70,11 @@ export async function shapeBrokerPortfolio(
 
 export const listPositionsTool = tool(
   "portfolio_list",
-  "List broker positions with current price, cash, and unrealized P&L. Prices and avg_cost are in thousand VND (e.g. 28.5 = 28,500 VND). Monetary totals are returned in VND.",
+  "List broker positions with current price, cash, and unrealized P&L. Outside backtests, the user is always prompted in the CLI before any broker call. Prices and avg_cost are in thousand VND (e.g. 28.5 = 28,500 VND). Monetary totals are returned in VND.",
   {},
   async () => {
+    const ok = await requireBrokerConsent("portfolio_list", "read cash, positions, and exposure");
+    if (!ok) return asText({ ok: false, error: "user_declined" });
     const snap = await getBroker().snapshot();
     return asText(await shapeBrokerPortfolio(snap, lastClose));
   },

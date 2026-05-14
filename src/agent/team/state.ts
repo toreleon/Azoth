@@ -58,7 +58,6 @@ export interface FinalDecision {
   sizingPct: number;
   rationale: string;
   exitPlan?: string;
-  journalId?: number;
   teamRunId: string;
 }
 

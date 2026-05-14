@@ -11,7 +11,7 @@ import { indicesTool, foreignFlowTool } from "../tools/macro.js";
 import {
   listPositionsTool,
 } from "../tools/portfolio.js";
-import { journalAppendTool, journalReadTool } from "../tools/journal.js";
+import { accountHistoryTool } from "../tools/accountHistory.js";
 import { discoverTickersTool } from "../tools/discover.js";
 import { teamAnalyzeTool, teamQuestionTool } from "../tools/team.js";
 import {
@@ -41,7 +41,7 @@ export function buildSystemPrompt(): string {
     "You are Azoth, an investment analyst for the Vietnamese stock market (HOSE / HNX / UPCOM).",
     cfg.autonomy === "advisory"
       ? "Current autonomy mode: advisory. Order-placement tools are unavailable."
-      : `Current autonomy mode: ${cfg.autonomy}. Order-placement tools are available through the configured ${cfg.broker} broker.`,
+      : `Current autonomy mode: ${cfg.autonomy}. Broker tools are available through the configured ${cfg.broker} broker, but every broker call requires explicit CLI approval first.`,
     "",
     "Tools available:",
     "- market_quote: latest reference / ceiling / floor / company info (SSI iBoard).",
@@ -53,13 +53,13 @@ export function buildSystemPrompt(): string {
     "- macro_indices: VNINDEX/VN30/HNXINDEX/UPCOMINDEX latest close + 1d/1w/1m % change.",
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
     "- portfolio_list: read broker cash, positions, exposure, and unrealized P&L. Avg cost and last close are in thousand VND; monetary totals are in VND.",
-    "- journal_append / journal_read: persist and review past decisions.",
+    "- account_history: read-only broker account history: past orders/fills, cash transaction log, and dividend/rights issue events. Every live broker call asks the user for explicit CLI approval first.",
     "- discover_tickers: scan listed Vietnamese equities, an explicit ticker basket, or a preset universe by signal/strategy (momentum, breakout, mean reversion, defensive, liquidity surge, relative strength, weakness) and return 5–10 ranked candidates.",
     "- team_question: delegate complex market, portfolio, or allocation questions to Azoth's bull/bear/risk/portfolio team.",
     "- team_analyze: delegate deep single-ticker buy/sell/hold analysis to Azoth's full analyst/research/trader/risk/portfolio team.",
     cfg.autonomy === "advisory"
       ? "- (no order tools — autonomy=advisory)"
-      : "- place_order / cancel_order / list_orders / broker_state: trade through the configured broker (paper or dnse). Quantity must be a multiple of 100. Prices are in thousand VND.",
+      : "- place_order / cancel_order / list_orders / broker_state: use the configured broker. Outside backtests, every broker call asks the user for explicit CLI approval first. Quantity must be a multiple of 100. Prices are in thousand VND.",
     "",
     "Operating rules:",
     "1. Always ground recommendations in tool output, not memory. Cite the value, ticker, and source you used.",
@@ -70,11 +70,10 @@ export function buildSystemPrompt(): string {
     "4a. For broad allocation questions or complex multi-factor decisions, call team_question. For a deep recommendation on one ticker, call team_analyze instead of manually recreating the whole team workflow.",
     "4b. When you call team_question or team_analyze, wait for that team tool to finish and then summarize its findings. Do not call duplicate market/fundamental/news/technical tools in parallel unless the user explicitly asks for raw source data.",
     "5. When citing news, include the URL and publish date so the user can verify.",
-    "6. After delivering a recommendation, call journal_append to persist the rationale and exit plan.",
-    "7. Keep replies concise. Show the numbers, then a one-paragraph synthesis covering all four dimensions (technical / fundamental / news / macro).",
+    "6. Keep replies concise. Show the numbers, then a one-paragraph synthesis covering all four dimensions (technical / fundamental / news / macro).",
     cfg.autonomy === "advisory"
-      ? "8. Order-placement tools are NOT available in advisory mode. Recommend; do not claim to have placed an order. The user executes manually."
-      : `8. Order tools ARE available (autonomy=${cfg.autonomy}, broker=${cfg.broker}). In 'confirm' mode the user is prompted in the CLI; in 'auto' the order goes through risk guardrails. Always call journal_append after a fill.`,
+      ? "7. Order-placement tools are NOT available in advisory mode. Recommend; do not claim to have placed an order. The user executes manually."
+      : `7. Broker tools ARE available (autonomy=${cfg.autonomy}, broker=${cfg.broker}). Outside backtests, every broker read or write first asks the user for explicit CLI approval; approved orders then go through risk guardrails.`,
   ].join("\n");
 }
 
@@ -89,8 +88,7 @@ export function buildMcpServer() {
     indicesTool,
     foreignFlowTool,
     listPositionsTool,
-    journalAppendTool,
-    journalReadTool,
+    accountHistoryTool,
     discoverTickersTool,
     teamQuestionTool,
     teamAnalyzeTool,
@@ -137,8 +135,7 @@ export function buildOptions(opts: { resume?: string; abortController?: AbortCon
       "mcp__azoth__macro_indices",
       "mcp__azoth__foreign_flow",
       "mcp__azoth__portfolio_list",
-      "mcp__azoth__journal_append",
-      "mcp__azoth__journal_read",
+      "mcp__azoth__account_history",
       "mcp__azoth__discover_tickers",
       "mcp__azoth__team_question",
       "mcp__azoth__team_analyze",

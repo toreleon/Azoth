@@ -24,7 +24,33 @@ const ConfigSchema = z.object({
     })
     .optional()
     .default({}),
-  broker: z.enum(["paper", "dnse"]),
+  broker: z.enum(["paper", "dnse", "fhsc"]),
+  fhsc: z
+    .object({
+      sub_account_id: z.string().default(""),
+      account_id: z.string().default(""),
+      base_url: z.string().default("https://api.vinasecurities.com"),
+      access_token: z.string().default(""),
+      access_key: z.string().default(""),
+      device_id: z.string().default(""),
+      user_id: z.string().default(""),
+      cust_id: z.string().default(""),
+      api_key: z.string().default(""),
+      api_secret: z.string().default(""),
+    })
+    .optional()
+    .default({
+      sub_account_id: "",
+      account_id: "",
+      base_url: "https://api.vinasecurities.com",
+      access_token: "",
+      access_key: "",
+      device_id: "",
+      user_id: "",
+      cust_id: "",
+      api_key: "",
+      api_secret: "",
+    }),
   risk: z.object({
     max_position_pct: z.number().min(0).max(1),
     max_daily_loss_pct: z.number().min(0).max(1),
@@ -96,6 +122,7 @@ export function updateConfig(patch: Partial<Config>): Config {
     ...patch,
     llm: patch.llm ? { ...loadConfig().llm, ...patch.llm } : loadConfig().llm,
     team: patch.team ? { ...loadConfig().team, ...patch.team } : loadConfig().team,
+    fhsc: patch.fhsc ? { ...loadConfig().fhsc, ...patch.fhsc } : loadConfig().fhsc,
     risk: patch.risk ? { ...loadConfig().risk, ...patch.risk } : loadConfig().risk,
   });
 }
