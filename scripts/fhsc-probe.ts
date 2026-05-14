@@ -127,7 +127,9 @@ async function main() {
   ];
   const variants = headerVariants(apiKey, apiSecret, accessToken, accessKey, deviceId);
 
-  console.log(`FHSC probe sub_account=${subAccountId} account=${accountId || "(same)"} bases=${bases.join(", ")}`);
+  console.log(
+    `FHSC probe sub_account=${subAccountId ? "set" : "missing"} account=${accountId ? "set" : "missing"} bases=${bases.join(", ")}`,
+  );
   for (const base of bases) {
     for (const p of paths) {
       for (const variant of variants) {
