@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { ipcMain, Notification } from "electron";
 import {
   ActivateProjectReq,
   AbortTurnReq,
@@ -11,6 +11,7 @@ import {
   ResumeSessionReq,
   RestoreSessionReq,
   SaveConfigReq,
+  SaveDesktopSettingsReq,
   SendPromptReq,
   SlashCommandReq,
   StartSessionReq,
@@ -46,6 +47,7 @@ import {
 } from "@azoth/core/runtime/sessionStore.js";
 import { loadConfig, saveConfig, updateConfig, type Config } from "@azoth/core/config/loader.js";
 import { collectHealth } from "@azoth/core/runtime/health.js";
+import { getDesktopSettings, saveDesktopSettings } from "./appSettings.js";
 
 const activeTurns = new Map<string, { controller: AbortController; stopTail: () => void }>();
 
@@ -87,6 +89,44 @@ function sendRecord(turnId: string, record: ChatRecord): void {
     sessionId: record.sessionId,
     record,
   });
+}
+
+function maybeNotifyOrderResult(record: ChatRecord, records: ChatRecord[]): void {
+  if (record.type !== "tool_result" || !record.toolUseId || !record.text) return;
+  const settings = getDesktopSettings();
+  if (!settings.showNotifications || !settings.notifyOnOrderFill || !Notification.isSupported()) return;
+
+  const tool = records.find(
+    (candidate) => candidate.type === "tool_use" && candidate.toolUseId === record.toolUseId,
+  );
+  if (tool?.toolName !== "place_order" && tool?.toolName !== "cancel_order") return;
+
+  try {
+    const parsed = JSON.parse(record.text) as {
+      order?: {
+        status?: string;
+        side?: string;
+        quantity?: number;
+        ticker?: string;
+        rejectReason?: string | null;
+      };
+      error?: string;
+    };
+    const status = parsed.order?.status;
+    if (!status || !["FILLED", "REJECTED", "CANCELLED"].includes(status)) return;
+    const order = parsed.order;
+    if (!order) return;
+    const detail = [order.side, order.quantity, order.ticker].filter(Boolean).join(" ");
+    const body = status === "REJECTED" && (order.rejectReason || parsed.error)
+      ? `${detail} - ${order.rejectReason ?? parsed.error}`
+      : detail;
+    new Notification({
+      title: `Order ${status.toLowerCase()}`,
+      body,
+    }).show();
+  } catch {
+    // Tool output is best-effort JSON; ignore non-order payloads.
+  }
 }
 
 function sendLiveBlockEvent(turnId: string, sessionId: string, message: unknown): void {
@@ -222,6 +262,7 @@ export function registerIpcHandlers(): void {
       const records = readSessionRecords(req.sessionId, project.rootPath).map(toRecord);
       for (const record of records.slice(streamedRecordCount)) {
         sendRecord(req.turnId, record);
+        maybeNotifyOrderResult(record, records);
       }
       streamedRecordCount = records.length;
     };
@@ -324,6 +365,13 @@ export function registerIpcHandlers(): void {
     const req = SaveConfigReq.parse(raw);
     if (Object.keys(req.patch).length === 0) return loadConfig() as unknown;
     return updateConfig(req.patch as Partial<Config>) as unknown;
+  });
+
+  register("app-settings:get", () => getDesktopSettings());
+
+  register("app-settings:save", (raw) => {
+    const req = SaveDesktopSettingsReq.parse(raw);
+    return saveDesktopSettings(req.patch);
   });
 
   register("broker:state", async () => {

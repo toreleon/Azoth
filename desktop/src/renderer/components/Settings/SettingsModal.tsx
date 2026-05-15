@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
+import type { DesktopSettings } from "../../../shared/ipc.js";
 import { useChatStore } from "../../store/chatStore.js";
 
 type Pane = "general" | "models" | "broker" | "risk" | "sessions" | "advanced" | "about";
@@ -22,11 +23,12 @@ const modelOptions = ["glm-5.1", "claude-haiku-4-5", "claude-sonnet-4-6", "claud
 
 export function SettingsModal({ onClose }: Props) {
   const [pane, setPane] = useState<Pane>("general");
-  const [query, setQuery] = useState("");
   const [saved, setSaved] = useState(false);
   const savedTimer = useRef<number | null>(null);
   const config = useChatStore((s) => s.config) as Record<string, any> | null;
+  const appSettings = useChatStore((s) => s.appSettings);
   const setConfig = useChatStore((s) => s.setConfig);
+  const setAppSettings = useChatStore((s) => s.setAppSettings);
   const projects = useChatStore((s) => s.projects);
   const sessions = useChatStore((s) => s.sessions);
 
@@ -48,11 +50,14 @@ export function SettingsModal({ onClose }: Props) {
     flashSaved();
   }
 
-  const visiblePanes = panes.filter((item) =>
-    item.label.toLowerCase().includes(query.trim().toLowerCase()),
-  );
-  const primary = visiblePanes.filter((item) => item.group !== "secondary");
-  const secondary = visiblePanes.filter((item) => item.group === "secondary");
+  async function saveAppSettings(patch: Partial<DesktopSettings>) {
+    const next = await window.azoth.invoke("app-settings:save", { patch });
+    setAppSettings(next);
+    flashSaved();
+  }
+
+  const primary = panes.filter((item) => item.group !== "secondary");
+  const secondary = panes.filter((item) => item.group === "secondary");
 
   return (
     <div className="settings-backdrop" onMouseDown={onClose}>
@@ -73,15 +78,10 @@ export function SettingsModal({ onClose }: Props) {
 
         <div className="settings-body">
           <nav className="settings-nav" aria-label="Settings sections">
-            <div className="settings-nav-search">
-              <SearchIcon />
-              <input
-                type="search"
-                placeholder="Search settings"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
+            <button className="settings-back-btn" onClick={onClose}>
+              <BackIcon />
+              Back to app
+            </button>
             {primary.map((item) => (
               <NavItem key={item.id} item={item} active={pane === item.id} onClick={() => setPane(item.id)} />
             ))}
@@ -92,7 +92,14 @@ export function SettingsModal({ onClose }: Props) {
           </nav>
 
           <div className="settings-pane">
-            {pane === "general" && <GeneralPane config={config} onSave={save} />}
+            {pane === "general" && (
+              <GeneralPane
+                config={config}
+                appSettings={appSettings}
+                onSave={save}
+                onSaveAppSettings={saveAppSettings}
+              />
+            )}
             {pane === "models" && <ModelsPane config={config} onSave={save} />}
             {pane === "broker" && <BrokerPane config={config} onSave={save} />}
             {pane === "risk" && <RiskPane config={config} onSave={save} />}
@@ -103,7 +110,6 @@ export function SettingsModal({ onClose }: Props) {
         </div>
       </div>
       <div className={`settings-saved${saved ? " show" : ""}`}>
-        <span className="dot" />
         Saved
       </div>
     </div>
@@ -129,12 +135,24 @@ function NavItem({
 
 function GeneralPane({
   config,
+  appSettings,
   onSave,
+  onSaveAppSettings,
 }: {
   config: Record<string, any> | null;
+  appSettings: DesktopSettings | null;
   onSave: (patch: Record<string, unknown>) => Promise<void>;
+  onSaveAppSettings: (patch: Partial<DesktopSettings>) => Promise<void>;
 }) {
   const team = config?.team ?? {};
+  const settings = appSettings ?? {
+    launchAtLogin: false,
+    hideOnClose: true,
+    showNotifications: true,
+    notifyOnOrderFill: true,
+    appearance: "light",
+  } satisfies DesktopSettings;
+
   return (
     <PaneShell title="General" subtitle="Autonomy, default model tier, and app behavior.">
       <GroupTitle>Autonomy</GroupTitle>
@@ -171,17 +189,43 @@ function GeneralPane({
 
       <GroupTitle>App</GroupTitle>
       <Group>
-        <SettingRow label="Launch at login" control={<Toggle checked={false} onChange={() => undefined} />} />
+        <SettingRow
+          label="Launch at login"
+          control={
+            <Toggle
+              checked={settings.launchAtLogin}
+              onChange={(launchAtLogin) => void onSaveAppSettings({ launchAtLogin })}
+            />
+          }
+        />
         <SettingRow
           label="Hide on close"
           hint="Keep Azoth running in the menu bar after the window closes."
-          control={<Toggle checked onChange={() => undefined} />}
+          control={
+            <Toggle
+              checked={settings.hideOnClose}
+              onChange={(hideOnClose) => void onSaveAppSettings({ hideOnClose })}
+            />
+          }
         />
-        <SettingRow label="Show notifications" control={<Toggle checked onChange={() => undefined} />} />
+        <SettingRow
+          label="Show notifications"
+          control={
+            <Toggle
+              checked={settings.showNotifications}
+              onChange={(showNotifications) => void onSaveAppSettings({ showNotifications })}
+            />
+          }
+        />
         <SettingRow
           label="Notify on order fill"
           hint="System notification when a live order fills or is rejected."
-          control={<Toggle checked onChange={() => undefined} />}
+          control={
+            <Toggle
+              checked={settings.notifyOnOrderFill}
+              onChange={(notifyOnOrderFill) => void onSaveAppSettings({ notifyOnOrderFill })}
+            />
+          }
         />
       </Group>
 
@@ -191,31 +235,14 @@ function GeneralPane({
           label="Appearance"
           control={
             <Segmented
-              value="light"
+              value={settings.appearance}
               options={[
                 { value: "light", label: "Light" },
                 { value: "dark", label: "Dark" },
                 { value: "system", label: "System" },
               ]}
-              onChange={() => undefined}
+              onChange={(appearance) => void onSaveAppSettings({ appearance })}
             />
-          }
-        />
-        <SettingRow
-          label="Accent color"
-          control={
-            <div className="settings-swatches">
-              {["#2f6feb", "#17a34a", "#7c3aed", "#525252"].map((color, idx) => (
-                <button
-                  key={color}
-                  className="settings-swatch"
-                  aria-pressed={idx === 0 ? "true" : "false"}
-                  style={{ background: color }}
-                  title={["Cobalt", "Green", "Violet", "Graphite"][idx]}
-                  onClick={() => undefined}
-                />
-              ))}
-            </div>
           }
         />
       </Group>
@@ -982,8 +1009,8 @@ function AdvancedIcon() {
 function AboutIcon() {
   return <Svg><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v5h1" /></Svg>;
 }
-function SearchIcon() {
-  return <Svg><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Svg>;
+function BackIcon() {
+  return <Svg><path d="M15 18l-6-6 6-6" /><path d="M9 12h11" /></Svg>;
 }
 function EyeIcon() {
   return <Svg><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></Svg>;

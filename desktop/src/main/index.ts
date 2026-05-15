@@ -3,10 +3,11 @@ import { initializeAzothRuntime } from "@azoth/core/runtime/init.js";
 import { loadConfig } from "@azoth/core/config/loader.js";
 import { ensureDefaultProject, getProject } from "./projects.js";
 import { activateProject } from "./projectContext.js";
-import { createMainWindow } from "./window.js";
+import { createMainWindow, markAppQuitting } from "./window.js";
 import { bindMainWindow } from "./streamBus.js";
 import { abortAllTurns, registerIpcHandlers } from "./mainIpc.js";
 import { installConsentBridge, clearConsent } from "./consent.js";
+import { applyDesktopSettings } from "./appSettings.js";
 
 function boot(): void {
   initializeAzothRuntime();
@@ -21,6 +22,7 @@ function boot(): void {
   if (project) activateProject(project);
   installConsentBridge();
   registerIpcHandlers();
+  applyDesktopSettings();
 
   const win = createMainWindow();
   bindMainWindow(win);
@@ -38,12 +40,17 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  const existing = BrowserWindow.getAllWindows()[0];
+  if (existing) {
+    existing.show();
+    existing.focus();
+  } else {
     const win = createMainWindow();
     bindMainWindow(win);
   }
 });
 
 app.on("before-quit", () => {
+  markAppQuitting();
   abortAllTurns();
 });

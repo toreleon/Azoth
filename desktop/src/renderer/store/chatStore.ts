@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   ChatRecord,
+  DesktopSettings,
   Project,
   SessionDescriptor,
   StreamEvent,
@@ -32,6 +33,7 @@ interface ChatState {
   consent: ConsentRequest | null;
   onboarded: boolean;
   config: unknown;
+  appSettings: DesktopSettings | null;
 
   setProjects(projects: Project[], activeId: string | null): void;
   setActiveProject(id: string): void;
@@ -47,6 +49,7 @@ interface ChatState {
   setConsent(c: ConsentRequest | null): void;
   setOnboarded(value: boolean): void;
   setConfig(cfg: unknown): void;
+  setAppSettings(settings: DesktopSettings): void;
 
   applyStreamEvent(event: StreamEvent): void;
 }
@@ -64,6 +67,7 @@ export const useChatStore = create<ChatState>((set) => ({
   consent: null,
   onboarded: false,
   config: null,
+  appSettings: null,
 
   setProjects: (projects, activeId) =>
     set({ projects, activeProjectId: activeId ?? projects[0]?.id ?? null }),
@@ -140,6 +144,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setConsent: (consent) => set({ consent }),
   setOnboarded: (onboarded) => set({ onboarded }),
   setConfig: (config) => set({ config }),
+  setAppSettings: (appSettings) => set({ appSettings }),
 
   applyStreamEvent: (event) =>
     set((state) => {

@@ -18,24 +18,44 @@ export function App() {
     projects,
     sessions,
     onboarded,
+    appSettings,
     setProjects,
     setSessions,
     setOnboarded,
     setConfig,
+    setAppSettings,
   } = useChatStore();
 
   useEffect(() => {
     void (async () => {
-      const [{ projects, activeId }, status, cfg] = await Promise.all([
+      const [{ projects, activeId }, status, cfg, appSettings] = await Promise.all([
         window.azoth.invoke("project:list", undefined),
         window.azoth.invoke("onboarding:status", undefined),
         window.azoth.invoke("config:get", undefined),
+        window.azoth.invoke("app-settings:get", undefined),
       ]);
       setProjects(projects, activeId);
       setOnboarded(status.onboarded);
       setConfig(cfg);
+      setAppSettings(appSettings);
     })();
-  }, [setProjects, setOnboarded, setConfig]);
+  }, [setProjects, setOnboarded, setConfig, setAppSettings]);
+
+  useEffect(() => {
+    if (!appSettings) return;
+    const root = document.documentElement;
+    const apply = () => {
+      const theme = appSettings.appearance === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+        : appSettings.appearance;
+      root.dataset.theme = theme;
+      root.dataset.appearance = appSettings.appearance;
+    };
+    apply();
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [appSettings]);
 
   useEffect(() => {
     if (!activeProjectId) return;

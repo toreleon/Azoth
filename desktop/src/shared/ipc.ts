@@ -62,6 +62,14 @@ export interface HealthReport {
   rows: HealthRow[];
 }
 
+export interface DesktopSettings {
+  launchAtLogin: boolean;
+  hideOnClose: boolean;
+  showNotifications: boolean;
+  notifyOnOrderFill: boolean;
+  appearance: "light" | "dark" | "system";
+}
+
 // -- Request schemas --------------------------------------------------------
 
 export const StartSessionReq = z.object({
@@ -119,6 +127,16 @@ export const SaveConfigReq = z.object({
   patch: z.record(z.unknown()),
 });
 
+export const SaveDesktopSettingsReq = z.object({
+  patch: z.object({
+    launchAtLogin: z.boolean().optional(),
+    hideOnClose: z.boolean().optional(),
+    showNotifications: z.boolean().optional(),
+    notifyOnOrderFill: z.boolean().optional(),
+    appearance: z.enum(["light", "dark", "system"]).optional(),
+  }),
+});
+
 export const HealthProbeReq = z.object({
   probe: z.boolean().default(false),
 });
@@ -157,6 +175,8 @@ export interface IpcChannelMap {
   "slash:run": { req: z.infer<typeof SlashCommandReq>; res: { ok: true; text?: string } };
   "config:get": { req: undefined; res: unknown };
   "config:save": { req: z.infer<typeof SaveConfigReq>; res: unknown };
+  "app-settings:get": { req: undefined; res: DesktopSettings };
+  "app-settings:save": { req: z.infer<typeof SaveDesktopSettingsReq>; res: DesktopSettings };
   "broker:state": { req: undefined; res: unknown };
   "health:probe": { req: z.infer<typeof HealthProbeReq>; res: HealthReport };
   "project:list": { req: undefined; res: { projects: Project[]; activeId: string | null } };

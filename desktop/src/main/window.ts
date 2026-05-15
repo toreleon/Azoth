@@ -1,5 +1,12 @@
-import { BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import { resolve } from "node:path";
+import { getDesktopSettings } from "./appSettings.js";
+
+let appQuitting = false;
+
+export function markAppQuitting(): void {
+  appQuitting = true;
+}
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -20,6 +27,13 @@ export function createMainWindow(): BrowserWindow {
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  win.on("close", (event) => {
+    if (process.platform === "darwin" && !appQuitting && getDesktopSettings().hideOnClose) {
+      event.preventDefault();
+      win.hide();
+    }
   });
 
   const devUrl = process.env["ELECTRON_RENDERER_URL"];
