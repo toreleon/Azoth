@@ -9,7 +9,7 @@ interface Props {
 export function ChatView({ sessionId }: Props) {
   const records = useChatStore((s) => s.recordsBySession[sessionId] ?? []);
   const liveRecords = useChatStore((s) => s.liveRecordsBySession[sessionId] ?? []);
-  const streaming = useChatStore((s) => s.streaming);
+  const isStreaming = useChatStore((s) => Boolean(s.activeTurnsBySession[sessionId]));
   const scrollRef = useRef<HTMLElement>(null);
   const liveTextSize = liveRecords.reduce(
     (sum, record) => sum + (record.text?.length ?? 0) + (record.toolInput?.length ?? 0),
@@ -31,7 +31,7 @@ export function ChatView({ sessionId }: Props) {
       {liveRecords.map((record, idx) => (
         <Block key={`live-${record.timestamp}-${idx}`} record={record} />
       ))}
-      {streaming && liveRecords.length === 0 && (
+      {isStreaming && liveRecords.length === 0 && (
         <article className="turn thinking">
           <div className="label">Reasoning</div>
           Thinking...

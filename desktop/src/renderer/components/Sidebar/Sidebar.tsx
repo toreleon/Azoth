@@ -2,7 +2,7 @@ import type React from "react";
 import { useChatStore } from "../../store/chatStore.js";
 import { SessionList } from "./SessionList.js";
 
-export function Sidebar() {
+export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { activeProjectId, setActiveSession, setRecords, setSessions } = useChatStore();
 
   async function newChat() {
@@ -36,6 +36,11 @@ export function Sidebar() {
           <AutomationIcon />
           Automations
           <span className="sidebar-soon">Soon</span>
+        </button>
+        <button className="sidebar-action" onClick={onOpenSettings}>
+          <SettingsIcon />
+          Settings
+          <kbd>⌘,</kbd>
         </button>
       </div>
 
@@ -94,6 +99,15 @@ function AutomationIcon() {
   return (
     <SidebarSvg>
       <path d="M3 8a5 5 0 1 0 10 0M3 8a5 5 0 1 1 10 0M8 3v10" />
+    </SidebarSvg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <SidebarSvg>
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 2.5v1.4M8 12.1v1.4M2.5 8h1.4M12.1 8h1.4M4.1 4.1l1 1M10.9 10.9l1 1M4.1 11.9l1-1M10.9 5.1l1-1" />
     </SidebarSvg>
   );
 }

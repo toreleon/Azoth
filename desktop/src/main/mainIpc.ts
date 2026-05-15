@@ -2,12 +2,14 @@ import { ipcMain } from "electron";
 import {
   ActivateProjectReq,
   AbortTurnReq,
+  ArchiveSessionReq,
   ConsentRespondReq,
   CreateProjectReq,
   DeleteProjectReq,
   HealthProbeReq,
   ListSessionsReq,
   ResumeSessionReq,
+  RestoreSessionReq,
   SaveConfigReq,
   SendPromptReq,
   SlashCommandReq,
@@ -35,8 +37,10 @@ import {
   runTurn,
 } from "@azoth/core/agent/orchestrator.js";
 import {
+  archiveSession,
   listSessions,
   readSessionRecords,
+  restoreArchivedSession,
   type SessionIndexEntry,
   type SessionRecord,
 } from "@azoth/core/runtime/sessionStore.js";
@@ -172,30 +176,45 @@ export function registerIpcHandlers(): void {
 
   register("session:list", (raw) => {
     const req = ListSessionsReq.parse(raw);
-    activateProjectById(req.projectId);
-    return listSessions().map(toDescriptor);
+    const project = activateProjectById(req.projectId);
+    return listSessions(project.rootPath).map(toDescriptor);
   });
 
   register("session:start", (raw) => {
     const req = StartSessionReq.parse(raw);
-    activateProjectById(req.projectId);
-    const entry = startNewSession(req.title);
+    const project = activateProjectById(req.projectId);
+    const entry = startNewSession(req.title, project.rootPath);
     return toDescriptor(entry);
   });
 
   register("session:resume", (raw) => {
     const req = ResumeSessionReq.parse(raw);
-    activateProjectById(req.projectId);
-    const entry = resumeSession(req.sessionId);
+    const project = activateProjectById(req.projectId);
+    const entry = resumeSession(req.sessionId, project.rootPath);
     if (!entry) throw new Error(`Session not found: ${req.sessionId}`);
-    const records = readSessionRecords(entry.id).map(toRecord);
+    const records = readSessionRecords(entry.id, project.rootPath).map(toRecord);
     return { session: toDescriptor(entry), records };
+  });
+
+  register("session:archive", (raw) => {
+    const req = ArchiveSessionReq.parse(raw);
+    const project = activateProjectById(req.projectId);
+    archiveSession(req.sessionId, project.rootPath);
+    return { ok: true as const };
+  });
+
+  register("session:restore", (raw) => {
+    const req = RestoreSessionReq.parse(raw);
+    const project = activateProjectById(req.projectId);
+    const entry = restoreArchivedSession(req.session, project.rootPath);
+    return toDescriptor(entry);
   });
 
   register("turn:send", (raw) => {
     const req = SendPromptReq.parse(raw);
     const project = activateProjectById(req.projectId);
-    resumeSession(req.sessionId);
+    const session = resumeSession(req.sessionId, project.rootPath);
+    if (!session) throw new Error(`Session not found: ${req.sessionId}`);
     const controller = new AbortController();
     let streamedRecordCount = readSessionRecords(req.sessionId, project.rootPath).length;
 
@@ -214,7 +233,11 @@ export function registerIpcHandlers(): void {
         let usage: ChatRecord["usage"] | undefined;
         let costUsd: number | undefined;
         let sdkSessionId: string | undefined;
-        for await (const message of runTurn(req.prompt, { signal: controller.signal })) {
+        for await (const message of runTurn(req.prompt, {
+          signal: controller.signal,
+          sessionId: req.sessionId,
+          cwd: project.rootPath,
+        })) {
           drainRecords();
           sendLiveBlockEvent(req.turnId, req.sessionId, message);
           if ((message as { type?: string }).type === "result") {
@@ -276,7 +299,8 @@ export function registerIpcHandlers(): void {
     activateProjectById(req.projectId);
     switch (req.name) {
       case "sessions": {
-        const list = recentSessions(20)
+        const project = getProject(req.projectId);
+        const list = recentSessions(20, project?.rootPath)
           .map((s) => `${s.id.slice(0, 8)}  ${s.title}`)
           .join("\n");
         return { ok: true as const, text: list || "(no sessions)" };

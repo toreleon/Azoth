@@ -1,279 +1,1002 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import { useChatStore } from "../../store/chatStore.js";
 
-type Tab = "llm" | "broker" | "risk" | "about";
+type Pane = "general" | "models" | "broker" | "risk" | "sessions" | "advanced" | "about";
 
 interface Props {
   onClose: () => void;
 }
 
+const panes: Array<{ id: Pane; label: string; icon: React.ReactNode; group?: "primary" | "secondary" }> = [
+  { id: "general", label: "General", icon: <GeneralIcon /> },
+  { id: "models", label: "Models", icon: <ModelIcon /> },
+  { id: "broker", label: "Broker", icon: <BrokerIcon /> },
+  { id: "risk", label: "Risk", icon: <RiskIcon /> },
+  { id: "sessions", label: "Data & Sessions", icon: <SessionsIcon />, group: "secondary" },
+  { id: "advanced", label: "Advanced", icon: <AdvancedIcon />, group: "secondary" },
+  { id: "about", label: "About", icon: <AboutIcon />, group: "secondary" },
+];
+
+const modelOptions = ["glm-5.1", "claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"];
+
 export function SettingsModal({ onClose }: Props) {
-  const [tab, setTab] = useState<Tab>("llm");
+  const [pane, setPane] = useState<Pane>("general");
+  const [query, setQuery] = useState("");
+  const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<number | null>(null);
   const config = useChatStore((s) => s.config) as Record<string, any> | null;
   const setConfig = useChatStore((s) => s.setConfig);
-  const [draft, setDraft] = useState<Record<string, any>>(config ?? {});
+  const projects = useChatStore((s) => s.projects);
+  const sessions = useChatStore((s) => s.sessions);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimer.current != null) window.clearTimeout(savedTimer.current);
+    };
+  }, []);
+
+  function flashSaved() {
+    setSaved(true);
+    if (savedTimer.current != null) window.clearTimeout(savedTimer.current);
+    savedTimer.current = window.setTimeout(() => setSaved(false), 1400);
+  }
 
   async function save(patch: Record<string, unknown>) {
     const next = await window.azoth.invoke("config:save", { patch });
     setConfig(next);
-    setDraft({ ...draft, ...patch });
+    flashSaved();
   }
 
+  const visiblePanes = panes.filter((item) =>
+    item.label.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  const primary = visiblePanes.filter((item) => item.group !== "secondary");
+  const secondary = visiblePanes.filter((item) => item.group === "secondary");
+
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="settings-backdrop" onMouseDown={onClose}>
       <div
-        className="flex h-[560px] w-[720px] flex-col overflow-hidden rounded-xl border border-azoth-border bg-azoth-surface"
-        onClick={(e) => e.stopPropagation()}
+        className="settings-win"
+        role="dialog"
+        aria-label="Azoth Settings"
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-azoth-border px-5 py-3">
-          <h2 className="text-sm font-medium text-azoth-text">Settings</h2>
-          <button onClick={onClose} className="text-azoth-muted hover:text-azoth-text">✕</button>
+        <div className="settings-titlebar">
+          <div className="traffic">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="settings-titlebar-title">Settings</div>
         </div>
-        <div className="flex flex-1 overflow-hidden">
-          <nav className="flex w-40 shrink-0 flex-col gap-1 border-r border-azoth-border p-2 text-sm">
-            {(["llm", "broker", "risk", "about"] as Tab[]).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`rounded px-3 py-1.5 text-left ${
-                  tab === t ? "bg-azoth-panel text-azoth-text" : "text-azoth-muted hover:bg-azoth-panel/60"
-                }`}
-              >
-                {t.toUpperCase()}
-              </button>
+
+        <div className="settings-body">
+          <nav className="settings-nav" aria-label="Settings sections">
+            <div className="settings-nav-search">
+              <SearchIcon />
+              <input
+                type="search"
+                placeholder="Search settings"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            {primary.map((item) => (
+              <NavItem key={item.id} item={item} active={pane === item.id} onClick={() => setPane(item.id)} />
+            ))}
+            {secondary.length > 0 && <div className="settings-nav-divider" />}
+            {secondary.map((item) => (
+              <NavItem key={item.id} item={item} active={pane === item.id} onClick={() => setPane(item.id)} />
             ))}
           </nav>
-          <div className="flex-1 overflow-y-auto p-5">
-            {tab === "llm" && <LlmTab config={config} onSave={save} />}
-            {tab === "broker" && <BrokerTab config={config} onSave={save} />}
-            {tab === "risk" && <RiskTab config={config} onSave={save} />}
-            {tab === "about" && <AboutTab />}
+
+          <div className="settings-pane">
+            {pane === "general" && <GeneralPane config={config} onSave={save} />}
+            {pane === "models" && <ModelsPane config={config} onSave={save} />}
+            {pane === "broker" && <BrokerPane config={config} onSave={save} />}
+            {pane === "risk" && <RiskPane config={config} onSave={save} />}
+            {pane === "sessions" && <SessionsPane projects={projects.length} sessions={sessions.length} />}
+            {pane === "advanced" && <AdvancedPane onSave={flashSaved} />}
+            {pane === "about" && <AboutPane />}
           </div>
         </div>
+      </div>
+      <div className={`settings-saved${saved ? " show" : ""}`}>
+        <span className="dot" />
+        Saved
       </div>
     </div>
   );
 }
 
-function Field({
-  label,
-  children,
+function NavItem({
+  item,
+  active,
+  onClick,
 }: {
-  label: string;
-  children: React.ReactNode;
+  item: { id: Pane; label: string; icon: React.ReactNode };
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
-    <label className="mb-3 block">
-      <span className="mb-1 block text-xs uppercase tracking-wider text-azoth-muted">{label}</span>
-      {children}
-    </label>
+    <button className="settings-nav-item" aria-current={active ? "true" : "false"} onClick={onClick}>
+      <span className="ico">{item.icon}</span>
+      {item.label}
+    </button>
   );
 }
 
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function GeneralPane({
+  config,
+  onSave,
+}: {
+  config: Record<string, any> | null;
+  onSave: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const team = config?.team ?? {};
   return (
-    <input
-      {...props}
-      className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text outline-none focus:border-azoth-accent"
+    <PaneShell title="General" subtitle="Autonomy, default model tier, and app behavior.">
+      <GroupTitle>Autonomy</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Autonomy mode"
+          hint="Controls when Azoth asks before placing orders or running tools."
+          control={
+            <Segmented
+              value={config?.autonomy ?? "advisory"}
+              options={[
+                { value: "advisory", label: "Advisory" },
+                { value: "confirm", label: "Confirm" },
+                { value: "auto", label: "Auto" },
+              ]}
+              onChange={(autonomy) => void onSave({ autonomy })}
+            />
+          }
+        />
+        <SettingRow
+          label="Output language"
+          hint="Used by analyst and research agents."
+          control={
+            <select
+              value={team.output_language ?? "en"}
+              onChange={(e) => void onSave({ team: { ...team, output_language: e.target.value } })}
+            >
+              <option value="en">English</option>
+              <option value="vi">Vietnamese</option>
+            </select>
+          }
+        />
+      </Group>
+
+      <GroupTitle>App</GroupTitle>
+      <Group>
+        <SettingRow label="Launch at login" control={<Toggle checked={false} onChange={() => undefined} />} />
+        <SettingRow
+          label="Hide on close"
+          hint="Keep Azoth running in the menu bar after the window closes."
+          control={<Toggle checked onChange={() => undefined} />}
+        />
+        <SettingRow label="Show notifications" control={<Toggle checked onChange={() => undefined} />} />
+        <SettingRow
+          label="Notify on order fill"
+          hint="System notification when a live order fills or is rejected."
+          control={<Toggle checked onChange={() => undefined} />}
+        />
+      </Group>
+
+      <GroupTitle>Appearance</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Appearance"
+          control={
+            <Segmented
+              value="light"
+              options={[
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+                { value: "system", label: "System" },
+              ]}
+              onChange={() => undefined}
+            />
+          }
+        />
+        <SettingRow
+          label="Accent color"
+          control={
+            <div className="settings-swatches">
+              {["#2f6feb", "#17a34a", "#7c3aed", "#525252"].map((color, idx) => (
+                <button
+                  key={color}
+                  className="settings-swatch"
+                  aria-pressed={idx === 0 ? "true" : "false"}
+                  style={{ background: color }}
+                  title={["Cobalt", "Green", "Violet", "Graphite"][idx]}
+                  onClick={() => undefined}
+                />
+              ))}
+            </div>
+          }
+        />
+      </Group>
+    </PaneShell>
+  );
+}
+
+function ModelsPane({
+  config,
+  onSave,
+}: {
+  config: Record<string, any> | null;
+  onSave: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const llm = config?.llm ?? {};
+  const team = config?.team ?? {};
+  const [apiKey, setApiKey] = useState(llm.api_key ?? "");
+  const [baseUrl, setBaseUrl] = useState(llm.base_url ?? "");
+  const [showKey, setShowKey] = useState(false);
+
+  useEffect(() => {
+    setApiKey(llm.api_key ?? "");
+    setBaseUrl(llm.base_url ?? "");
+  }, [llm.api_key, llm.base_url]);
+
+  return (
+    <PaneShell title="Models" subtitle="LLM provider, API credentials, and model tiers for the agent team.">
+      <GroupTitle>Provider</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Provider"
+          control={
+            <select
+              value={llm.provider ?? "anthropic"}
+              onChange={(e) => void onSave({ llm: { ...llm, provider: e.target.value } })}
+            >
+              <option value="anthropic">Anthropic</option>
+              <option value="compatible">Anthropic-compatible (proxy)</option>
+            </select>
+          }
+        />
+        <SettingRow
+          label="API key"
+          hint="Stored locally in ~/.azoth/config.yaml with mode 0600."
+          control={
+            <PasswordField
+              value={apiKey}
+              visible={showKey}
+              onToggle={() => setShowKey((v) => !v)}
+              onChange={setApiKey}
+              onBlur={() => void onSave({ llm: { ...llm, api_key: apiKey, base_url: baseUrl } })}
+            />
+          }
+        />
+        <SettingRow
+          label="Base URL"
+          control={
+            <input
+              className="mono w-lg"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              onBlur={() => void onSave({ llm: { ...llm, api_key: apiKey, base_url: baseUrl } })}
+            />
+          }
+        />
+        <SettingRow
+          label="Connection"
+          hint="Uses the configured provider, API key, and base URL."
+          control={
+            <>
+              <span className={apiKey || llm.provider === "anthropic" ? "pill pill-ok" : "pill pill-warn"}>
+                <span className="dot" />
+                {apiKey || llm.provider === "anthropic" ? "Configured" : "Missing key"}
+              </span>
+              <button className="settings-btn" onClick={() => undefined}>Test</button>
+            </>
+          }
+        />
+      </Group>
+
+      <GroupTitle>Team tiers</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Quick model"
+          hint="Analysts, researchers, trader, risk agent."
+          control={
+            <ModelSelect
+              value={team.quick_model ?? config?.model ?? "glm-5.1"}
+              onChange={(quick_model) => void onSave({ team: { ...team, quick_model } })}
+            />
+          }
+        />
+        <SettingRow
+          label="Deep model"
+          hint="Research manager and portfolio manager, used sparingly."
+          control={
+            <ModelSelect
+              value={team.deep_model ?? config?.model ?? "glm-5.1"}
+              onChange={(deep_model) => void onSave({ team: { ...team, deep_model } })}
+            />
+          }
+        />
+        <SettingRow
+          label="Orchestrator default"
+          hint="Top-level model used by the desktop chat."
+          control={<ModelSelect value={config?.model ?? "glm-5.1"} onChange={(model) => void onSave({ model })} />}
+        />
+      </Group>
+
+      <GroupTitle>Budget</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Daily spend cap"
+          hint="Soft cap, used for warning and planning."
+          control={
+            <>
+              <input className="w-num" type="number" value="5.00" step="0.5" onChange={() => undefined} />
+              <span className="settings-unit">USD / day</span>
+            </>
+          }
+        />
+        <SettingRow
+          label="Today's spend"
+          hint="Resets at 00:00 ICT."
+          control={
+            <>
+              <span className="settings-stat">$0.00 of $5.00</span>
+              <div className="settings-meter"><span style={{ width: "0%" }} /></div>
+            </>
+          }
+        />
+      </Group>
+    </PaneShell>
+  );
+}
+
+function BrokerPane({
+  config,
+  onSave,
+}: {
+  config: Record<string, any> | null;
+  onSave: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const fhsc = config?.fhsc ?? {};
+  const [draft, setDraft] = useState<Record<string, string>>({
+    sub_account_id: fhsc.sub_account_id ?? "",
+    account_id: fhsc.account_id ?? "",
+    api_key: fhsc.api_key ?? "",
+    api_secret: fhsc.api_secret ?? "",
+    base_url: fhsc.base_url ?? "https://api.vinasecurities.com",
+    device_id: fhsc.device_id ?? "",
+    user_id: fhsc.user_id ?? "",
+    cust_id: fhsc.cust_id ?? "",
+  });
+  const [shown, setShown] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setDraft({
+      sub_account_id: fhsc.sub_account_id ?? "",
+      account_id: fhsc.account_id ?? "",
+      api_key: fhsc.api_key ?? "",
+      api_secret: fhsc.api_secret ?? "",
+      base_url: fhsc.base_url ?? "https://api.vinasecurities.com",
+      device_id: fhsc.device_id ?? "",
+      user_id: fhsc.user_id ?? "",
+      cust_id: fhsc.cust_id ?? "",
+    });
+  }, [
+    fhsc.account_id,
+    fhsc.api_key,
+    fhsc.api_secret,
+    fhsc.base_url,
+    fhsc.cust_id,
+    fhsc.device_id,
+    fhsc.sub_account_id,
+    fhsc.user_id,
+  ]);
+
+  const saveFhsc = () => void onSave({ fhsc: { ...fhsc, ...draft } });
+  const hasLiveCredentials = Boolean(draft.sub_account_id && (draft.api_key || fhsc.access_token));
+
+  return (
+    <PaneShell title="Broker" subtitle="Where Azoth places orders. Paper trading is the default and uses no real money.">
+      <div className="settings-banner warn">
+        <RiskIcon />
+        <div>
+          Live broker connections place <strong>real orders</strong>. Azoth uses your saved Risk limits as a hard
+          ceiling, but a misconfigured strategy can still lose money.
+        </div>
+      </div>
+
+      <GroupTitle>Connection</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Broker"
+          control={
+            <Segmented
+              value={config?.broker ?? "paper"}
+              options={[
+                { value: "paper", label: "Paper" },
+                { value: "fhsc", label: "FHSC" },
+                { value: "dnse", label: "DNSE" },
+              ]}
+              onChange={(broker) => void onSave({ broker })}
+            />
+          }
+        />
+        <SettingRow
+          label="Status"
+          hint={hasLiveCredentials ? `Configured as ${draft.sub_account_id}` : "Paper mode uses no broker credentials."}
+          control={
+            <>
+              <span className={hasLiveCredentials ? "pill pill-ok" : "pill pill-muted"}>
+                <span className="dot" />
+                {hasLiveCredentials ? "Live" : "Paper"}
+              </span>
+              <button className="settings-btn" onClick={() => undefined}>Reconnect</button>
+            </>
+          }
+        />
+      </Group>
+
+      <GroupTitle>FHSC credentials</GroupTitle>
+      <Group>
+        <TextRow label="Sub-account ID" value={draft.sub_account_id} onChange={(v) => setDraft({ ...draft, sub_account_id: v })} onBlur={saveFhsc} />
+        <TextRow label="Account ID" value={draft.account_id} onChange={(v) => setDraft({ ...draft, account_id: v })} onBlur={saveFhsc} />
+        <SettingRow
+          label="API key"
+          control={
+            <PasswordField
+              value={draft.api_key}
+              visible={Boolean(shown.api_key)}
+              onToggle={() => setShown((s) => ({ ...s, api_key: !s.api_key }))}
+              onChange={(api_key) => setDraft({ ...draft, api_key })}
+              onBlur={saveFhsc}
+            />
+          }
+        />
+        <SettingRow
+          label="API secret"
+          control={
+            <PasswordField
+              value={draft.api_secret}
+              visible={Boolean(shown.api_secret)}
+              onToggle={() => setShown((s) => ({ ...s, api_secret: !s.api_secret }))}
+              onChange={(api_secret) => setDraft({ ...draft, api_secret })}
+              onBlur={saveFhsc}
+            />
+          }
+        />
+        <TextRow className="w-lg" label="Base URL" value={draft.base_url} onChange={(base_url) => setDraft({ ...draft, base_url })} onBlur={saveFhsc} />
+      </Group>
+
+      <details className="settings-advanced">
+        <summary>
+          <ChevronIcon />
+          Advanced - session tokens and device binding
+        </summary>
+        <Group>
+          <TextRow className="w-lg" label="Device ID" value={draft.device_id} onChange={(device_id) => setDraft({ ...draft, device_id })} onBlur={saveFhsc} />
+          <TextRow label="User ID" value={draft.user_id} onChange={(user_id) => setDraft({ ...draft, user_id })} onBlur={saveFhsc} />
+          <TextRow label="Customer ID" value={draft.cust_id} onChange={(cust_id) => setDraft({ ...draft, cust_id })} onBlur={saveFhsc} />
+          <SettingRow
+            label="Access token"
+            hint={fhsc.access_token ? "Saved locally. Refresh from broker setup when expired." : "No access token saved."}
+            control={<button className="settings-btn" onClick={() => undefined}>Force refresh</button>}
+          />
+        </Group>
+      </details>
+    </PaneShell>
+  );
+}
+
+function RiskPane({
+  config,
+  onSave,
+}: {
+  config: Record<string, any> | null;
+  onSave: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const risk = config?.risk ?? {};
+  const [whitelist, setWhitelist] = useState<string[]>((risk.ticker_whitelist as string[] | undefined) ?? []);
+  const [ticker, setTicker] = useState("");
+
+  useEffect(() => {
+    setWhitelist((risk.ticker_whitelist as string[] | undefined) ?? []);
+  }, [risk.ticker_whitelist]);
+
+  const saveRisk = (patch: Record<string, unknown>) => void onSave({ risk: { ...risk, ...patch } });
+  const addTicker = () => {
+    const nextTicker = ticker.trim().toUpperCase();
+    if (!nextTicker || whitelist.includes(nextTicker)) return;
+    const next = [...whitelist, nextTicker];
+    setWhitelist(next);
+    setTicker("");
+    saveRisk({ ticker_whitelist: next });
+  };
+  const removeTicker = (value: string) => {
+    const next = whitelist.filter((item) => item !== value);
+    setWhitelist(next);
+    saveRisk({ ticker_whitelist: next });
+  };
+
+  return (
+    <PaneShell
+      title="Risk guardrails"
+      subtitle="Hard ceilings the orchestrator and broker layer cannot exceed, even with autonomy set to Auto."
+    >
+      <GroupTitle>Position sizing</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Max position size"
+          hint="As a share of total portfolio equity, per ticker."
+          control={
+            <Slider
+              value={Math.round((risk.max_position_pct ?? 0.15) * 100)}
+              min={1}
+              max={50}
+              suffix="%"
+              onChange={(v) => saveRisk({ max_position_pct: v / 100 })}
+            />
+          }
+        />
+        <SettingRow
+          label="Max daily loss"
+          hint="Trips the kill-switch and rejects new orders for the rest of the trading day."
+          control={
+            <Slider
+              value={Math.round((risk.max_daily_loss_pct ?? 0.03) * 100)}
+              min={1}
+              max={20}
+              suffix="%"
+              onChange={(v) => saveRisk({ max_daily_loss_pct: v / 100 })}
+            />
+          }
+        />
+        <SettingRow
+          label="Max order notional"
+          hint="Single-order cap in VND."
+          control={
+            <>
+              <input
+                className="w-num wide"
+                type="number"
+                value={risk.max_order_notional_vnd ?? 50000000}
+                step={5000000}
+                onChange={(e) => saveRisk({ max_order_notional_vnd: Number(e.target.value) })}
+              />
+              <span className="settings-unit">VND</span>
+            </>
+          }
+        />
+      </Group>
+
+      <GroupTitle>Universe</GroupTitle>
+      <Group>
+        <div className="settings-row stacked">
+          <div>
+            <label>Ticker whitelist</label>
+            <span className="hint">Azoth will refuse to place orders outside this list. Leave empty to allow all configured markets.</span>
+          </div>
+          <div className="control">
+            <div className="chip-input" onClick={(e) => (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus()}>
+              {whitelist.map((item) => (
+                <span className="chip" key={item}>
+                  {item}
+                  <button aria-label={`Remove ${item}`} onClick={() => removeTicker(item)}>x</button>
+                </span>
+              ))}
+              <input
+                placeholder="Add ticker..."
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTicker();
+                  } else if (e.key === "Backspace" && !ticker && whitelist.length > 0) {
+                    removeTicker(whitelist[whitelist.length - 1]!);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        <SettingRow
+          label="Allow margin"
+          hint="Permit leveraged orders on margin-eligible accounts."
+          control={<Toggle checked={Boolean(risk.allow_margin)} onChange={(allow_margin) => saveRisk({ allow_margin })} />}
+        />
+        <SettingRow
+          label="Allow shorting"
+          hint="Vietnam short-selling support depends on account and market rules."
+          control={<Toggle checked={false} onChange={() => undefined} />}
+        />
+      </Group>
+
+      <GroupTitle>Trading hours</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Restrict to VN session"
+          hint="09:00-11:30 and 13:00-14:45 ICT, weekdays."
+          control={<Toggle checked onChange={() => undefined} />}
+        />
+        <SettingRow
+          label="Block ATC orders"
+          hint="Reject orders during 14:30-14:45 closing auction."
+          control={<Toggle checked={false} onChange={() => undefined} />}
+        />
+      </Group>
+    </PaneShell>
+  );
+}
+
+function SessionsPane({ projects, sessions }: { projects: number; sessions: number }) {
+  return (
+    <PaneShell title="Data & Sessions" subtitle="Where Azoth keeps your chats, config, and projects on disk.">
+      <GroupTitle>Locations</GroupTitle>
+      <Group>
+        <LocationRow label="Config file" hint="Schema-validated YAML, mode 0600." path="~/.azoth/config.yaml" />
+        <LocationRow label="Sessions directory" hint="One JSONL per session, grouped by project." path="~/.azoth/projects/" />
+        <LocationRow label="Projects index" hint="Desktop projects and active selection." path="~/.azoth/projects-desktop.json" />
+      </Group>
+
+      <GroupTitle>Storage</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Active sessions"
+          hint={`${sessions} sessions across ${projects} projects`}
+          control={<button className="settings-btn" onClick={() => undefined}>Export...</button>}
+        />
+        <SettingRow
+          label="Archived sessions"
+          hint="Soft-deleted, hidden from sidebar. Restore support is available during the undo window."
+          control={
+            <>
+              <span className="pill pill-muted">Hidden</span>
+              <button className="settings-btn" onClick={() => undefined}>Open archive</button>
+            </>
+          }
+        />
+        <SettingRow
+          label="Tool call cache"
+          hint="Market quotes, consensus snapshots, news fetches."
+          control={
+            <>
+              <span className="settings-stat">Local cache</span>
+              <button className="settings-btn" onClick={() => undefined}>Clear cache</button>
+            </>
+          }
+        />
+      </Group>
+
+      <GroupTitle>Danger zone</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Reset all settings"
+          hint="Restores default config. Sessions and broker credentials are kept."
+          control={<button className="settings-btn danger" onClick={() => undefined}>Reset settings...</button>}
+        />
+        <SettingRow
+          label="Delete all sessions"
+          hint="Permanently removes every session JSONL. Cannot be undone."
+          control={<button className="settings-btn danger" onClick={() => undefined}>Delete sessions...</button>}
+        />
+      </Group>
+    </PaneShell>
+  );
+}
+
+function AdvancedPane({ onSave }: { onSave: () => void }) {
+  return (
+    <PaneShell title="Advanced" subtitle="Diagnostics and developer-only switches. Wrong values here can break the agent loop.">
+      <GroupTitle>Logging</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Log level"
+          control={
+            <Segmented
+              value="info"
+              options={[
+                { value: "error", label: "Error" },
+                { value: "info", label: "Info" },
+                { value: "debug", label: "Debug" },
+                { value: "trace", label: "Trace" },
+              ]}
+              onChange={onSave}
+            />
+          }
+        />
+        <SettingRow
+          label="Stream every block delta"
+          hint="Persist each content_block_delta to the session JSONL. High volume."
+          control={<Toggle checked={false} onChange={onSave} />}
+        />
+        <SettingRow
+          label="Diagnostics bundle"
+          hint="Last 7 days of logs, redacted config, and broker handshake."
+          control={<button className="settings-btn" onClick={onSave}>Export bundle</button>}
+        />
+      </Group>
+
+      <GroupTitle>Experimental</GroupTitle>
+      <Group>
+        <SettingRow
+          label="Use Vietnamese tool descriptions"
+          hint="Send Vietnamese tool schemas to the orchestrator."
+          control={<Toggle checked={false} onChange={onSave} />}
+        />
+        <SettingRow
+          label="Parallel analyst fan-out"
+          hint="Run fundamental, technical, and sentiment analysts in parallel."
+          control={<Toggle checked onChange={onSave} />}
+        />
+        <SettingRow
+          label="Strict schema validation"
+          hint="Reject tool outputs that fail Zod parse instead of repairing."
+          control={<Toggle checked onChange={onSave} />}
+        />
+      </Group>
+    </PaneShell>
+  );
+}
+
+function AboutPane() {
+  return (
+    <PaneShell title="About">
+      <div className="about-hero">
+        <div className="about-mark" aria-label="Azoth"><AzothMark /></div>
+        <h2 className="about-name">Azoth Desktop</h2>
+        <p className="about-version">Version 0.1.0</p>
+        <p className="about-tagline">An agentic trading assistant for Vietnam equities. Live on FHSC and DNSE; paper trading otherwise.</p>
+        <div className="about-links">
+          <a href="#">Release notes</a>
+          <span>|</span>
+          <a href="#">Documentation</a>
+          <span>|</span>
+          <a href="#">Report an issue</a>
+        </div>
+        <button className="settings-btn primary">Check for updates</button>
+        <p className="about-risk">
+          Trading involves risk of loss. Past performance is not indicative of future results. Azoth is not a registered investment advisor.
+        </p>
+      </div>
+    </PaneShell>
+  );
+}
+
+function PaneShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <div className="settings-pane-header">
+        <h1>{title}</h1>
+        {subtitle && <p>{subtitle}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Group({ children }: { children: React.ReactNode }) {
+  return <div className="settings-group">{children}</div>;
+}
+
+function GroupTitle({ children }: { children: React.ReactNode }) {
+  return <div className="settings-group-title">{children}</div>;
+}
+
+function SettingRow({
+  label,
+  hint,
+  control,
+}: {
+  label: string;
+  hint?: string;
+  control: React.ReactNode;
+}) {
+  return (
+    <div className="settings-row">
+      <div>
+        <label>{label}</label>
+        {hint && <span className="hint">{hint}</span>}
+      </div>
+      <div className="control">{control}</div>
+    </div>
+  );
+}
+
+function TextRow({
+  label,
+  value,
+  onChange,
+  onBlur,
+  className = "w-md",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+  className?: string;
+}) {
+  return (
+    <SettingRow
+      label={label}
+      control={<input className={`mono ${className}`} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />}
     />
   );
 }
 
-function LlmTab({
-  config,
-  onSave,
-}: {
-  config: Record<string, any> | null;
-  onSave: (patch: Record<string, unknown>) => Promise<void>;
-}) {
-  const [provider, setProvider] = useState(config?.llm?.provider ?? "anthropic");
-  const [apiKey, setApiKey] = useState(config?.llm?.api_key ?? "");
-  const [baseUrl, setBaseUrl] = useState(config?.llm?.base_url ?? "");
-  const [model, setModel] = useState(config?.model ?? "claude-opus-4-1");
-
+function LocationRow({ label, hint, path }: { label: string; hint: string; path: string }) {
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSave({
-          model,
-          llm: { provider, api_key: apiKey, base_url: baseUrl },
-        });
-      }}
-    >
-      <Field label="Provider">
-        <select
-          value={provider}
-          onChange={(e) => setProvider(e.target.value)}
-          className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text"
-        >
-          <option value="anthropic">Anthropic</option>
-          <option value="compatible">Anthropic-compatible (proxy)</option>
-        </select>
-      </Field>
-      <Field label="API key">
-        <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-      </Field>
-      {provider === "compatible" && (
-        <Field label="Base URL">
-          <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
-        </Field>
-      )}
-      <Field label="Model">
-        <Input value={model} onChange={(e) => setModel(e.target.value)} />
-      </Field>
-      <button
-        type="submit"
-        className="mt-2 rounded bg-azoth-accent px-4 py-2 text-sm text-white"
-      >
-        Save
-      </button>
-    </form>
-  );
-}
-
-function BrokerTab({
-  config,
-  onSave,
-}: {
-  config: Record<string, any> | null;
-  onSave: (patch: Record<string, unknown>) => Promise<void>;
-}) {
-  const [broker, setBroker] = useState(config?.broker ?? "paper");
-  const [fhsc, setFhsc] = useState<Record<string, string>>({
-    sub_account_id: config?.fhsc?.sub_account_id ?? "",
-    api_key: config?.fhsc?.api_key ?? "",
-    api_secret: config?.fhsc?.api_secret ?? "",
-    base_url: config?.fhsc?.base_url ?? "https://api.vinasecurities.com",
-  });
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSave({ broker, fhsc });
-      }}
-    >
-      <Field label="Broker">
-        <select
-          value={broker}
-          onChange={(e) => setBroker(e.target.value)}
-          className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text"
-        >
-          <option value="paper">Paper</option>
-          <option value="dnse">DNSE</option>
-          <option value="fhsc">FHSC</option>
-        </select>
-      </Field>
-      {broker === "fhsc" && (
+    <SettingRow
+      label={label}
+      hint={hint}
+      control={
         <>
-          <Field label="Sub account ID">
-            <Input
-              value={fhsc.sub_account_id}
-              onChange={(e) => setFhsc({ ...fhsc, sub_account_id: e.target.value })}
-            />
-          </Field>
-          <Field label="API key">
-            <Input
-              value={fhsc.api_key}
-              onChange={(e) => setFhsc({ ...fhsc, api_key: e.target.value })}
-            />
-          </Field>
-          <Field label="API secret">
-            <Input
-              type="password"
-              value={fhsc.api_secret}
-              onChange={(e) => setFhsc({ ...fhsc, api_secret: e.target.value })}
-            />
-          </Field>
-          <Field label="Base URL">
-            <Input
-              value={fhsc.base_url}
-              onChange={(e) => setFhsc({ ...fhsc, base_url: e.target.value })}
-            />
-          </Field>
+          <span className="settings-path">{path}</span>
+          <button className="settings-btn" onClick={() => undefined}>Reveal</button>
         </>
-      )}
-      <button
-        type="submit"
-        className="mt-2 rounded bg-azoth-accent px-4 py-2 text-sm text-white"
-      >
-        Save
-      </button>
-    </form>
+      }
+    />
   );
 }
 
-function RiskTab({
-  config,
-  onSave,
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
 }: {
-  config: Record<string, any> | null;
-  onSave: (patch: Record<string, unknown>) => Promise<void>;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
 }) {
-  const r = config?.risk ?? {};
-  const [maxPos, setMaxPos] = useState(String(r.max_position_pct ?? 0.1));
-  const [maxLoss, setMaxLoss] = useState(String(r.max_daily_loss_pct ?? 0.05));
-  const [maxNotional, setMaxNotional] = useState(String(r.max_order_notional_vnd ?? 100000000));
-  const [whitelist, setWhitelist] = useState<string>(
-    ((r.ticker_whitelist as string[] | undefined) ?? []).join(", "),
-  );
-  const [allowMargin, setAllowMargin] = useState(Boolean(r.allow_margin));
-
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSave({
-          risk: {
-            max_position_pct: Number(maxPos),
-            max_daily_loss_pct: Number(maxLoss),
-            max_order_notional_vnd: Number(maxNotional),
-            ticker_whitelist: whitelist
-              .split(",")
-              .map((s) => s.trim().toUpperCase())
-              .filter(Boolean),
-            allow_margin: allowMargin,
-          },
-        });
-      }}
-    >
-      <Field label="Max position %">
-        <Input value={maxPos} onChange={(e) => setMaxPos(e.target.value)} />
-      </Field>
-      <Field label="Max daily loss %">
-        <Input value={maxLoss} onChange={(e) => setMaxLoss(e.target.value)} />
-      </Field>
-      <Field label="Max order notional (VND)">
-        <Input value={maxNotional} onChange={(e) => setMaxNotional(e.target.value)} />
-      </Field>
-      <Field label="Ticker whitelist (comma-separated)">
-        <Input value={whitelist} onChange={(e) => setWhitelist(e.target.value)} />
-      </Field>
-      <label className="mb-3 flex items-center gap-2 text-sm text-azoth-text">
-        <input
-          type="checkbox"
-          checked={allowMargin}
-          onChange={(e) => setAllowMargin(e.target.checked)}
-        />
-        Allow margin
-      </label>
-      <button
-        type="submit"
-        className="mt-2 rounded bg-azoth-accent px-4 py-2 text-sm text-white"
-      >
-        Save
-      </button>
-    </form>
+    <div className="settings-seg" role="radiogroup">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          role="radio"
+          aria-pressed={value === option.value ? "true" : "false"}
+          aria-checked={value === option.value ? "true" : "false"}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
-function AboutTab() {
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
   return (
-    <div className="text-sm text-azoth-muted">
-      <p className="mb-2 text-azoth-text">Azoth Desktop v0.1.0</p>
-      <p>AI stock trading assistant for Vietnam equities.</p>
-      <p className="mt-4">Config and sessions live in <code>~/.azoth/</code>.</p>
+    <button
+      className="settings-toggle"
+      role="switch"
+      aria-checked={checked ? "true" : "false"}
+      onClick={() => onChange(!checked)}
+    />
+  );
+}
+
+function Slider({
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+  useEffect(() => setLocalValue(value), [value]);
+  return (
+    <div className="slider-row">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={localValue}
+        onChange={(e) => setLocalValue(Number(e.target.value))}
+        onMouseUp={() => onChange(localValue)}
+        onKeyUp={() => onChange(localValue)}
+      />
+      <span className="slider-num">{localValue.toFixed(1)}{suffix}</span>
     </div>
+  );
+}
+
+function ModelSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const options = useMemo(() => (
+    modelOptions.includes(value) ? modelOptions : [value, ...modelOptions]
+  ), [value]);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      {options.map((option) => <option key={option} value={option}>{option}</option>)}
+    </select>
+  );
+}
+
+function PasswordField({
+  value,
+  visible,
+  onToggle,
+  onChange,
+  onBlur,
+}: {
+  value: string;
+  visible: boolean;
+  onToggle: () => void;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+}) {
+  return (
+    <span className="pw-wrap">
+      <input
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+      />
+      <button className="pw-reveal" aria-label={visible ? "Hide key" : "Show key"} onClick={onToggle}>
+        <EyeIcon />
+      </button>
+    </span>
+  );
+}
+
+function Svg({ children }: { children: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+
+function GeneralIcon() {
+  return <Svg><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></Svg>;
+}
+function ModelIcon() {
+  return <Svg><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4z" /></Svg>;
+}
+function BrokerIcon() {
+  return <Svg><path d="M3 21V10l9-6 9 6v11" /><path d="M9 21v-7h6v7" /></Svg>;
+}
+function RiskIcon() {
+  return <Svg><path d="M12 2 2 22h20L12 2z" /><path d="M12 9v5M12 17.5v.1" /></Svg>;
+}
+function SessionsIcon() {
+  return <Svg><path d="M3 5a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z" /></Svg>;
+}
+function AdvancedIcon() {
+  return <Svg><path d="M4 7h16M4 12h16M4 17h10" /></Svg>;
+}
+function AboutIcon() {
+  return <Svg><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v5h1" /></Svg>;
+}
+function SearchIcon() {
+  return <Svg><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Svg>;
+}
+function EyeIcon() {
+  return <Svg><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></Svg>;
+}
+function ChevronIcon() {
+  return <svg viewBox="0 0 10 10" fill="currentColor" aria-hidden="true"><path d="M3 1l4 4-4 4z" /></svg>;
+}
+function AzothMark() {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <circle cx="32" cy="20" r="6" stroke="currentColor" strokeWidth="3" />
+      <path d="M14 52 L32 26 L50 52" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 42 L42 42" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
   );
 }

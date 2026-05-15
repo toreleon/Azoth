@@ -1,15 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar/Sidebar.js";
 import { ChatView } from "./components/ChatView/ChatView.js";
 import { EmptyState } from "./components/Empty/EmptyState.js";
 import { PromptComposer } from "./components/Composer/PromptComposer.js";
 import { Onboarding } from "./components/Onboarding/Onboarding.js";
 import { ConsentToast } from "./components/Consent/ConsentToast.js";
+import { SettingsModal } from "./components/Settings/SettingsModal.js";
 import { useStreamBridge } from "./lib/streamBridge.js";
 import { useChatStore } from "./store/chatStore.js";
 
 export function App() {
   useStreamBridge();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const {
     activeProjectId,
     activeSessionId,
@@ -45,6 +47,19 @@ export function App() {
     })();
   }, [activeProjectId, setSessions]);
 
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
+        event.preventDefault();
+        setSettingsOpen(true);
+      } else if (event.key === "Escape") {
+        setSettingsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   if (!onboarded) {
     return <Onboarding onDone={() => setOnboarded(true)} />;
   }
@@ -65,12 +80,13 @@ export function App() {
         </div>
         <div className="titlebar-title">{windowTitle}</div>
       </div>
-      <Sidebar />
+      <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
       <main className="main">
         {activeSessionId ? <ChatView sessionId={activeSessionId} /> : <EmptyState />}
         <PromptComposer />
       </main>
       <ConsentToast />
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

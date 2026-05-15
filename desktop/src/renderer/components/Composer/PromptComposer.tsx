@@ -18,8 +18,7 @@ export function PromptComposer() {
   const {
     activeProjectId,
     activeSessionId,
-    streaming,
-    activeTurnId,
+    activeTurnsBySession,
     setActiveSession,
     setRecords,
     setSessions,
@@ -27,6 +26,8 @@ export function PromptComposer() {
     startStreaming,
     stopStreaming,
   } = useChatStore();
+  const activeTurnId = activeSessionId ? activeTurnsBySession[activeSessionId] : undefined;
+  const streaming = activeTurnId != null;
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -75,7 +76,7 @@ export function PromptComposer() {
       });
 
       const turnId = newTurnId();
-      startStreaming(turnId);
+      startStreaming(sessionId, turnId);
       setValue("");
       await window.azoth.invoke("turn:send", {
         projectId: activeProjectId,
@@ -85,7 +86,7 @@ export function PromptComposer() {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      stopStreaming();
+      if (sessionId) stopStreaming(sessionId);
       if (sessionId) {
         appendRecord(sessionId, {
           type: "error",

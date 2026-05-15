@@ -23,11 +23,11 @@ interface ChatState {
   projects: Project[];
   activeProjectId: string | null;
   sessions: SessionDescriptor[];
+  archivedSessionIds: string[];
   activeSessionId: string | null;
   recordsBySession: Record<string, ChatRecord[]>;
   liveRecordsBySession: Record<string, ChatRecord[]>;
-  streaming: boolean;
-  activeTurnId: string | null;
+  activeTurnsBySession: Record<string, string>;
   cumulative: { tokens: number; costUsd: number };
   consent: ConsentRequest | null;
   onboarded: boolean;
@@ -36,11 +36,13 @@ interface ChatState {
   setProjects(projects: Project[], activeId: string | null): void;
   setActiveProject(id: string): void;
   setSessions(sessions: SessionDescriptor[]): void;
+  archiveSession(id: string): void;
+  restoreArchivedSession(id: string): void;
   setActiveSession(id: string | null): void;
   setRecords(sessionId: string, records: ChatRecord[]): void;
   appendRecord(sessionId: string, record: ChatRecord): void;
-  startStreaming(turnId: string): void;
-  stopStreaming(): void;
+  startStreaming(sessionId: string, turnId: string): void;
+  stopStreaming(sessionId?: string): void;
   addUsage(stats: TurnStats): void;
   setConsent(c: ConsentRequest | null): void;
   setOnboarded(value: boolean): void;
@@ -53,11 +55,11 @@ export const useChatStore = create<ChatState>((set) => ({
   projects: [],
   activeProjectId: null,
   sessions: [],
+  archivedSessionIds: [],
   activeSessionId: null,
   recordsBySession: {},
   liveRecordsBySession: {},
-  streaming: false,
-  activeTurnId: null,
+  activeTurnsBySession: {},
   cumulative: { tokens: 0, costUsd: 0 },
   consent: null,
   onboarded: false,
@@ -69,15 +71,43 @@ export const useChatStore = create<ChatState>((set) => ({
     set({
       activeProjectId: id,
       sessions: [],
+      archivedSessionIds: [],
       activeSessionId: null,
       recordsBySession: {},
       liveRecordsBySession: {},
+      activeTurnsBySession: {},
     }),
-  setSessions: (sessions) => set({ sessions }),
+  setSessions: (sessions) =>
+    set((state) => ({
+      sessions: sessions.filter((session) => !state.archivedSessionIds.includes(session.id)),
+    })),
+  archiveSession: (id) =>
+    set((state) => {
+      const archivedSessionIds = state.archivedSessionIds.includes(id)
+        ? state.archivedSessionIds
+        : [...state.archivedSessionIds, id];
+      const sessions = state.sessions.filter((session) => session.id !== id);
+      const activeSessionId = state.activeSessionId === id ? null : state.activeSessionId;
+      const { [id]: _records, ...recordsBySession } = state.recordsBySession;
+      const { [id]: _live, ...liveRecordsBySession } = state.liveRecordsBySession;
+      const { [id]: _turn, ...activeTurnsBySession } = state.activeTurnsBySession;
+      return {
+        archivedSessionIds,
+        sessions,
+        activeSessionId,
+        recordsBySession,
+        liveRecordsBySession,
+        activeTurnsBySession,
+      };
+    }),
+  restoreArchivedSession: (id) =>
+    set((state) => ({
+      archivedSessionIds: state.archivedSessionIds.filter((archivedId) => archivedId !== id),
+    })),
   setActiveSession: (id) => set({ activeSessionId: id }),
   setRecords: (sessionId, records) =>
     set((state) => ({
-      recordsBySession: { ...state.recordsBySession, [sessionId]: records },
+      recordsBySession: { ...state.recordsBySession, [sessionId]: normalizeToolResults(records) },
       liveRecordsBySession: { ...state.liveRecordsBySession, [sessionId]: [] },
     })),
   appendRecord: (sessionId, record) =>
@@ -87,8 +117,16 @@ export const useChatStore = create<ChatState>((set) => ({
         recordsBySession: { ...state.recordsBySession, [sessionId]: [...existing, record] },
       };
     }),
-  startStreaming: (turnId) => set({ streaming: true, activeTurnId: turnId }),
-  stopStreaming: () => set({ streaming: false, activeTurnId: null }),
+  startStreaming: (sessionId, turnId) =>
+    set((state) => ({
+      activeTurnsBySession: { ...state.activeTurnsBySession, [sessionId]: turnId },
+    })),
+  stopStreaming: (sessionId) =>
+    set((state) => {
+      if (!sessionId) return { activeTurnsBySession: {} };
+      const { [sessionId]: _removed, ...activeTurnsBySession } = state.activeTurnsBySession;
+      return { activeTurnsBySession };
+    }),
   addUsage: (stats) =>
     set((state) => ({
       cumulative: {
@@ -110,6 +148,14 @@ export const useChatStore = create<ChatState>((set) => ({
           const sid = event.sessionId;
           const existing = state.recordsBySession[sid] ?? [];
           const live = state.liveRecordsBySession[sid] ?? [];
+          if (event.record.type === "tool_result") {
+            const nextRecords = attachToolResult(existing, event.record);
+            const nextLive = removeMatchingLiveRecord(live, event.record);
+            return {
+              recordsBySession: { ...state.recordsBySession, [sid]: nextRecords },
+              liveRecordsBySession: { ...state.liveRecordsBySession, [sid]: nextLive },
+            };
+          }
           const last = existing[existing.length - 1];
           if (
             event.record.type === "user" &&
@@ -164,9 +210,13 @@ export const useChatStore = create<ChatState>((set) => ({
           return {};
         case "turn:done": {
           const { [event.sessionId]: _cleared, ...remainingLive } = state.liveRecordsBySession;
+          const { [event.sessionId]: activeTurnId, ...activeTurnsBySession } = state.activeTurnsBySession;
+          const nextTurns =
+            activeTurnId == null || activeTurnId === event.turnId
+              ? activeTurnsBySession
+              : state.activeTurnsBySession;
           return {
-            streaming: false,
-            activeTurnId: null,
+            activeTurnsBySession: nextTurns,
             liveRecordsBySession: remainingLive,
             cumulative: {
               tokens:
@@ -178,9 +228,13 @@ export const useChatStore = create<ChatState>((set) => ({
           };
         }
         case "turn:error":
+          const { [event.sessionId]: failedTurnId, ...remainingTurns } = state.activeTurnsBySession;
+          const nextActiveTurns =
+            failedTurnId == null || failedTurnId === event.turnId
+              ? remainingTurns
+              : state.activeTurnsBySession;
           return {
-            streaming: false,
-            activeTurnId: null,
+            activeTurnsBySession: nextActiveTurns,
             liveRecordsBySession: {
               ...state.liveRecordsBySession,
               [event.sessionId]: [],
@@ -215,14 +269,38 @@ export const useChatStore = create<ChatState>((set) => ({
 }));
 
 function removeMatchingLiveRecord(live: ChatRecord[], record: ChatRecord): ChatRecord[] {
-  if (!["assistant", "thinking", "tool_use"].includes(record.type)) return live;
+  const recordType = record.type === "tool_result" ? "tool_use" : record.type;
+  if (!["assistant", "thinking", "tool_use"].includes(recordType)) return live;
   const idx = live.findIndex((candidate) => {
-    if (candidate.type !== record.type) return false;
-    if (record.type === "tool_use" && record.toolUseId) {
+    if (candidate.type !== recordType) return false;
+    if (record.toolUseId) {
       return candidate.toolUseId === record.toolUseId;
     }
     return true;
   });
   if (idx < 0) return live;
   return [...live.slice(0, idx), ...live.slice(idx + 1)];
+}
+
+function attachToolResult(existing: ChatRecord[], result: ChatRecord): ChatRecord[] {
+  if (!result.toolUseId) return [...existing, result];
+  const idx = existing.findIndex(
+    (record) => record.type === "tool_use" && record.toolUseId === result.toolUseId,
+  );
+  if (idx < 0) return [...existing, result];
+  const toolUse = existing[idx]!;
+  const updated: ChatRecord = {
+    ...toolUse,
+    text: result.text,
+    toolName: toolUse.toolName ?? result.toolName,
+  };
+  return [...existing.slice(0, idx), updated, ...existing.slice(idx + 1)];
+}
+
+function normalizeToolResults(records: ChatRecord[]): ChatRecord[] {
+  return records.reduce<ChatRecord[]>((acc, record) => {
+    if (record.type === "tool_result") return attachToolResult(acc, record);
+    acc.push(record);
+    return acc;
+  }, []);
 }

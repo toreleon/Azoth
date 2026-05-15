@@ -158,9 +158,10 @@ let activeSessionId: string | undefined;
 let activeLocalSessionId: string | undefined;
 const pendingLocalContext: string[] = [];
 
-export function resetSession() {
+export function resetSession(cwd = process.cwd()) {
   const cfg = loadConfig();
   const session = createSession({
+    cwd,
     model: cfg.model,
     autonomy: cfg.autonomy,
   });
@@ -169,9 +170,10 @@ export function resetSession() {
   pendingLocalContext.length = 0;
 }
 
-export function startNewSession(title?: string): SessionIndexEntry {
+export function startNewSession(title?: string, cwd = process.cwd()): SessionIndexEntry {
   const cfg = loadConfig();
   const session = createSession({
+    cwd,
     title,
     model: cfg.model,
     autonomy: cfg.autonomy,
@@ -182,31 +184,31 @@ export function startNewSession(title?: string): SessionIndexEntry {
   return session;
 }
 
-export function resumeLatestSession(): SessionIndexEntry | undefined {
-  const active = getActiveSession();
-  const session = active ? findSession(active.id) : latestSession();
+export function resumeLatestSession(cwd = process.cwd()): SessionIndexEntry | undefined {
+  const active = getActiveSession(cwd);
+  const session = active ? findSession(active.id, cwd) : latestSession(cwd);
   if (!session) return undefined;
   activeLocalSessionId = session.id;
   activeSessionId = session.sdkSessionId;
-  activateSession(session.id);
+  activateSession(session.id, cwd);
   return session;
 }
 
-export function resumeSession(id: string): SessionIndexEntry | undefined {
-  const session = activateSession(id);
+export function resumeSession(id: string, cwd = process.cwd()): SessionIndexEntry | undefined {
+  const session = activateSession(id, cwd);
   if (!session) return undefined;
   activeLocalSessionId = session.id;
   activeSessionId = session.sdkSessionId;
   return session;
 }
 
-export function recentSessions(limit = 10): SessionIndexEntry[] {
-  return listSessions().slice(0, limit);
+export function recentSessions(limit = 10, cwd = process.cwd()): SessionIndexEntry[] {
+  return listSessions(cwd).slice(0, limit);
 }
 
-export function readActiveSessionRecords(): SessionRecord[] {
-  const session = resumeLatestSession();
-  return session ? readSessionRecords(session.id) : [];
+export function readActiveSessionRecords(cwd = process.cwd()): SessionRecord[] {
+  const session = resumeLatestSession(cwd);
+  return session ? readSessionRecords(session.id, cwd) : [];
 }
 
 export function recordLocalTurn(prompt: string, response: string): void {
@@ -234,10 +236,10 @@ export function recordLocalTurn(prompt: string, response: string): void {
   pendingLocalContext.push(`User command: ${prompt}\nCommand response:\n${response}`);
 }
 
-function ensureActiveChatSession(prompt: string): SessionIndexEntry {
-  const existing = activeLocalSessionId ? findSession(activeLocalSessionId) : resumeLatestSession();
+function ensureActiveChatSession(prompt: string, cwd = process.cwd()): SessionIndexEntry {
+  const existing = activeLocalSessionId ? findSession(activeLocalSessionId, cwd) : resumeLatestSession(cwd);
   if (existing) return existing;
-  return startNewSession(prompt.slice(0, 80) || "Untitled session");
+  return startNewSession(prompt.slice(0, 80) || "Untitled session", cwd);
 }
 
 function pendingContextFromRecords(records: SessionRecord[]): string[] {
@@ -261,33 +263,50 @@ function pendingContextFromRecords(records: SessionRecord[]): string[] {
   return contexts;
 }
 
-function recordSessionId(sdkSessionId: string, cfg: ReturnType<typeof loadConfig>) {
-  if (!activeLocalSessionId) return;
-  activeSessionId = sdkSessionId;
-  touchSession(activeLocalSessionId, { sdkSessionId, model: cfg.model, autonomy: cfg.autonomy });
-  appendSessionRecord(activeLocalSessionId, {
+function recordSessionId(
+  localSessionId: string,
+  cwd: string,
+  sdkSessionId: string,
+  cfg: ReturnType<typeof loadConfig>,
+  updateActiveGlobals: boolean,
+) {
+  if (updateActiveGlobals) activeSessionId = sdkSessionId;
+  touchSession(localSessionId, { sdkSessionId, model: cfg.model, autonomy: cfg.autonomy }, cwd);
+  appendSessionRecord(localSessionId, {
     type: "system",
     timestamp: Date.now(),
-    sessionId: activeLocalSessionId,
-    cwd: process.cwd(),
+    sessionId: localSessionId,
+    cwd,
     sdkSessionId,
     model: cfg.model,
     autonomy: cfg.autonomy,
-  });
+  }, cwd);
 }
 
-export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = {}) {
+export async function* runTurn(
+  prompt: string,
+  opts: { signal?: AbortSignal; sessionId?: string; cwd?: string } = {},
+) {
   const cfg = loadConfig();
+  const cwd = opts.cwd ?? process.cwd();
   const abortController = new AbortController();
   const abortFromSignal = () => abortController.abort(opts.signal?.reason);
   if (opts.signal?.aborted) abortFromSignal();
   else opts.signal?.addEventListener("abort", abortFromSignal, { once: true });
-  const session = ensureActiveChatSession(prompt);
-  activeLocalSessionId = session.id;
-  activeSessionId = session.sdkSessionId;
-  const localContext = pendingLocalContext.length
+  const session = opts.sessionId
+    ? findSession(opts.sessionId, cwd)
+    : ensureActiveChatSession(prompt, cwd);
+  if (!session) throw new Error(`Session not found: ${opts.sessionId}`);
+  const localSessionId = session.id;
+  const managesGlobalActiveSession = opts.sessionId == null;
+  if (managesGlobalActiveSession) {
+    activeLocalSessionId = session.id;
+    activeSessionId = session.sdkSessionId;
+  }
+  let sdkSessionId = session.sdkSessionId;
+  const localContext = managesGlobalActiveSession && pendingLocalContext.length
     ? pendingLocalContext.splice(0)
-    : pendingContextFromRecords(readSessionRecords(session.id));
+    : pendingContextFromRecords(readSessionRecords(session.id, cwd));
   const sdkPrompt = localContext.length
     ? [
         "Context from local Azoth commands run earlier in this chat. Use it as prior conversation context for this turn:",
@@ -301,11 +320,11 @@ export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = 
     type: "user",
     timestamp: Date.now(),
     sessionId: session.id,
-    cwd: process.cwd(),
+    cwd,
     text: prompt,
     model: cfg.model,
     autonomy: cfg.autonomy,
-  });
+  }, cwd);
 
   // Attempt to resume the prior SDK session. If Claude Code can no longer
   // find that conversation (subprocess exits with code 1 on startup), drop
@@ -317,30 +336,30 @@ export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = 
   let currentBlock: TextBlock | ToolBlock | null = null;
 
   const flushCurrentBlock = () => {
-    if (!currentBlock || !activeLocalSessionId) return;
+    if (!currentBlock) return;
     const base = {
       timestamp: Date.now(),
-      sessionId: activeLocalSessionId,
-      cwd: process.cwd(),
+      sessionId: localSessionId,
+      cwd,
       model: cfg.model,
       autonomy: cfg.autonomy,
     };
     if (currentBlock.type === "assistant" || currentBlock.type === "thinking") {
       if (currentBlock.text) {
-        appendSessionRecord(activeLocalSessionId, {
+        appendSessionRecord(localSessionId, {
           ...base,
           type: currentBlock.type,
           text: currentBlock.text,
-        });
+        }, cwd);
       }
     } else if (currentBlock.type === "tool_use") {
-      appendSessionRecord(activeLocalSessionId, {
+      appendSessionRecord(localSessionId, {
         ...base,
         type: "tool_use",
         toolName: currentBlock.toolName,
         toolUseId: currentBlock.toolUseId,
         toolInput: currentBlock.toolInput,
-      });
+      }, cwd);
     }
     currentBlock = null;
   };
@@ -350,112 +369,117 @@ export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = 
     for await (const message of stream) yield message;
   };
 
-  let attempt: AsyncGenerator<any, void, void> = consume(activeSessionId);
-  let triedFreshRetry = activeSessionId == null;
+  let attempt: AsyncGenerator<any, void, void> = consume(sdkSessionId);
+  let triedFreshRetry = sdkSessionId == null;
 
   try {
     while (true) {
       try {
         for await (const message of attempt) {
-    if (message.type === "stream_event") {
-      const ev = (message as { event: any }).event;
-      if (ev?.type === "content_block_start") {
-        flushCurrentBlock();
-        const cb = ev.content_block;
-        if (cb?.type === "thinking") {
-          currentBlock = { type: "thinking", text: "" };
-        } else if (cb?.type === "text") {
-          currentBlock = { type: "assistant", text: "" };
-        } else if (cb?.type === "tool_use") {
-          currentBlock = {
-            type: "tool_use",
-            toolName: cb.name,
-            toolUseId: cb.id,
-            toolInput: "",
-          };
-        }
-      } else if (ev?.type === "content_block_delta") {
-        const d = ev.delta;
-        if (d?.type === "thinking_delta" && d.thinking && currentBlock?.type === "thinking") {
-          currentBlock.text += d.thinking;
-        } else if (d?.type === "text_delta" && d.text && currentBlock?.type === "assistant") {
-          currentBlock.text += d.text;
-        } else if (d?.type === "input_json_delta" && d.partial_json && currentBlock?.type === "tool_use") {
-          currentBlock.toolInput += d.partial_json;
-        }
-      } else if (ev?.type === "content_block_stop" || ev?.type === "message_stop") {
-        flushCurrentBlock();
-      }
-    } else if (message.type === "user") {
-      const content = (message as any).message?.content;
-      if (Array.isArray(content) && activeLocalSessionId) {
-        for (const c of content) {
-          if (c?.type === "tool_result") {
-            const text = typeof c.content === "string"
-              ? c.content
-              : Array.isArray(c.content)
-                ? c.content.map((x: any) => x?.text ?? "").join("")
-                : JSON.stringify(c.content);
-            appendSessionRecord(activeLocalSessionId, {
-              type: "tool_result",
-              timestamp: Date.now(),
-              sessionId: activeLocalSessionId,
-              cwd: process.cwd(),
-              text: text.slice(0, 4000),
-              toolUseId: c.tool_use_id,
-              model: cfg.model,
-              autonomy: cfg.autonomy,
-            });
+            if (message.type === "stream_event") {
+              const ev = (message as { event: any }).event;
+              if (ev?.type === "content_block_start") {
+                flushCurrentBlock();
+                const cb = ev.content_block;
+                if (cb?.type === "thinking") {
+                  currentBlock = { type: "thinking", text: "" };
+                } else if (cb?.type === "text") {
+                  currentBlock = { type: "assistant", text: "" };
+                } else if (cb?.type === "tool_use") {
+                  currentBlock = {
+                    type: "tool_use",
+                    toolName: cb.name,
+                    toolUseId: cb.id,
+                    toolInput: "",
+                  };
+                }
+              } else if (ev?.type === "content_block_delta") {
+                const d = ev.delta;
+                if (d?.type === "thinking_delta" && d.thinking && currentBlock?.type === "thinking") {
+                  currentBlock.text += d.thinking;
+                } else if (d?.type === "text_delta" && d.text && currentBlock?.type === "assistant") {
+                  currentBlock.text += d.text;
+                } else if (d?.type === "input_json_delta" && d.partial_json && currentBlock?.type === "tool_use") {
+                  currentBlock.toolInput += d.partial_json;
+                }
+              } else if (ev?.type === "content_block_stop" || ev?.type === "message_stop") {
+                flushCurrentBlock();
+              }
+            } else if (message.type === "user") {
+              const content = (message as any).message?.content;
+              if (Array.isArray(content)) {
+                for (const c of content) {
+                  if (c?.type === "tool_result") {
+                    const text = typeof c.content === "string"
+                      ? c.content
+                      : Array.isArray(c.content)
+                        ? c.content.map((x: any) => x?.text ?? "").join("")
+                        : JSON.stringify(c.content);
+                    appendSessionRecord(localSessionId, {
+                      type: "tool_result",
+                      timestamp: Date.now(),
+                      sessionId: localSessionId,
+                      cwd,
+                      text: text.slice(0, 4000),
+                      toolUseId: c.tool_use_id,
+                      model: cfg.model,
+                      autonomy: cfg.autonomy,
+                    }, cwd);
+                  }
+                }
+              }
+            }
+            if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
+              const sid = (message as { session_id?: string }).session_id;
+              if (sid) {
+                sdkSessionId = sid;
+                recordSessionId(localSessionId, cwd, sid, cfg, managesGlobalActiveSession);
+              }
+            } else if (message.type === "result") {
+              flushCurrentBlock();
+              const r = message as unknown as {
+                session_id?: string;
+                total_cost_usd?: number;
+                usage?: {
+                  input_tokens?: number;
+                  output_tokens?: number;
+                  cache_read_input_tokens?: number;
+                  cache_creation_input_tokens?: number;
+                };
+              };
+              if (r.session_id) {
+                sdkSessionId = r.session_id;
+                recordSessionId(localSessionId, cwd, r.session_id, cfg, managesGlobalActiveSession);
+              }
+              appendSessionRecord(localSessionId, {
+                type: "result",
+                timestamp: Date.now(),
+                sessionId: localSessionId,
+                cwd,
+                sdkSessionId: r.session_id,
+                usage: {
+                  inputTokens: r.usage?.input_tokens,
+                  outputTokens: r.usage?.output_tokens,
+                  cacheReadTokens: r.usage?.cache_read_input_tokens,
+                  cacheCreationTokens: r.usage?.cache_creation_input_tokens,
+                },
+                costUsd: r.total_cost_usd,
+                model: cfg.model,
+                autonomy: cfg.autonomy,
+              }, cwd);
+            }
+            yield message;
           }
-        }
-      }
-    }
-    if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
-      const sid = (message as { session_id?: string }).session_id;
-      if (sid) recordSessionId(sid, cfg);
-    } else if (message.type === "result") {
-      flushCurrentBlock();
-      const r = message as unknown as {
-        session_id?: string;
-        total_cost_usd?: number;
-        usage?: {
-          input_tokens?: number;
-          output_tokens?: number;
-          cache_read_input_tokens?: number;
-          cache_creation_input_tokens?: number;
-        };
-      };
-      if (r.session_id) recordSessionId(r.session_id, cfg);
-      if (activeLocalSessionId) {
-        appendSessionRecord(activeLocalSessionId, {
-          type: "result",
-          timestamp: Date.now(),
-          sessionId: activeLocalSessionId,
-          cwd: process.cwd(),
-          sdkSessionId: r.session_id,
-          usage: {
-            inputTokens: r.usage?.input_tokens,
-            outputTokens: r.usage?.output_tokens,
-            cacheReadTokens: r.usage?.cache_read_input_tokens,
-            cacheCreationTokens: r.usage?.cache_creation_input_tokens,
-          },
-          costUsd: r.total_cost_usd,
-          model: cfg.model,
-          autonomy: cfg.autonomy,
-        });
-      }
-    }
-      yield message;
-        }
-        break;
-      } catch (err) {
-        const msg = (err as Error)?.message ?? "";
-        if (!triedFreshRetry && /exited with code 1|No conversation found/i.test(msg)) {
-          triedFreshRetry = true;
-          activeSessionId = undefined;
-          currentBlock = null;
-          attempt = consume(undefined);
-          continue;
+          break;
+        } catch (err) {
+          const msg = (err as Error)?.message ?? "";
+          if (!triedFreshRetry && /exited with code 1|No conversation found/i.test(msg)) {
+            triedFreshRetry = true;
+            sdkSessionId = undefined;
+            if (managesGlobalActiveSession) activeSessionId = undefined;
+            currentBlock = null;
+            attempt = consume(undefined);
+            continue;
         }
         throw err;
       }

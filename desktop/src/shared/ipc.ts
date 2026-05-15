@@ -74,6 +74,25 @@ export const ResumeSessionReq = z.object({
   sessionId: z.string(),
 });
 
+export const ArchiveSessionReq = z.object({
+  projectId: z.string(),
+  sessionId: z.string(),
+});
+
+export const RestoreSessionReq = z.object({
+  projectId: z.string(),
+  session: z.object({
+    id: z.string(),
+    sdkSessionId: z.string().optional(),
+    title: z.string(),
+    cwd: z.string(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+    model: z.string().optional(),
+    autonomy: z.string().optional(),
+  }),
+});
+
 export const ListSessionsReq = z.object({
   projectId: z.string(),
 });
@@ -130,6 +149,8 @@ export interface IpcChannelMap {
     req: z.infer<typeof ResumeSessionReq>;
     res: { session: SessionDescriptor; records: ChatRecord[] };
   };
+  "session:archive": { req: z.infer<typeof ArchiveSessionReq>; res: { ok: true } };
+  "session:restore": { req: z.infer<typeof RestoreSessionReq>; res: SessionDescriptor };
   "session:list": { req: z.infer<typeof ListSessionsReq>; res: SessionDescriptor[] };
   "turn:send": { req: z.infer<typeof SendPromptReq>; res: { ok: true } };
   "turn:abort": { req: z.infer<typeof AbortTurnReq>; res: { ok: boolean } };

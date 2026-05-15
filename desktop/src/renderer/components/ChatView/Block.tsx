@@ -26,9 +26,17 @@ export function Block({ record }: { record: ChatRecord }) {
         </article>
       );
     case "tool_use":
-      return <ToolChip record={record} state="running" />;
+      return (
+        <article className="turn tool-turn">
+          <ToolChip record={record} state={record.text ? "done" : "running"} />
+        </article>
+      );
     case "tool_result":
-      return <ToolChip record={record} state="done" />;
+      return (
+        <article className="turn tool-turn">
+          <ToolChip record={record} state="done" />
+        </article>
+      );
     case "result":
       return null;
     case "error":
