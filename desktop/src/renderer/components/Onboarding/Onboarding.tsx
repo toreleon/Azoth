@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { availableModelOrDefault, normalizeProvider } from "../../lib/providerModels.js";
+import { useProviderModels } from "../../lib/useProviderModels.js";
 
 interface Props {
   onDone: () => void;
@@ -9,8 +11,9 @@ export function Onboarding({ onDone }: Props) {
   const [provider, setProvider] = useState("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [model, setModel] = useState("claude-opus-4-1");
+  const [model, setModel] = useState("");
   const [broker, setBroker] = useState("paper");
+  const modelList = useProviderModels({ provider, apiKey, baseUrl });
 
   useEffect(() => {
     void (async () => {
@@ -18,21 +21,35 @@ export function Onboarding({ onDone }: Props) {
         | { llm?: { api_key?: string; provider?: string; base_url?: string }; model?: string }
         | null;
       if (cfg?.llm?.api_key) setApiKey(cfg.llm.api_key);
-      if (cfg?.llm?.provider) setProvider(cfg.llm.provider);
+      const nextProvider = normalizeProvider(cfg?.llm?.provider);
+      if (cfg?.llm?.provider) setProvider(nextProvider);
       if (cfg?.llm?.base_url) setBaseUrl(cfg.llm.base_url);
       if (cfg?.model) setModel(cfg.model);
     })();
   }, []);
 
+  function updateProvider(value: string) {
+    const nextProvider = normalizeProvider(value);
+    setProvider(nextProvider);
+    setModel("");
+  }
+
   async function saveLlm() {
+    const selectedModel = availableModelOrDefault(modelList.models, model);
+    if (!selectedModel) return;
     await window.azoth.invoke("config:save", {
       patch: {
-        model,
+        model: selectedModel,
         llm: { provider, api_key: apiKey, base_url: baseUrl },
       },
     });
     setStep("broker");
   }
+
+  useEffect(() => {
+    if (modelList.loading || modelList.error || modelList.models.length === 0) return;
+    setModel((current) => availableModelOrDefault(modelList.models, current));
+  }, [modelList.error, modelList.loading, modelList.models]);
 
   async function saveBroker() {
     await window.azoth.invoke("config:save", { patch: { broker } });
@@ -66,7 +83,7 @@ export function Onboarding({ onDone }: Props) {
             <Field label="Provider">
               <select
                 value={provider}
-                onChange={(e) => setProvider(e.target.value)}
+                onChange={(e) => updateProvider(e.target.value)}
                 className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text"
               >
                 <option value="anthropic">Anthropic</option>
@@ -92,15 +109,29 @@ export function Onboarding({ onDone }: Props) {
               </Field>
             )}
             <Field label="Model">
-              <input
-                value={model}
+              <select
+                value={modelList.loading || modelList.error || modelList.models.length === 0
+                  ? ""
+                  : availableModelOrDefault(modelList.models, model)}
+                disabled={modelList.loading || Boolean(modelList.error) || modelList.models.length === 0}
                 onChange={(e) => setModel(e.target.value)}
                 className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text outline-none focus:border-azoth-accent"
-              />
+              >
+                {modelList.loading || modelList.error || modelList.models.length === 0 ? (
+                  <option value="">
+                    {modelList.loading ? "Loading models..." : modelList.error ? "Models unavailable" : "No models"}
+                  </option>
+                ) : null}
+                {modelList.models.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </Field>
             <button
               onClick={saveLlm}
-              disabled={!apiKey.trim()}
+              disabled={!apiKey.trim() || modelList.loading || Boolean(modelList.error) || !availableModelOrDefault(modelList.models, model)}
               className="mt-2 w-full rounded-md bg-azoth-accent px-4 py-2 text-sm text-white disabled:opacity-40"
             >
               Continue

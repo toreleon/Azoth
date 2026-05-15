@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import type { DesktopSettings } from "../../../shared/ipc.js";
+import {
+  availableModelOrDefault,
+  modelIsAvailable,
+  normalizeProvider,
+  type LlmProvider,
+} from "../../lib/providerModels.js";
+import { useProviderModels } from "../../lib/useProviderModels.js";
 import { useChatStore } from "../../store/chatStore.js";
 
 type Pane = "general" | "models" | "broker" | "risk" | "sessions" | "advanced" | "about";
@@ -19,12 +26,10 @@ const panes: Array<{ id: Pane; label: string; icon: React.ReactNode; group?: "pr
   { id: "about", label: "About", icon: <AboutIcon />, group: "secondary" },
 ];
 
-const modelOptions = ["glm-5.1", "claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"];
-
 export function SettingsModal({ onClose }: Props) {
   const [pane, setPane] = useState<Pane>("general");
-  const [saved, setSaved] = useState(false);
-  const savedTimer = useRef<number | null>(null);
+  const [toast, setToast] = useState({ visible: false, message: "Saved" });
+  const toastTimer = useRef<number | null>(null);
   const config = useChatStore((s) => s.config) as Record<string, any> | null;
   const appSettings = useChatStore((s) => s.appSettings);
   const setConfig = useChatStore((s) => s.setConfig);
@@ -34,14 +39,21 @@ export function SettingsModal({ onClose }: Props) {
 
   useEffect(() => {
     return () => {
-      if (savedTimer.current != null) window.clearTimeout(savedTimer.current);
+      if (toastTimer.current != null) window.clearTimeout(toastTimer.current);
     };
   }, []);
 
+  function showToast(message: string) {
+    setToast({ visible: true, message });
+    if (toastTimer.current != null) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(
+      () => setToast((current) => ({ ...current, visible: false })),
+      1800,
+    );
+  }
+
   function flashSaved() {
-    setSaved(true);
-    if (savedTimer.current != null) window.clearTimeout(savedTimer.current);
-    savedTimer.current = window.setTimeout(() => setSaved(false), 1400);
+    showToast("Saved");
   }
 
   async function save(patch: Record<string, unknown>) {
@@ -100,7 +112,7 @@ export function SettingsModal({ onClose }: Props) {
                 onSaveAppSettings={saveAppSettings}
               />
             )}
-            {pane === "models" && <ModelsPane config={config} onSave={save} />}
+            {pane === "models" && <ModelsPane config={config} onSave={save} onNotify={showToast} />}
             {pane === "broker" && <BrokerPane config={config} onSave={save} />}
             {pane === "risk" && <RiskPane config={config} onSave={save} />}
             {pane === "sessions" && <SessionsPane projects={projects.length} sessions={sessions.length} />}
@@ -109,8 +121,8 @@ export function SettingsModal({ onClose }: Props) {
           </div>
         </div>
       </div>
-      <div className={`settings-saved${saved ? " show" : ""}`}>
-        Saved
+      <div className={`settings-saved${toast.visible ? " show" : ""}`}>
+        {toast.message}
       </div>
     </div>
   );
@@ -253,20 +265,82 @@ function GeneralPane({
 function ModelsPane({
   config,
   onSave,
+  onNotify,
 }: {
   config: Record<string, any> | null;
   onSave: (patch: Record<string, unknown>) => Promise<void>;
+  onNotify: (message: string) => void;
 }) {
   const llm = config?.llm ?? {};
   const team = config?.team ?? {};
+  const provider = normalizeProvider(llm.provider);
   const [apiKey, setApiKey] = useState(llm.api_key ?? "");
   const [baseUrl, setBaseUrl] = useState(llm.base_url ?? "");
   const [showKey, setShowKey] = useState(false);
+  const modelList = useProviderModels({ provider, apiKey, baseUrl });
+  const connectionReady = Boolean(apiKey.trim()) && (provider === "anthropic" || Boolean(baseUrl.trim()));
+  const lastConnectionNotice = useRef("");
 
   useEffect(() => {
     setApiKey(llm.api_key ?? "");
     setBaseUrl(llm.base_url ?? "");
   }, [llm.api_key, llm.base_url]);
+
+  useEffect(() => {
+    if (!config) return;
+    if (modelList.loading || modelList.error || modelList.models.length === 0) return;
+    if (
+      modelIsAvailable(modelList.models, config.model) &&
+      modelIsAvailable(modelList.models, team.quick_model ?? config.model) &&
+      modelIsAvailable(modelList.models, team.deep_model ?? config.model)
+    ) {
+      return;
+    }
+    void onSave({
+      model: availableModelOrDefault(modelList.models, config.model),
+      team: {
+        ...team,
+        quick_model: availableModelOrDefault(modelList.models, team.quick_model ?? config.model),
+        deep_model: availableModelOrDefault(modelList.models, team.deep_model ?? config.model),
+      },
+    });
+  }, [config, modelList.error, modelList.loading, modelList.models, onSave, team]);
+
+  useEffect(() => {
+    if (modelList.loading) return;
+    const message = !connectionReady
+      ? provider === "compatible" && !baseUrl.trim()
+        ? "Missing endpoint"
+        : "Missing API key"
+      : modelList.error
+        ? modelList.error
+        : modelList.models.length > 0
+          ? `${modelList.models.length} models loaded`
+          : "No models found";
+    const key = `${provider}:${apiKey}:${baseUrl}:${message}`;
+    if (lastConnectionNotice.current === key) return;
+    lastConnectionNotice.current = key;
+    onNotify(message);
+  }, [
+    apiKey,
+    baseUrl,
+    connectionReady,
+    modelList.error,
+    modelList.loading,
+    modelList.models.length,
+    onNotify,
+    provider,
+  ]);
+
+  function saveProvider(nextProvider: LlmProvider) {
+    return onSave({
+      llm: {
+        ...llm,
+        provider: nextProvider,
+        base_url: baseUrl,
+      },
+    });
+  }
 
   return (
     <PaneShell title="Models" subtitle="LLM provider, API credentials, and model tiers for the agent team.">
@@ -275,13 +349,24 @@ function ModelsPane({
         <SettingRow
           label="Provider"
           control={
-            <select
-              value={llm.provider ?? "anthropic"}
-              onChange={(e) => void onSave({ llm: { ...llm, provider: e.target.value } })}
-            >
-              <option value="anthropic">Anthropic</option>
-              <option value="compatible">Anthropic-compatible (proxy)</option>
-            </select>
+            <>
+              <select
+                value={provider}
+                onChange={(e) => void saveProvider(normalizeProvider(e.target.value))}
+              >
+                <option value="anthropic">Anthropic</option>
+                <option value="compatible">Anthropic-compatible (proxy)</option>
+              </select>
+              <button
+                className="settings-icon-btn"
+                disabled={!connectionReady}
+                title="Refresh models"
+                aria-label="Refresh models"
+                onClick={modelList.refresh}
+              >
+                <RefreshIcon />
+              </button>
+            </>
           }
         />
         <SettingRow
@@ -297,30 +382,21 @@ function ModelsPane({
             />
           }
         />
-        <SettingRow
-          label="Base URL"
-          control={
-            <input
-              className="mono w-lg"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              onBlur={() => void onSave({ llm: { ...llm, api_key: apiKey, base_url: baseUrl } })}
-            />
-          }
-        />
-        <SettingRow
-          label="Connection"
-          hint="Uses the configured provider, API key, and base URL."
-          control={
-            <>
-              <span className={apiKey || llm.provider === "anthropic" ? "pill pill-ok" : "pill pill-warn"}>
-                <span className="dot" />
-                {apiKey || llm.provider === "anthropic" ? "Configured" : "Missing key"}
-              </span>
-              <button className="settings-btn" onClick={() => undefined}>Test</button>
-            </>
-          }
-        />
+        {provider === "compatible" && (
+          <SettingRow
+            label="Endpoint"
+            hint="Anthropic-compatible base URL. This is preserved if you switch providers."
+            control={
+              <input
+                className="mono w-lg"
+                value={baseUrl}
+                placeholder="https://provider.example.com"
+                onChange={(e) => setBaseUrl(e.target.value)}
+                onBlur={() => void onSave({ llm: { ...llm, api_key: apiKey, base_url: baseUrl } })}
+              />
+            }
+          />
+        )}
       </Group>
 
       <GroupTitle>Team tiers</GroupTitle>
@@ -330,7 +406,10 @@ function ModelsPane({
           hint="Analysts, researchers, trader, risk agent."
           control={
             <ModelSelect
-              value={team.quick_model ?? config?.model ?? "glm-5.1"}
+              models={modelList.models}
+              loading={modelList.loading}
+              error={modelList.error}
+              value={team.quick_model ?? config?.model}
               onChange={(quick_model) => void onSave({ team: { ...team, quick_model } })}
             />
           }
@@ -340,7 +419,10 @@ function ModelsPane({
           hint="Research manager and portfolio manager, used sparingly."
           control={
             <ModelSelect
-              value={team.deep_model ?? config?.model ?? "glm-5.1"}
+              models={modelList.models}
+              loading={modelList.loading}
+              error={modelList.error}
+              value={team.deep_model ?? config?.model}
               onChange={(deep_model) => void onSave({ team: { ...team, deep_model } })}
             />
           }
@@ -348,7 +430,15 @@ function ModelsPane({
         <SettingRow
           label="Orchestrator default"
           hint="Top-level model used by the desktop chat."
-          control={<ModelSelect value={config?.model ?? "glm-5.1"} onChange={(model) => void onSave({ model })} />}
+          control={
+            <ModelSelect
+              models={modelList.models}
+              loading={modelList.loading}
+              error={modelList.error}
+              value={config?.model}
+              onChange={(model) => void onSave({ model })}
+            />
+          }
         />
       </Group>
 
@@ -941,13 +1031,27 @@ function Slider({
   );
 }
 
-function ModelSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const options = useMemo(() => (
-    modelOptions.includes(value) ? modelOptions : [value, ...modelOptions]
-  ), [value]);
+function ModelSelect({
+  models,
+  loading,
+  error,
+  value,
+  onChange,
+}: {
+  models: string[];
+  loading: boolean;
+  error: string | null;
+  value: string | undefined;
+  onChange: (value: string) => void;
+}) {
+  const selected = availableModelOrDefault(models, value);
+  const disabled = loading || Boolean(error) || models.length === 0;
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      {options.map((option) => <option key={option} value={option}>{option}</option>)}
+    <select value={disabled ? "" : selected} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      {disabled ? (
+        <option value="">{loading ? "Loading models..." : error ? "Models unavailable" : "No models"}</option>
+      ) : null}
+      {models.map((option) => <option key={option} value={option}>{option}</option>)}
     </select>
   );
 }
@@ -1011,6 +1115,9 @@ function AboutIcon() {
 }
 function BackIcon() {
   return <Svg><path d="M15 18l-6-6 6-6" /><path d="M9 12h11" /></Svg>;
+}
+function RefreshIcon() {
+  return <Svg><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8" /><path d="M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16" /><path d="M20 20v-4h-4" /></Svg>;
 }
 function EyeIcon() {
   return <Svg><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></Svg>;

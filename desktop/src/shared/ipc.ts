@@ -109,6 +109,7 @@ export const SendPromptReq = z.object({
   projectId: z.string(),
   sessionId: z.string(),
   prompt: z.string(),
+  displayPrompt: z.string().optional(),
   turnId: z.string(),
 });
 
@@ -136,6 +137,14 @@ export const SaveDesktopSettingsReq = z.object({
     appearance: z.enum(["light", "dark", "system"]).optional(),
   }),
 });
+
+export const ListModelsReq = z
+  .object({
+    provider: z.enum(["anthropic", "compatible"]).optional(),
+    apiKey: z.string().optional(),
+    baseUrl: z.string().optional(),
+  })
+  .optional();
 
 export const HealthProbeReq = z.object({
   probe: z.boolean().default(false),
@@ -175,6 +184,10 @@ export interface IpcChannelMap {
   "slash:run": { req: z.infer<typeof SlashCommandReq>; res: { ok: true; text?: string } };
   "config:get": { req: undefined; res: unknown };
   "config:save": { req: z.infer<typeof SaveConfigReq>; res: unknown };
+  "models:list": {
+    req: z.infer<typeof ListModelsReq>;
+    res: { models: string[]; error?: string };
+  };
   "app-settings:get": { req: undefined; res: DesktopSettings };
   "app-settings:save": { req: z.infer<typeof SaveDesktopSettingsReq>; res: DesktopSettings };
   "broker:state": { req: undefined; res: unknown };

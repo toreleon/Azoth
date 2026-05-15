@@ -21,6 +21,7 @@ import {
   brokerStateTool,
 } from "../tools/order.js";
 import { resolveClaudeCodeExecutable } from "./claudeCodeExecutable.js";
+import { spawnTrackedClaudeCodeProcess } from "./claudeProcess.js";
 import { loadConfig } from "../config/loader.js";
 import {
   activateSession,
@@ -120,6 +121,7 @@ export function buildOptions(opts: { resume?: string; abortController?: AbortCon
     ...(pathToClaudeCodeExecutable ? { pathToClaudeCodeExecutable } : {}),
     ...(opts.resume ? { resume: opts.resume } : {}),
     ...(opts.abortController ? { abortController: opts.abortController } : {}),
+    spawnClaudeCodeProcess: spawnTrackedClaudeCodeProcess,
     mcpServers: {
       azoth: buildMcpServer(),
     },
@@ -285,7 +287,7 @@ function recordSessionId(
 
 export async function* runTurn(
   prompt: string,
-  opts: { signal?: AbortSignal; sessionId?: string; cwd?: string } = {},
+  opts: { signal?: AbortSignal; sessionId?: string; cwd?: string; displayPrompt?: string } = {},
 ) {
   const cfg = loadConfig();
   const cwd = opts.cwd ?? process.cwd();
@@ -321,7 +323,7 @@ export async function* runTurn(
     timestamp: Date.now(),
     sessionId: session.id,
     cwd,
-    text: prompt,
+    text: opts.displayPrompt ?? prompt,
     model: cfg.model,
     autonomy: cfg.autonomy,
   }, cwd);

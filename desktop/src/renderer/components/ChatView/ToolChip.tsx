@@ -2,6 +2,12 @@ import { useState } from "react";
 import type { ChatRecord } from "../../../shared/ipc.js";
 import { summarizeToolInput, toolLabel } from "../../lib/toolSummary.js";
 
+const MAX_BODY_LINES = 8;
+const MAX_ARRAY_ITEMS = 8;
+const MAX_OBJECT_ENTRIES = 6;
+const MAX_VALUE_CHARS = 420;
+const MAX_LINE_CHARS = 720;
+
 interface Props {
   record: ChatRecord;
   state: "running" | "done";
@@ -86,17 +92,17 @@ function bodyLines({
       const parsed = JSON.parse(trimmed) as unknown;
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return Object.entries(parsed as Record<string, unknown>)
-          .slice(0, 6)
+          .slice(0, MAX_BODY_LINES)
           .map(([key, value]) => ({
             tool: label,
-            text: `${key}=${formatValue(value)}`,
+            text: truncateText(`${key}=${formatValue(value)}`, MAX_LINE_CHARS),
             error: isError,
           }));
       }
       if (Array.isArray(parsed)) {
-        return parsed.slice(0, 6).map((item, idx) => ({
+        return parsed.slice(0, MAX_BODY_LINES).map((item, idx) => ({
           tool: label,
-          text: `${idx + 1}. ${formatValue(item)}`,
+          text: truncateText(`${idx + 1}. ${formatValue(item)}`, MAX_LINE_CHARS),
           error: isError,
         }));
       }
@@ -106,19 +112,32 @@ function bodyLines({
   }
   return trimmed
     .split(/\n+/)
-    .slice(0, 6)
-    .map((line) => ({ tool: label, text: line.trim(), error: isError }));
+    .slice(0, MAX_BODY_LINES)
+    .map((line) => ({ tool: label, text: truncateText(line.trim(), MAX_LINE_CHARS), error: isError }));
 }
 
-function formatValue(value: unknown): string {
-  if (typeof value === "string") return value;
+function formatValue(value: unknown, depth = 0): string {
+  if (typeof value === "string") return truncateText(value, MAX_VALUE_CHARS);
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (value == null) return "null";
-  if (Array.isArray(value)) return `[${value.map(formatValue).join(", ")}]`;
-  return Object.entries(value as Record<string, unknown>)
-    .slice(0, 5)
-    .map(([key, entryValue]) => `${key}=${formatValue(entryValue)}`)
-    .join(" · ");
+  if (depth >= 2) return truncateText(JSON.stringify(value), MAX_VALUE_CHARS);
+  if (Array.isArray(value)) {
+    const visible = value.slice(0, MAX_ARRAY_ITEMS).map((item) => formatValue(item, depth + 1));
+    const suffix = value.length > MAX_ARRAY_ITEMS ? `, ... +${value.length - MAX_ARRAY_ITEMS}` : "";
+    return `[${visible.join(", ")}${suffix}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  const visible = entries
+    .slice(0, MAX_OBJECT_ENTRIES)
+    .map(([key, entryValue]) => `${key}=${formatValue(entryValue, depth + 1)}`);
+  const suffix = entries.length > MAX_OBJECT_ENTRIES ? ` · ... +${entries.length - MAX_OBJECT_ENTRIES}` : "";
+  return `${visible.join(" · ")}${suffix}`;
+}
+
+function truncateText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const visibleLength = Math.max(0, max - 24);
+  return `${text.slice(0, visibleLength).trimEnd()} ... (${text.length - visibleLength} more chars)`;
 }
 
 function ToolIcon({ state }: { state: "running" | "done" | "error" }) {

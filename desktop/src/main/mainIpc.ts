@@ -7,6 +7,7 @@ import {
   CreateProjectReq,
   DeleteProjectReq,
   HealthProbeReq,
+  ListModelsReq,
   ListSessionsReq,
   ResumeSessionReq,
   RestoreSessionReq,
@@ -39,17 +40,23 @@ import {
 } from "@azoth/core/agent/orchestrator.js";
 import {
   archiveSession,
+  appendSessionRecord,
   listSessions,
   readSessionRecords,
   restoreArchivedSession,
   type SessionIndexEntry,
   type SessionRecord,
 } from "@azoth/core/runtime/sessionStore.js";
-import { loadConfig, saveConfig, updateConfig, type Config } from "@azoth/core/config/loader.js";
-import { collectHealth } from "@azoth/core/runtime/health.js";
+import { loadConfig, updateConfig, type Config } from "@azoth/core/config/loader.js";
+import { collectHealth, renderHealth } from "@azoth/core/runtime/health.js";
+import { azothPaths } from "@azoth/core/runtime/paths.js";
+import { listLlmModels } from "@azoth/core/runtime/llmSetup.js";
+import { abortActiveTeamRuns } from "@azoth/core/tools/team.js";
 import { getDesktopSettings, saveDesktopSettings } from "./appSettings.js";
+import { SLASH_COMMANDS } from "../shared/slashCommands.js";
 
-const activeTurns = new Map<string, { controller: AbortController; stopTail: () => void }>();
+const activeTurns = new Map<string, { controller: AbortController; sessionId: string }>();
+const abortedTurns = new Set<string>();
 
 function toDescriptor(entry: SessionIndexEntry): SessionDescriptor {
   return {
@@ -185,6 +192,55 @@ function activateProjectById(id: string) {
   return project;
 }
 
+function renderAbout(): string {
+  const cfg = loadConfig();
+  const paths = azothPaths();
+  return [
+    "Azoth Desktop",
+    `config: ${paths.config}`,
+    `database: ${paths.db}`,
+    `sessions: ${paths.projects}`,
+    `provider: ${cfg.llm.provider}`,
+    `model: ${cfg.model}`,
+    `broker: ${cfg.broker}`,
+    `autonomy: ${cfg.autonomy}`,
+  ].join("\n");
+}
+
+function renderHelp(): string {
+  return SLASH_COMMANDS
+    .map((c) => `/${c.name}${c.args ? ` ${c.args}` : ""} - ${c.description}`)
+    .join("\n");
+}
+
+function persistLocalSlashTurn(
+  sessionId: string | undefined,
+  cwd: string,
+  prompt: string,
+  response: string,
+): void {
+  if (!sessionId) return;
+  const cfg = loadConfig();
+  appendSessionRecord(sessionId, {
+    type: "user",
+    timestamp: Date.now(),
+    sessionId,
+    cwd,
+    text: prompt,
+    model: cfg.model,
+    autonomy: cfg.autonomy,
+  }, cwd);
+  appendSessionRecord(sessionId, {
+    type: "assistant",
+    timestamp: Date.now(),
+    sessionId,
+    cwd,
+    text: response,
+    model: cfg.model,
+    autonomy: cfg.autonomy,
+  }, cwd);
+}
+
 type Handler<K extends keyof IpcChannelMap> = (
   req: IpcChannelMap[K]["req"],
 ) => Promise<IpcChannelMap[K]["res"]> | IpcChannelMap[K]["res"];
@@ -267,7 +323,7 @@ export function registerIpcHandlers(): void {
       streamedRecordCount = records.length;
     };
 
-    activeTurns.set(req.turnId, { controller, stopTail: () => undefined });
+    activeTurns.set(req.turnId, { controller, sessionId: req.sessionId });
 
     void (async () => {
       try {
@@ -278,7 +334,9 @@ export function registerIpcHandlers(): void {
           signal: controller.signal,
           sessionId: req.sessionId,
           cwd: project.rootPath,
+          displayPrompt: req.displayPrompt,
         })) {
+          if (controller.signal.aborted) break;
           drainRecords();
           sendLiveBlockEvent(req.turnId, req.sessionId, message);
           if ((message as { type?: string }).type === "result") {
@@ -302,6 +360,7 @@ export function registerIpcHandlers(): void {
             };
           }
         }
+        if (abortedTurns.has(req.turnId)) return;
         drainRecords();
         sendStream({
           kind: "turn:done",
@@ -312,6 +371,7 @@ export function registerIpcHandlers(): void {
           sdkSessionId,
         });
       } catch (err) {
+        if (abortedTurns.has(req.turnId) || controller.signal.aborted) return;
         const message = err instanceof Error ? err.message : String(err);
         sendStream({
           kind: "turn:error",
@@ -321,6 +381,7 @@ export function registerIpcHandlers(): void {
         });
       } finally {
         activeTurns.delete(req.turnId);
+        abortedTurns.delete(req.turnId);
       }
     })();
 
@@ -331,32 +392,79 @@ export function registerIpcHandlers(): void {
     const req = AbortTurnReq.parse(raw);
     const entry = activeTurns.get(req.turnId);
     if (!entry) return { ok: false };
+    abortedTurns.add(req.turnId);
+    abortActiveTeamRuns();
     entry.controller.abort();
+    sendStream({
+      kind: "turn:done",
+      turnId: req.turnId,
+      sessionId: entry.sessionId,
+    });
     return { ok: true };
   });
 
   register("slash:run", async (raw) => {
     const req = SlashCommandReq.parse(raw);
-    activateProjectById(req.projectId);
-    switch (req.name) {
+    const project = activateProjectById(req.projectId);
+    const name = req.name.toLowerCase();
+    const args = req.args?.trim() ?? "";
+    let text: string;
+    switch (name) {
       case "sessions": {
-        const project = getProject(req.projectId);
-        const list = recentSessions(20, project?.rootPath)
-          .map((s) => `${s.id.slice(0, 8)}  ${s.title}`)
+        const list = recentSessions(20, project.rootPath)
+          .map((s) => {
+            const date = new Date(s.updatedAt).toISOString().slice(0, 16).replace("T", " ");
+            return `${s.id.slice(0, 8)}  ${date}  ${s.title}`;
+          })
           .join("\n");
-        return { ok: true as const, text: list || "(no sessions)" };
+        text = list || "No saved sessions for this project.";
+        break;
       }
       case "health": {
-        const report = await collectHealth({ probeProviders: req.args?.includes("--probe") });
-        return { ok: true as const, text: JSON.stringify(report, null, 2) };
+        const report = await collectHealth({ probeProviders: args.includes("--probe") });
+        text = renderHealth(report);
+        break;
       }
+      case "autonomy": {
+        const mode = args.split(/\s+/)[0];
+        if (!mode) {
+          text = `Current autonomy mode: ${loadConfig().autonomy}`;
+          break;
+        }
+        if (!["advisory", "confirm", "auto"].includes(mode)) {
+          text = "Usage: /autonomy <advisory|confirm|auto>";
+          break;
+        }
+        const next = updateConfig({ autonomy: mode as Config["autonomy"] });
+        text = `Autonomy mode set to ${next.autonomy}.`;
+        break;
+      }
+      case "about":
+        text = renderAbout();
+        break;
+      case "help":
+        text = renderHelp();
+        break;
+      case "team":
+        text = "Usage: /team <message>";
+        break;
+      case "analyze":
+        text = "Usage: /analyze <ticker> [--rounds N]";
+        break;
+      case "quote":
+        text = "Usage: /quote <ticker>";
+        break;
       case "new": {
-        startNewSession();
-        return { ok: true as const };
+        startNewSession(undefined, project.rootPath);
+        text = "Started a fresh session.";
+        break;
       }
       default:
-        return { ok: true as const };
+        text = `Unknown command: /${req.name}. Type /help for available commands.`;
+        break;
     }
+    persistLocalSlashTurn(req.sessionId, project.rootPath, `/${name}${args ? ` ${args}` : ""}`, text);
+    return { ok: true as const, text };
   });
 
   register("config:get", () => loadConfig() as unknown);
@@ -365,6 +473,21 @@ export function registerIpcHandlers(): void {
     const req = SaveConfigReq.parse(raw);
     if (Object.keys(req.patch).length === 0) return loadConfig() as unknown;
     return updateConfig(req.patch as Partial<Config>) as unknown;
+  });
+
+  register("models:list", async (raw) => {
+    const req = ListModelsReq.parse(raw);
+    const cfg = loadConfig();
+    const provider = req?.provider ?? cfg.llm.provider;
+    const apiKey = req?.apiKey ?? cfg.llm.api_key;
+    const baseUrl = req?.baseUrl ?? cfg.llm.base_url;
+    try {
+      const models = await listLlmModels({ provider, apiKey, baseUrl });
+      return { models };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { models: [], error: message };
+    }
   });
 
   register("app-settings:get", () => getDesktopSettings());
@@ -400,12 +523,11 @@ export function registerIpcHandlers(): void {
 }
 
 export function abortAllTurns(): void {
-  for (const { controller, stopTail } of activeTurns.values()) {
+  for (const [turnId, { controller, sessionId }] of activeTurns.entries()) {
+    abortedTurns.add(turnId);
+    abortActiveTeamRuns();
     controller.abort();
-    stopTail();
+    sendStream({ kind: "turn:done", turnId, sessionId });
   }
   activeTurns.clear();
 }
-
-// Silence unused saveConfig warning while keeping the import explicit.
-void saveConfig;

@@ -7,6 +7,8 @@ const coreAlias = {
   "@shared": resolve(__dirname, "src/shared"),
 };
 
+const nativeExternals = ["better-sqlite3"];
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
@@ -14,6 +16,7 @@ export default defineConfig({
     build: {
       outDir: "out/main",
       rollupOptions: {
+        external: nativeExternals,
         input: resolve(__dirname, "src/main/index.ts"),
       },
     },

@@ -470,14 +470,16 @@ input, textarea, [contenteditable="true"] {
 }
 
 .main {
-  display: grid;
-  grid-template-rows: 1fr auto;
+  position: relative;
+  overflow: hidden;
   min-height: 0;
+  background: var(--bg);
 }
 
 .thread {
+  height: 100%;
   overflow-y: auto;
-  padding: var(--space-8) max(48px, calc(50% - 420px));
+  padding: var(--space-8) max(48px, calc(50% - 420px)) 180px;
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -519,6 +521,15 @@ input, textarea, [contenteditable="true"] {
   align-self: flex-end;
   max-width: 80%;
   color: var(--accent-text);
+}
+
+.thread,
+.turn .bubble,
+.turn.thinking,
+.tool-call .body,
+.error-bubble {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .turn.assistant .bubble {
@@ -741,8 +752,15 @@ input, textarea, [contenteditable="true"] {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: min(280px, 38vh);
+  max-width: 100%;
+  overflow: auto;
+  padding-right: 10px;
   font-size: 13px;
   color: var(--muted);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  word-break: break-word;
 }
 
 .tool-call .body code {
@@ -767,18 +785,32 @@ input, textarea, [contenteditable="true"] {
 }
 
 .composer {
-  padding: var(--space-3) max(48px, calc(50% - 420px)) var(--space-3);
-  border-top: var(--hairline);
-  background: color-mix(in oklab, var(--bg), var(--surface) 46%);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: var(--space-3) max(48px, calc(50% - 420px)) calc(var(--space-4) + env(safe-area-inset-bottom));
+  border-top: 0;
+  background: linear-gradient(
+    to top,
+    var(--bg) 0%,
+    color-mix(in oklab, var(--bg), transparent 5%) 68%,
+    transparent 100%
+  );
+  pointer-events: none;
 }
 
 .composer-shell {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 1px 0 color-mix(in oklab, var(--fg), transparent 95%);
+  box-shadow:
+    0 18px 42px color-mix(in oklab, var(--fg), transparent 90%),
+    0 1px 0 color-mix(in oklab, var(--fg), transparent 95%);
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
   position: relative;
+  pointer-events: auto;
 }
 
 .composer-shell:focus-within {
@@ -900,23 +932,28 @@ input, textarea, [contenteditable="true"] {
   flex: 1;
 }
 
-.send-btn {
+.send-btn,
+.stop-btn {
   width: 30px;
   height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--fg);
-  color: var(--bg);
   border-radius: 50%;
   transition: background var(--motion-fast), transform var(--motion-fast);
+}
+
+.send-btn {
+  background: var(--fg);
+  color: var(--bg);
 }
 
 .send-btn:hover {
   background: color-mix(in oklab, var(--fg), white 15%);
 }
 
-.send-btn:active {
+.send-btn:active,
+.stop-btn:active {
   transform: translateY(0.5px);
 }
 
@@ -924,34 +961,37 @@ input, textarea, [contenteditable="true"] {
   opacity: 0.4;
 }
 
-.send-btn svg {
-  width: 13px;
-  height: 13px;
+.send-btn svg,
+.stop-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .stop-btn {
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
   border: 1px solid color-mix(in oklab, var(--danger), transparent 75%);
   color: var(--danger);
   background: var(--surface);
-  border-radius: var(--radius-pill);
-  padding: 0 12px;
-  font-size: var(--text-sm);
+}
+
+.stop-btn:hover {
+  background: var(--danger-soft);
+  border-color: color-mix(in oklab, var(--danger), transparent 55%);
 }
 
 .slash-pop {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 16px;
-  width: 360px;
-  background: var(--surface);
+  bottom: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  width: auto;
+  max-height: min(520px, calc(100vh - 220px));
+  padding: 6px;
+  background: color-mix(in oklab, var(--surface), var(--bg) 16%);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--elev-raised);
-  overflow: hidden;
-  z-index: 30;
+  overflow-y: auto;
+  z-index: 45;
   display: none;
 }
 
@@ -959,43 +999,65 @@ input, textarea, [contenteditable="true"] {
   display: block;
 }
 
-.slash-pop .slash-head {
-  font-size: 11px;
-  color: var(--muted);
-  padding: 8px 12px;
-  border-bottom: var(--hairline);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
 .slash-item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 8px 12px;
+  min-height: 42px;
+  padding: 0 12px;
   cursor: pointer;
   font-size: var(--text-sm);
   width: 100%;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  text-align: left;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
 }
 
 .slash-item:hover,
 .slash-item.active {
-  background: color-mix(in oklab, var(--accent), transparent 92%);
+  background: color-mix(in oklab, var(--fg), transparent 92%);
+  color: var(--fg);
+}
+
+.slash-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.slash-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.slash-item.active .slash-icon,
+.slash-item:hover .slash-icon {
+  color: var(--fg);
 }
 
 .slash-item .cmd {
-  font-family: var(--font-mono);
-  color: var(--accent);
+  color: currentColor;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .slash-item .desc {
   color: var(--muted);
-  font-size: 12px;
-  margin-left: auto;
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.slash-item.active .desc,
+.slash-item:hover .desc {
+  color: var(--muted);
 }
 
 .empty-thread {
@@ -1427,6 +1489,12 @@ input, textarea, [contenteditable="true"] {
   background: color-mix(in oklab, var(--fg), transparent 96%);
 }
 
+.settings-btn:disabled,
+.settings-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .settings-btn.primary {
   background: var(--accent);
   color: var(--accent-on);
@@ -1444,6 +1512,28 @@ input, textarea, [contenteditable="true"] {
 
 .settings-btn.danger:hover {
   background: color-mix(in oklab, var(--danger), transparent 94%);
+}
+
+.settings-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--muted);
+  border: 0.5px solid color-mix(in oklab, var(--fg), transparent 82%);
+  background: var(--surface);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--fg), transparent 94%);
+}
+
+.settings-icon-btn:hover:not(:disabled) {
+  color: var(--fg);
+  background: color-mix(in oklab, var(--fg), transparent 96%);
+}
+
+.settings-icon-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .pill {

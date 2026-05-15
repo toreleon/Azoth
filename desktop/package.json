@@ -13,6 +13,7 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "better-sqlite3": "^11.10.0",
     "zustand": "^4.5.5"
   },
   "devDependencies": {

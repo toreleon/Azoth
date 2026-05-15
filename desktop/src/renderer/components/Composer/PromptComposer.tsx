@@ -9,6 +9,33 @@ function newTurnId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function parseSlash(input: string): { name: string; args: string } | null {
+  if (!input.startsWith("/")) return null;
+  const [rawName = "", ...rest] = input.slice(1).trim().split(/\s+/);
+  const name = rawName.toLowerCase();
+  if (!name) return null;
+  return { name, args: rest.join(" ").trim() };
+}
+
+function promptForSlash(name: string, args: string): string | null {
+  switch (name) {
+    case "team":
+      return args ? `Run a multi-agent debate on this question: ${args}` : null;
+    case "analyze":
+      return args ? `Run a structured team analysis for ${args}.` : null;
+    case "backtest":
+      return `Run an interval backtest with these arguments: ${args || "default previous calendar week"}.`;
+    case "quote":
+      return args
+        ? `Give me a market quote with technicals and recent news for ${args.toUpperCase()}.`
+        : null;
+    case "positions":
+      return "Summarize my current portfolio positions, unrealized PnL, and exposures.";
+    default:
+      return null;
+  }
+}
+
 export function PromptComposer() {
   const [value, setValue] = useState("");
   const [suggestIdx, setSuggestIdx] = useState(0);
@@ -25,6 +52,7 @@ export function PromptComposer() {
     appendRecord,
     startStreaming,
     stopStreaming,
+    setConfig,
   } = useChatStore();
   const activeTurnId = activeSessionId ? activeTurnsBySession[activeSessionId] : undefined;
   const streaming = activeTurnId != null;
@@ -48,31 +76,39 @@ export function PromptComposer() {
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [value]);
 
-  const send = useCallback(async () => {
-    const text = value.trim();
-    if (!text || !activeProjectId || streaming) return;
-    setError(null);
+  const refreshSessions = useCallback(async () => {
+    if (!activeProjectId) return;
+    const list = await window.azoth.invoke("session:list", { projectId: activeProjectId });
+    setSessions(list);
+  }, [activeProjectId, setSessions]);
 
+  const ensureSession = useCallback(async (title: string) => {
+    if (!activeProjectId) throw new Error("No active project selected.");
     let sessionId = activeSessionId;
-    try {
-      if (!sessionId) {
-        const entry = await window.azoth.invoke("session:start", {
-          projectId: activeProjectId,
-          title: text.slice(0, 80),
-        });
-        sessionId = entry.id;
-        setActiveSession(sessionId);
-        setRecords(sessionId, []);
-        const list = await window.azoth.invoke("session:list", { projectId: activeProjectId });
-        setSessions(list);
-      }
+    if (sessionId) return sessionId;
+    const entry = await window.azoth.invoke("session:start", {
+      projectId: activeProjectId,
+      title: title.slice(0, 80) || "Untitled session",
+    });
+    sessionId = entry.id;
+    setActiveSession(sessionId);
+    setRecords(sessionId, []);
+    await refreshSessions();
+    return sessionId;
+  }, [activeProjectId, activeSessionId, refreshSessions, setActiveSession, setRecords]);
 
+  const sendPrompt = useCallback(async (prompt: string, displayPrompt = prompt) => {
+    if (!activeProjectId || streaming) return;
+    setError(null);
+    let sessionId: string | null = null;
+    try {
+      sessionId = await ensureSession(displayPrompt);
       // Optimistic user record so the message appears immediately.
       appendRecord(sessionId, {
         type: "user",
         timestamp: Date.now(),
         sessionId,
-        text,
+        text: displayPrompt,
       });
 
       const turnId = newTurnId();
@@ -81,7 +117,8 @@ export function PromptComposer() {
       await window.azoth.invoke("turn:send", {
         projectId: activeProjectId,
         sessionId,
-        prompt: text,
+        prompt,
+        displayPrompt: displayPrompt === prompt ? undefined : displayPrompt,
         turnId,
       });
     } catch (err) {
@@ -99,21 +136,121 @@ export function PromptComposer() {
       }
     }
   }, [
-    value,
     activeProjectId,
-    activeSessionId,
     streaming,
-    setActiveSession,
-    setRecords,
-    setSessions,
+    ensureSession,
     appendRecord,
     startStreaming,
     stopStreaming,
   ]);
 
+  const runLocalSlash = useCallback(async (name: string, args: string, userText: string) => {
+    if (!activeProjectId || streaming) return;
+    setError(null);
+    let sessionId: string | null = null;
+    try {
+      sessionId = await ensureSession(userText);
+      appendRecord(sessionId, {
+        type: "user",
+        timestamp: Date.now(),
+        sessionId,
+        text: userText,
+      });
+      setValue("");
+      const res = await window.azoth.invoke("slash:run", {
+        projectId: activeProjectId,
+        sessionId,
+        name,
+        args,
+      });
+      appendRecord(sessionId, {
+        type: "assistant",
+        timestamp: Date.now(),
+        sessionId,
+        text: res.text ?? "",
+      });
+      if (name === "autonomy") {
+        const cfg = await window.azoth.invoke("config:get", undefined);
+        setConfig(cfg);
+      }
+      await refreshSessions();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (sessionId) {
+        appendRecord(sessionId, {
+          type: "error",
+          timestamp: Date.now(),
+          sessionId,
+          text: message,
+        });
+      } else {
+        setError(message);
+      }
+    }
+  }, [
+    activeProjectId,
+    streaming,
+    ensureSession,
+    appendRecord,
+    refreshSessions,
+    setConfig,
+  ]);
+
+  const startNewChat = useCallback(async () => {
+    if (!activeProjectId || streaming) return;
+    setError(null);
+    try {
+      const entry = await window.azoth.invoke("session:start", {
+        projectId: activeProjectId,
+        title: "Untitled session",
+      });
+      setActiveSession(entry.id);
+      setRecords(entry.id, []);
+      setValue("");
+      await refreshSessions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [activeProjectId, streaming, refreshSessions, setActiveSession, setRecords]);
+
+  const send = useCallback(async () => {
+    const text = value.trim();
+    if (!text || !activeProjectId || streaming) return;
+
+    const slash = parseSlash(text);
+    if (slash) {
+      if (slash.name === "new") {
+        await startNewChat();
+        return;
+      }
+      const prompt = promptForSlash(slash.name, slash.args);
+      if (prompt) {
+        await sendPrompt(prompt, text);
+        return;
+      }
+      if (["help", "sessions", "health", "about", "autonomy"].includes(slash.name)) {
+        await runLocalSlash(slash.name, slash.args, text);
+        return;
+      }
+      await runLocalSlash(slash.name, slash.args, text || `/${slash.name}`);
+      return;
+    }
+
+    await sendPrompt(text);
+  }, [
+    value,
+    activeProjectId,
+    streaming,
+    sendPrompt,
+    runLocalSlash,
+    startNewChat,
+  ]);
+
   async function abort() {
     if (!activeTurnId) return;
-    await window.azoth.invoke("turn:abort", { turnId: activeTurnId });
+    const sessionId = activeSessionId;
+    const res = await window.azoth.invoke("turn:abort", { turnId: activeTurnId });
+    if (res.ok && sessionId) stopStreaming(sessionId);
   }
 
   const suggestions = matchSlash(value);
@@ -180,8 +317,8 @@ export function PromptComposer() {
             <VoiceIcon />
           </button>
           {streaming ? (
-            <button onClick={abort} className="stop-btn">
-              Stop
+            <button onClick={abort} className="stop-btn" title="Stop">
+              <StopIcon />
             </button>
           ) : (
             <button
@@ -238,12 +375,25 @@ function SendIcon() {
       viewBox="0 0 14 14"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M7 11V3M3.5 6.5 7 3l3.5 3.5" />
+      <path d="M7 11.2V2.8M3.3 6.5 7 2.8l3.7 3.7" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5"
+      viewBox="0 0 14 14"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <rect x="3.25" y="3.25" width="7.5" height="7.5" rx="1.4" />
     </svg>
   );
 }
