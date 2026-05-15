@@ -1,0 +1,19 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "paths": {
+      "@azoth/core/*": ["../src/*"]
+    },
+    "baseUrl": ".",
+    "noEmit": true
+  },
+  "include": [
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts",
+    "src/shared/**/*.ts",
+    "../src/**/*.ts"
+  ],
+  "exclude": ["node_modules", "out", "release"]
+}

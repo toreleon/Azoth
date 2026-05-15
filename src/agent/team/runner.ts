@@ -1,5 +1,6 @@
 import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+import { resolveClaudeCodeExecutable } from "../claudeCodeExecutable.js";
 import { loadConfig } from "../../config/loader.js";
 import { allowedToolIds, buildRoleMcpServer } from "./tools.js";
 import type { RoleName, RoleUsage, TeamEvent } from "./state.js";
@@ -45,9 +46,11 @@ function buildOptions(
   const allowed = allowedToolIds(role);
   const tools = allowWebSearch ? [WEB_SEARCH_TOOL] : [];
   const allowedTools = allowWebSearch ? [WEB_SEARCH_TOOL, ...allowed] : allowed;
+  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable();
   const opts: Options = {
     model: modelForRole(role, modelOverride),
     systemPrompt,
+    ...(pathToClaudeCodeExecutable ? { pathToClaudeCodeExecutable } : {}),
     includePartialMessages: true,
     // Keep Claude Code built-ins locked down while intentionally exposing
     // WebSearch for supplemental current context.

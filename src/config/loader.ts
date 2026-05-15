@@ -5,7 +5,7 @@ import { z } from "zod";
 import { DEFAULT_CONFIG_YAML } from "../runtime/defaultConfig.js";
 import { azothPaths, ensureAzothDirs } from "../runtime/paths.js";
 
-const ConfigSchema = z.object({
+export const ConfigSchema = z.object({
   autonomy: z.enum(["advisory", "confirm", "auto"]),
   model: z.string().min(1),
   llm: z

@@ -20,6 +20,7 @@ import {
   listOrdersTool,
   brokerStateTool,
 } from "../tools/order.js";
+import { resolveClaudeCodeExecutable } from "./claudeCodeExecutable.js";
 import { loadConfig } from "../config/loader.js";
 import {
   activateSession,
@@ -112,9 +113,11 @@ export function buildMcpServer() {
 
 export function buildOptions(opts: { resume?: string; abortController?: AbortController } = {}): Options {
   const cfg = loadConfig();
+  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable();
   return {
     model: cfg.model,
     systemPrompt: buildSystemPrompt(),
+    ...(pathToClaudeCodeExecutable ? { pathToClaudeCodeExecutable } : {}),
     ...(opts.resume ? { resume: opts.resume } : {}),
     ...(opts.abortController ? { abortController: opts.abortController } : {}),
     mcpServers: {
