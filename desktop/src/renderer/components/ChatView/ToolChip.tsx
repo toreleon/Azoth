@@ -20,7 +20,7 @@ export function ToolChip({ record, state }: Props) {
   const summary = summarizeToolInput(record.toolName, record.toolInput);
   const resultBody = record.text ?? "";
   const body = resultBody || (isResult ? record.text ?? "" : record.toolInput ?? "");
-  const isError = /error|unauthorized|failed|exception|401|403|500/i.test(body);
+  const isError = isToolError(body);
   const className = [
     "tool-call",
     state === "running" ? "is-running" : "",
@@ -74,6 +74,34 @@ function humanizeTool(label: string): string {
   return label
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isToolError(body: string): boolean {
+  const trimmed = body.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const obj = parsed as Record<string, unknown>;
+      if (obj.ok === false) return true;
+      if (typeof obj.error === "string" && obj.error.trim()) return true;
+      if (typeof obj.message === "string" && isErrorText(obj.message)) return true;
+      const status = Number(obj.status ?? obj.statusCode ?? obj.code);
+      if (Number.isFinite(status) && status >= 400) return true;
+    }
+    return false;
+  } catch {
+    return isErrorText(trimmed);
+  }
+}
+
+function isErrorText(text: string): boolean {
+  return (
+    /\b(error|failed|exception|unauthorized|forbidden|invalid)\b/i.test(text) ||
+    /\bno\s+json\s+object\s+found\b/i.test(text) ||
+    /\bHTTP\s*(4\d\d|5\d\d)\b/i.test(text) ||
+    /\b(status|statusCode|code)\s*[:=]\s*(4\d\d|5\d\d)\b/i.test(text)
+  );
 }
 
 function bodyLines({

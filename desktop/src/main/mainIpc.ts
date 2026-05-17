@@ -19,6 +19,7 @@ import {
   type ChatRecord,
   type IpcChannelMap,
   type SessionDescriptor,
+  type TeamUiEvent,
 } from "../shared/ipc.js";
 import {
   createProject,
@@ -52,6 +53,11 @@ import { collectHealth, renderHealth } from "@azoth/core/runtime/health.js";
 import { azothPaths } from "@azoth/core/runtime/paths.js";
 import { listLlmModels } from "@azoth/core/runtime/llmSetup.js";
 import { abortActiveTeamRuns } from "@azoth/core/tools/team.js";
+import {
+  subscribeTeamToolEvents,
+  type TeamToolEvent,
+  withTeamToolEventContext,
+} from "@azoth/core/agent/team/toolEventBus.js";
 import { getDesktopSettings, saveDesktopSettings } from "./appSettings.js";
 import { SLASH_COMMANDS } from "../shared/slashCommands.js";
 
@@ -182,6 +188,76 @@ function sendLiveBlockEvent(turnId: string, sessionId: string, message: unknown)
       turnId,
       sessionId,
     });
+  }
+}
+
+function compactText(value: string | undefined, limit = 120): string {
+  if (!value) return "";
+  const oneLine = value.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= limit) return oneLine;
+  return `${oneLine.slice(0, limit - 3)}...`;
+}
+
+function toTeamUiEvent(event: TeamToolEvent): TeamUiEvent | null {
+  const ev = event.event;
+  switch (ev.type) {
+    case "run_start":
+      return {
+        type: "run_start",
+        teamTool: event.tool,
+        runId: ev.runId,
+        ticker: ev.ticker,
+      };
+    case "role_start":
+      return {
+        type: "role_start",
+        teamTool: event.tool,
+        role: ev.role,
+        round: ev.round,
+      };
+    case "role_tool": {
+      const input = compactText(ev.input);
+      return {
+        type: "role_tool",
+        teamTool: event.tool,
+        role: ev.role,
+        subtool: ev.tool,
+        detail: input,
+      };
+    }
+    case "role_tool_result":
+      return {
+        type: "role_tool_result",
+        teamTool: event.tool,
+        role: ev.role,
+        subtool: ev.tool,
+      };
+    case "role_end":
+      return {
+        type: "role_end",
+        teamTool: event.tool,
+        role: ev.role,
+        round: ev.round,
+      };
+    case "final":
+      return {
+        type: "final",
+        teamTool: event.tool,
+        ticker: ev.decision.ticker,
+        rating: ev.decision.rating,
+        sizingPct: ev.decision.sizingPct,
+      };
+    case "error":
+      return {
+        type: "error",
+        teamTool: event.tool,
+        role: ev.role,
+        message: compactText(ev.message, 240),
+      };
+    case "role_delta":
+      return null;
+    default:
+      return null;
   }
 }
 
@@ -326,40 +402,55 @@ export function registerIpcHandlers(): void {
     activeTurns.set(req.turnId, { controller, sessionId: req.sessionId });
 
     void (async () => {
+      const unsubscribeTeamEvents = subscribeTeamToolEvents((event) => {
+        if (abortedTurns.has(req.turnId) || controller.signal.aborted) return;
+        if (event.contextId && event.contextId !== req.turnId) return;
+        if (!event.contextId && activeTurns.size > 1) return;
+        const teamEvent = toTeamUiEvent(event);
+        if (!teamEvent) return;
+        sendStream({
+          kind: "team:event",
+          turnId: req.turnId,
+          sessionId: req.sessionId,
+          event: teamEvent,
+        });
+      });
       try {
         let usage: ChatRecord["usage"] | undefined;
         let costUsd: number | undefined;
         let sdkSessionId: string | undefined;
-        for await (const message of runTurn(req.prompt, {
-          signal: controller.signal,
-          sessionId: req.sessionId,
-          cwd: project.rootPath,
-          displayPrompt: req.displayPrompt,
-        })) {
-          if (controller.signal.aborted) break;
-          drainRecords();
-          sendLiveBlockEvent(req.turnId, req.sessionId, message);
-          if ((message as { type?: string }).type === "result") {
-            const r = message as {
-              session_id?: string;
-              total_cost_usd?: number;
-              usage?: {
-                input_tokens?: number;
-                output_tokens?: number;
-                cache_read_input_tokens?: number;
-                cache_creation_input_tokens?: number;
+        await withTeamToolEventContext(req.turnId, async () => {
+          for await (const message of runTurn(req.prompt, {
+            signal: controller.signal,
+            sessionId: req.sessionId,
+            cwd: project.rootPath,
+            displayPrompt: req.displayPrompt,
+          })) {
+            if (controller.signal.aborted) break;
+            drainRecords();
+            sendLiveBlockEvent(req.turnId, req.sessionId, message);
+            if ((message as { type?: string }).type === "result") {
+              const r = message as {
+                session_id?: string;
+                total_cost_usd?: number;
+                usage?: {
+                  input_tokens?: number;
+                  output_tokens?: number;
+                  cache_read_input_tokens?: number;
+                  cache_creation_input_tokens?: number;
+                };
               };
-            };
-            sdkSessionId = r.session_id;
-            costUsd = r.total_cost_usd;
-            usage = {
-              inputTokens: r.usage?.input_tokens,
-              outputTokens: r.usage?.output_tokens,
-              cacheReadTokens: r.usage?.cache_read_input_tokens,
-              cacheCreationTokens: r.usage?.cache_creation_input_tokens,
-            };
+              sdkSessionId = r.session_id;
+              costUsd = r.total_cost_usd;
+              usage = {
+                inputTokens: r.usage?.input_tokens,
+                outputTokens: r.usage?.output_tokens,
+                cacheReadTokens: r.usage?.cache_read_input_tokens,
+                cacheCreationTokens: r.usage?.cache_creation_input_tokens,
+              };
+            }
           }
-        }
+        });
         if (abortedTurns.has(req.turnId)) return;
         drainRecords();
         sendStream({
@@ -380,6 +471,7 @@ export function registerIpcHandlers(): void {
           message,
         });
       } finally {
+        unsubscribeTeamEvents();
         activeTurns.delete(req.turnId);
         abortedTurns.delete(req.turnId);
       }

@@ -51,6 +51,29 @@ export interface ChatRecord {
   title?: string;
 }
 
+export type TeamToolKind = "team_question" | "team_analyze";
+
+export interface TeamUiEvent {
+  type:
+    | "run_start"
+    | "role_start"
+    | "role_tool"
+    | "role_tool_result"
+    | "role_end"
+    | "final"
+    | "error";
+  teamTool: TeamToolKind;
+  runId?: string;
+  ticker?: string;
+  role?: string;
+  round?: number;
+  subtool?: string;
+  detail?: string;
+  rating?: string;
+  sizingPct?: number;
+  message?: string;
+}
+
 export interface HealthRow {
   name: string;
   ok: boolean;
@@ -238,6 +261,12 @@ export type StreamEvent =
       sdkSessionId?: string;
     }
   | { kind: "turn:error"; turnId: string; sessionId: string; message: string }
+  | {
+      kind: "team:event";
+      turnId: string;
+      sessionId: string;
+      event: TeamUiEvent;
+    }
   | {
       kind: "consent:request";
       id: string;

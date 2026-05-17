@@ -143,6 +143,13 @@ export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; 
     } else if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
       const sid = (message as { session_id?: string }).session_id;
       if (sid) sessionId = sid;
+    } else if (message.type === "assistant") {
+      const finalText = extractAssistantText((message as any).message?.content);
+      const trimmedText = text.trim();
+      const trimmedFinalText = finalText.trim();
+      if (trimmedFinalText && !trimmedText) text = trimmedFinalText;
+      else if (trimmedFinalText && trimmedFinalText.includes(trimmedText)) text = trimmedFinalText;
+      else if (trimmedFinalText && !trimmedText.includes(trimmedFinalText)) text += trimmedFinalText;
     } else if (message.type === "result") {
       const r = message as unknown as {
         session_id?: string;
@@ -163,19 +170,34 @@ export async function runRole<T>(opts: RoleRunOptions<T>): Promise<{ output: T; 
     }
   }
 
-  const json = extractJson(text);
   let parsed: T;
   try {
+    const json = extractJson(text);
     parsed = schema.parse(json);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`role=${role} produced invalid JSON output: ${msg}\nraw: ${text.slice(0, 500)}`);
+    const raw = text.trim() ? text.trim().slice(0, 500) : "(empty)";
+    throw new Error(`role=${role} produced invalid JSON output: ${msg}\nraw: ${raw}`);
   }
   emit({ type: "role_end", role, round, output: parsed, usage });
   return {
     output: parsed,
     raw: { text, toolCount, usage, sessionId },
   };
+}
+
+function extractAssistantText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "type" in item && (item as { type?: string }).type === "text") {
+        return (item as { text?: string }).text ?? "";
+      }
+      return "";
+    })
+    .join("");
 }
 
 function extractJson(text: string): unknown {
@@ -199,8 +221,23 @@ function extractJson(text: string): unknown {
   const start = trimmed.indexOf("{");
   if (start >= 0) {
     let depth = 0;
+    let inString = false;
+    let escaped = false;
     for (let i = start; i < trimmed.length; i++) {
       const c = trimmed[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (c === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (c === "\"") {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
       if (c === "{") depth++;
       else if (c === "}") {
         depth--;

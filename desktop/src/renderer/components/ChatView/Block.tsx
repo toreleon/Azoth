@@ -1,5 +1,6 @@
 import type { ChatRecord } from "../../../shared/ipc.js";
 import { MarkdownContent } from "./MarkdownContent.js";
+import { isTeamToolName, TeamResultCard } from "./TeamResultCard.js";
 import { ToolChip } from "./ToolChip.js";
 
 export function Block({ record }: { record: ChatRecord }) {
@@ -26,12 +27,28 @@ export function Block({ record }: { record: ChatRecord }) {
         </article>
       );
     case "tool_use":
+      if (isTeamToolName(record.toolName) && record.text) {
+        const fallback = (
+          <article className="turn tool-turn">
+            <ToolChip record={record} state="done" />
+          </article>
+        );
+        return <TeamResultCard record={record} fallback={fallback} />;
+      }
       return (
         <article className="turn tool-turn">
           <ToolChip record={record} state={record.text ? "done" : "running"} />
         </article>
       );
     case "tool_result":
+      if (isTeamToolName(record.toolName) && record.text) {
+        const fallback = (
+          <article className="turn tool-turn">
+            <ToolChip record={record} state="done" />
+          </article>
+        );
+        return <TeamResultCard record={record} fallback={fallback} />;
+      }
       return (
         <article className="turn tool-turn">
           <ToolChip record={record} state="done" />
