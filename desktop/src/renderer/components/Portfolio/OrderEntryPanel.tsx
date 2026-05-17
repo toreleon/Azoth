@@ -52,14 +52,18 @@ export function OrderEntryPanel({ onPlaced }: { onPlaced: () => void }) {
   }
 
   return (
-    <div className="portfolio-card portfolio-order-entry">
+    <section className="portfolio-card ds-card portfolio-order-entry">
       <div className="portfolio-card-header">
-        <h2>Place order</h2>
+        <div>
+          <span className="ds-kicker">Trade ticket</span>
+          <h2 className="ds-title">Place order</h2>
+        </div>
       </div>
       <form className="portfolio-form" onSubmit={submit}>
-        <label className="portfolio-field">
-          <span>Ticker</span>
+        <label className="ds-field">
+          <span className="ds-field-label">Ticker</span>
           <input
+            className="ds-input portfolio-symbol-input"
             type="text"
             value={ticker}
             onChange={(e) => setTicker(e.target.value.toUpperCase())}
@@ -70,43 +74,44 @@ export function OrderEntryPanel({ onPlaced }: { onPlaced: () => void }) {
           />
         </label>
 
-        <div className="portfolio-toggle-row" role="group" aria-label="Side">
+        <div className="portfolio-segment" role="group" aria-label="Side">
           <button
             type="button"
-            className={`portfolio-toggle ${side === "BUY" ? "is-active portfolio-side-buy" : ""}`}
+            className={`portfolio-segment-option ${side === "BUY" ? "is-active portfolio-side-buy" : ""}`}
             onClick={() => setSide("BUY")}
           >
             BUY
           </button>
           <button
             type="button"
-            className={`portfolio-toggle ${side === "SELL" ? "is-active portfolio-side-sell" : ""}`}
+            className={`portfolio-segment-option ${side === "SELL" ? "is-active portfolio-side-sell" : ""}`}
             onClick={() => setSide("SELL")}
           >
             SELL
           </button>
         </div>
 
-        <div className="portfolio-toggle-row" role="group" aria-label="Order type">
+        <div className="portfolio-segment" role="group" aria-label="Order type">
           <button
             type="button"
-            className={`portfolio-toggle ${type === "LIMIT" ? "is-active" : ""}`}
+            className={`portfolio-segment-option ${type === "LIMIT" ? "is-active" : ""}`}
             onClick={() => setType("LIMIT")}
           >
             LIMIT
           </button>
           <button
             type="button"
-            className={`portfolio-toggle ${type === "MARKET" ? "is-active" : ""}`}
+            className={`portfolio-segment-option ${type === "MARKET" ? "is-active" : ""}`}
             onClick={() => setType("MARKET")}
           >
             MARKET
           </button>
         </div>
 
-        <label className="portfolio-field">
-          <span>Quantity (HOSE lot = 100)</span>
+        <label className="ds-field">
+          <span className="ds-field-label">Quantity (HOSE lot = 100)</span>
           <input
+            className="ds-input"
             type="number"
             min={100}
             step={100}
@@ -117,9 +122,10 @@ export function OrderEntryPanel({ onPlaced }: { onPlaced: () => void }) {
         </label>
 
         {type === "LIMIT" ? (
-          <label className="portfolio-field">
-            <span>Limit price (thousand VND, e.g. 28.5)</span>
+          <label className="ds-field">
+            <span className="ds-field-label">Limit price (thousand VND)</span>
             <input
+              className="ds-input"
               type="number"
               min={0}
               step={0.05}
@@ -130,9 +136,10 @@ export function OrderEntryPanel({ onPlaced }: { onPlaced: () => void }) {
           </label>
         ) : null}
 
-        <label className="portfolio-field">
-          <span>Notes (optional)</span>
+        <label className="ds-field">
+          <span className="ds-field-label">Notes (optional)</span>
           <input
+            className="ds-input"
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -142,15 +149,15 @@ export function OrderEntryPanel({ onPlaced }: { onPlaced: () => void }) {
 
         <button
           type="submit"
-          className={`portfolio-btn portfolio-btn-primary portfolio-side-${side.toLowerCase()}`}
+          className={`ds-button primary full-width portfolio-submit portfolio-submit-${side.toLowerCase()}`}
           disabled={busy}
         >
-          {busy ? "Submitting…" : `${side} ${ticker || "—"}`}
+          {busy ? "Submitting..." : `${side} ${ticker || "-"}`}
         </button>
 
         {result ? <OrderResult result={result} /> : null}
       </form>
-    </div>
+    </section>
   );
 }
 
@@ -158,7 +165,7 @@ function OrderResult({ result }: { result: PortfolioPlaceOrderRes }) {
   if (result.ok) {
     return (
       <div className="portfolio-result portfolio-result-ok">
-        Order {result.order.status.toLowerCase()} — #{result.order.id}
+        Order {result.order.status.toLowerCase()} #{result.order.id}
       </div>
     );
   }

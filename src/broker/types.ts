@@ -60,6 +60,8 @@ export interface BrokerSnapshot {
   cashVnd: number;
   positions: BrokerPosition[];
   subAccounts?: BrokerSubAccount[];
+  /** Broker-reported total NAV/equity in VND, when available. */
+  totalEquityVnd?: number;
   /** Optional equity baseline used for loss guardrails. VND. */
   initialCashVnd?: number;
   /** Optional broker-reported margin usage. VND. */

@@ -13,55 +13,60 @@ export function OpenOrdersTable({
   onCancel: (id: string) => void;
 }) {
   return (
-    <div className="portfolio-card">
+    <section className="portfolio-card ds-card">
       <div className="portfolio-card-header">
-        <h2>Open orders</h2>
+        <div>
+          <span className="ds-kicker">Working</span>
+          <h2 className="ds-title">Open orders</h2>
+        </div>
         <span className="portfolio-card-meta">{orders.length}</span>
       </div>
       {orders.length === 0 ? (
         <div className="portfolio-empty">No open orders.</div>
       ) : (
-        <table className="portfolio-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Ticker</th>
-              <th>Side</th>
-              <th>Type</th>
-              <th className="num">Qty</th>
-              <th className="num">Limit</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((o) => (
-              <tr key={o.id}>
-                <td className="portfolio-mono">{formatTime(o.createdAt)}</td>
-                <td>
-                  <strong>{o.ticker}</strong>
-                </td>
-                <td>
-                  <span className={`portfolio-side portfolio-side-${o.side.toLowerCase()}`}>
-                    {o.side}
-                  </span>
-                </td>
-                <td>{o.type}</td>
-                <td className="num">{formatQuantity(o.quantity)}</td>
-                <td className="num">{formatThousandVnd(o.limitPrice)}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="portfolio-btn portfolio-btn-danger"
-                    onClick={() => onCancel(o.id)}
-                  >
-                    Cancel
-                  </button>
-                </td>
+        <div className="portfolio-table-wrap">
+          <table className="portfolio-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Ticker</th>
+                <th>Side</th>
+                <th>Type</th>
+                <th className="num">Qty</th>
+                <th className="num">Limit</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {orders.map((o) => (
+                <tr key={o.id}>
+                  <td className="portfolio-mono">{formatTime(o.createdAt)}</td>
+                  <td>
+                    <strong>{o.ticker}</strong>
+                  </td>
+                  <td>
+                    <span className={`portfolio-side portfolio-side-${o.side.toLowerCase()}`}>
+                      {o.side}
+                    </span>
+                  </td>
+                  <td>{o.type}</td>
+                  <td className="num">{formatQuantity(o.quantity)}</td>
+                  <td className="num">{formatThousandVnd(o.limitPrice)}</td>
+                  <td className="portfolio-row-action">
+                    <button
+                      type="button"
+                      className="ds-button danger portfolio-compact-action"
+                      onClick={() => onCancel(o.id)}
+                    >
+                      Cancel
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
-    </div>
+    </section>
   );
 }

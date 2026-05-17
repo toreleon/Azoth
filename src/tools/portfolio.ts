@@ -55,7 +55,7 @@ export async function shapeBrokerPortfolio(
     },
     { cost_basis_vnd: 0, market_value_vnd: 0, unrealized_pnl_vnd: 0 },
   );
-  const total_equity_vnd = snap.cashVnd + totals.market_value_vnd;
+  const total_equity_vnd = snap.totalEquityVnd ?? snap.cashVnd + totals.market_value_vnd;
 
   return {
     broker: snap.broker,

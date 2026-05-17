@@ -4,8 +4,9 @@ import type {
   PortfolioHistoryRes,
   PortfolioSnapshot,
 } from "../../../shared/ipc.js";
-import { RefreshIcon } from "../Icon.js";
+import { BrokerIcon, PositionsIcon, RefreshIcon } from "../Icon.js";
 import { AccountOverview } from "./AccountOverview.js";
+import { AccountSplitView } from "./AccountSplitView.js";
 import { HoldingsTable } from "./HoldingsTable.js";
 import { OpenOrdersTable } from "./OpenOrdersTable.js";
 import { OrderEntryPanel } from "./OrderEntryPanel.js";
@@ -86,6 +87,8 @@ export function PortfolioView({
   }, [loadHistory]);
 
   const openOrders = orders.filter((o) => o.status === "PENDING");
+  const positionCount = snapshot?.positions.length ?? 0;
+  const subAccountCount = snapshot?.sub_accounts.length ?? 0;
 
   async function handleCancel(id: string): Promise<void> {
     setOrders((prev) =>
@@ -109,11 +112,21 @@ export function PortfolioView({
   return (
     <section className="portfolio-view">
       <header className="portfolio-header">
-        <div>
+        <div className="portfolio-heading">
           <span className="ds-kicker">
             {snapshot ? `Broker: ${snapshot.broker}` : "Broker"}
           </span>
-          <h1>My Portfolio</h1>
+          <h1 className="ds-title">My Portfolio</h1>
+          <div className="portfolio-header-meta" aria-label="Portfolio summary">
+            <span>
+              <BrokerIcon />
+              {subAccountCount} sub-account{subAccountCount === 1 ? "" : "s"}
+            </span>
+            <span>
+              <PositionsIcon />
+              {positionCount} position{positionCount === 1 ? "" : "s"}
+            </span>
+          </div>
         </div>
         <div className="portfolio-header-actions">
           <span className="portfolio-refresh-label">
@@ -121,22 +134,27 @@ export function PortfolioView({
           </span>
           <button
             type="button"
-            className="settings-icon-btn"
+            className="ds-button portfolio-refresh-btn"
             title="Refresh"
             aria-label="Refresh"
             onClick={() => void refresh()}
             disabled={loading}
           >
             <RefreshIcon />
+            <span>Refresh</span>
           </button>
         </div>
       </header>
 
       {error ? <div className="portfolio-error">{error}</div> : null}
 
-      <div className="portfolio-grid">
-        <div className="portfolio-col portfolio-col-main">
+      <div className="portfolio-layout">
+        <div className="portfolio-main">
           <AccountOverview snapshot={snapshot} />
+          <AccountSplitView
+            snapshot={snapshot}
+            onOpenTicker={onOpenTicker}
+          />
           <HoldingsTable
             positions={snapshot?.positions ?? []}
             onOpenTicker={onOpenTicker}
@@ -150,9 +168,9 @@ export function PortfolioView({
             onRefresh={() => void loadHistory()}
           />
         </div>
-        <div className="portfolio-col portfolio-col-side">
+        <aside className="portfolio-side-panel" aria-label="Order entry">
           <OrderEntryPanel onPlaced={() => void loadCore(true)} />
-        </div>
+        </aside>
       </div>
     </section>
   );

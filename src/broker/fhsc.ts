@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { request } from "undici";
-import { loadConfig } from "../config/loader.js";
+import { loadConfig, updateConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import type {
   Broker,
@@ -33,6 +33,7 @@ import type {
  * Auth config or env, choose one:
  *   FHSC_ACCESS_TOKEN    — browser/API bearer token
  *   FHSC_ACCESS_KEY      — browser session access key used as x-access-key
+ *   FHSC_REFRESH_TOKEN   — browser session refresh token used by invest.fhsc.com.vn
  *   FHSC_DEVICE_ID       — browser session device id used as device-id
  *   FHSC_API_KEY         — OpenAPI key from invest.fhsc.com.vn/quan-ly-api
  *   FHSC_API_SECRET      — OpenAPI secret paired with FHSC_API_KEY
@@ -92,6 +93,31 @@ interface FhscPaymentSubAccount {
   blocked_balance?: number;
   type?: string;
   sub_account_ext?: string;
+  [key: string]: unknown;
+}
+
+interface FhscAssetSummary {
+  net_asset_value?: number;
+  money?: {
+    total?: number;
+    [key: string]: unknown;
+  };
+  products?: {
+    stock?: number;
+    fund?: number;
+    bond?: number;
+    hay0?: number;
+    child_savings?: number;
+    [key: string]: unknown;
+  };
+  debt?: {
+    total?: number;
+    advance_amt?: number;
+    cidepo_fee?: number;
+    cidepo_fee_acr?: number;
+    owe_deposit?: number;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 
@@ -301,8 +327,9 @@ export class FHSCBroker implements Broker {
   private readonly baseUrl: string;
   private readonly subAccountId: string;
   private readonly accountId: string;
-  private readonly accessToken: string;
+  private accessToken: string;
   private readonly accessKey: string;
+  private readonly refreshToken: string;
   private readonly deviceId: string;
   private readonly userId: string;
   private readonly custId: string;
@@ -315,6 +342,7 @@ export class FHSCBroker implements Broker {
     const subAccountId = process.env.FHSC_SUB_ACCOUNT_ID?.trim() || cfg.sub_account_id.trim();
     const accessToken = process.env.FHSC_ACCESS_TOKEN?.trim() || cfg.access_token.trim();
     const accessKey = process.env.FHSC_ACCESS_KEY?.trim() || cfg.access_key.trim();
+    const refreshToken = process.env.FHSC_REFRESH_TOKEN?.trim() || cfg.refresh_token.trim();
     const deviceId = process.env.FHSC_DEVICE_ID?.trim() || cfg.device_id.trim();
     const userId = process.env.FHSC_USER_ID?.trim() || cfg.user_id.trim();
     const custId = process.env.FHSC_CUST_ID?.trim() || cfg.cust_id.trim();
@@ -323,15 +351,16 @@ export class FHSCBroker implements Broker {
     if (!subAccountId) {
       throw new Error("FHSCBroker requires FHSC sub_account_id in config or env FHSC_SUB_ACCOUNT_ID");
     }
-    if (!(accessToken && accessKey) && !(apiKey && apiSecret)) {
+    if (!((accessToken || refreshToken) && accessKey) && !(apiKey && apiSecret)) {
       throw new Error(
-        "FHSCBroker requires config/env auth: access_token + access_key, or api_key + api_secret",
+        "FHSCBroker requires config/env auth: browser session access_key + access_token/refresh_token, or api_key + api_secret",
       );
     }
     this.subAccountId = subAccountId;
     this.accountId = process.env.FHSC_ACCOUNT_ID?.trim() || cfg.account_id.trim() || subAccountId;
     this.accessToken = accessToken;
     this.accessKey = accessKey;
+    this.refreshToken = refreshToken;
     this.deviceId = deviceId;
     this.userId = userId;
     this.custId = custId;
@@ -347,8 +376,8 @@ export class FHSCBroker implements Broker {
       "device-type": "WEB",
       "x-channel": "ONLINE",
     };
-    if (this.accessToken && this.accessKey) {
-      headers.authorization = `Bearer ${this.accessToken}`;
+    if ((this.accessToken || this.refreshToken) && this.accessKey) {
+      if (this.accessToken) headers.authorization = `Bearer ${this.accessToken}`;
       headers["x-access-key"] = this.accessKey;
       if (this.deviceId) headers["device-id"] = this.deviceId;
       return headers;
@@ -358,7 +387,37 @@ export class FHSCBroker implements Broker {
     return headers;
   }
 
-  private async getJson<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
+  private async refreshAccessToken(): Promise<boolean> {
+    if (!this.refreshToken || !this.accessKey) return false;
+    const url = new URL(`${this.baseUrl}/auth/v1/authentication`);
+    url.searchParams.set("scope", "refresh_token_v1");
+    url.searchParams.set("token", this.refreshToken);
+    const { statusCode, body } = await request(url, {
+      method: "GET",
+      headers: this.authHeaders(),
+    });
+    const text = await body.text();
+    if (statusCode < 200 || statusCode >= 300) return false;
+    const json = JSON.parse(text) as FhscEnvelope<{ access_token?: string }>;
+    if (!isSuccess(json)) return false;
+    const nextToken = (json.result as { access_token?: string } | undefined)?.access_token
+      ?? (json.data as { access_token?: string } | undefined)?.access_token;
+    if (!nextToken) return false;
+    this.accessToken = nextToken;
+    try {
+      const current = loadConfig();
+      updateConfig({ fhsc: { ...current.fhsc, access_token: nextToken } });
+    } catch {
+      // Runtime refresh should not fail the broker read if persisting the token fails.
+    }
+    return true;
+  }
+
+  private async getJson<T>(
+    path: string,
+    params: Record<string, string | number> = {},
+    retryOnUnauthorized = true,
+  ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, String(value));
@@ -368,6 +427,9 @@ export class FHSCBroker implements Broker {
       headers: this.authHeaders(),
     });
     const text = await body.text();
+    if (statusCode === 401 && retryOnUnauthorized && await this.refreshAccessToken()) {
+      return this.getJson<T>(path, params, false);
+    }
     if (statusCode < 200 || statusCode >= 300) {
       const hint =
         text.includes("InvalidTokenException") || text.includes("Thông tin xác thực không hợp lệ")
@@ -389,11 +451,28 @@ export class FHSCBroker implements Broker {
     ).catch(() => []);
   }
 
+  private async assetsSummary(): Promise<FhscAssetSummary | null> {
+    if (!this.userId) return null;
+    const paths = [
+      `/accounts/v3/users/${encodeURIComponent(this.userId)}/assets/summary`,
+      `/accounts/v4/users/${encodeURIComponent(this.userId)}/assets/summary`,
+    ];
+    for (const path of paths) {
+      try {
+        return await this.getJson<FhscAssetSummary>(path);
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
   private async portfolioForSubAccount(subAccountId: string): Promise<FhscPortfolioItem[]> {
     const raw = await this.getJson<{ portfolio?: FhscPortfolioItem[] } | FhscPortfolioItem[]>(
       `/trade/v2/sub-accounts/${encodeURIComponent(subAccountId)}/portfolio`,
     );
-    return Array.isArray(raw) ? raw : (raw.portfolio ?? []);
+    const rows = Array.isArray(raw) ? raw : (raw.portfolio ?? []);
+    return rows.map((row) => ({ ...row, sub_account_id: row.sub_account_id ?? subAccountId }));
   }
 
   private async historySubAccounts(): Promise<BrokerSubAccount[]> {
@@ -575,12 +654,13 @@ export class FHSCBroker implements Broker {
     const byTicker = new Map<
       string,
       {
+        ticker: string;
         quantity: number;
         costValue: number;
         marketValueVnd: number;
         unrealizedPnlVnd: number;
-        subAccountIds: Set<string>;
-        custodyCodes: Set<string>;
+        subAccountId?: string;
+        custodyCode?: string;
         lastPrice?: number;
       }
     >();
@@ -594,25 +674,25 @@ export class FHSCBroker implements Broker {
       const unrealizedPnlVnd = numberOf(p.pnl_amount);
       const subAccountId = String(p.sub_account_id ?? "").trim();
       const custodyCode = String(p.custodycd ?? "").trim();
-      const current = byTicker.get(ticker) ?? {
+      const key = `${ticker}|${subAccountId}|${custodyCode}`;
+      const current = byTicker.get(key) ?? {
+        ticker,
         quantity: 0,
         costValue: 0,
         marketValueVnd: 0,
         unrealizedPnlVnd: 0,
-        subAccountIds: new Set<string>(),
-        custodyCodes: new Set<string>(),
+        subAccountId: subAccountId || undefined,
+        custodyCode: custodyCode || undefined,
       };
       current.quantity += quantity;
       current.costValue += avgCost * quantity;
       current.marketValueVnd += marketValueVnd;
       current.unrealizedPnlVnd += unrealizedPnlVnd;
       if (lastPrice > 0) current.lastPrice = lastPrice;
-      if (subAccountId) current.subAccountIds.add(subAccountId);
-      if (custodyCode) current.custodyCodes.add(custodyCode);
-      byTicker.set(ticker, current);
+      byTicker.set(key, current);
     }
-    return Array.from(byTicker.entries()).map(([ticker, value]) => ({
-      ticker,
+    return Array.from(byTicker.values()).map((value) => ({
+      ticker: value.ticker,
       quantity: value.quantity,
       avgCost: value.quantity > 0 ? value.costValue / value.quantity : 0,
       lastPrice: value.lastPrice,
@@ -620,13 +700,16 @@ export class FHSCBroker implements Broker {
       unrealizedPnlVnd: value.unrealizedPnlVnd || undefined,
       unrealizedPnlPct:
         value.costValue > 0 ? (value.unrealizedPnlVnd / (value.costValue * 1000)) * 100 : undefined,
-      subAccountId: Array.from(value.subAccountIds).join(",") || undefined,
-      custodyCode: Array.from(value.custodyCodes).join(",") || undefined,
+      subAccountId: value.subAccountId,
+      custodyCode: value.custodyCode,
     }));
   }
 
   async snapshot(): Promise<BrokerSnapshot> {
-    const paymentAccounts = await this.paymentSubAccounts();
+    const [paymentAccounts, assetSummary] = await Promise.all([
+      this.paymentSubAccounts(),
+      this.assetsSummary(),
+    ]);
     const subAccountIds = Array.from(
       new Set(
         [
@@ -642,7 +725,8 @@ export class FHSCBroker implements Broker {
     if (
       paymentAccounts.length === 0 &&
       accountResult.status === "rejected" &&
-      portfolioResults.every((result) => result.status === "rejected")
+      portfolioResults.every((result) => result.status === "rejected") &&
+      !assetSummary
     ) {
       throw new Error(
         `FHSC snapshot failed: ${String(accountResult.reason)}; ${portfolioResults
@@ -658,10 +742,15 @@ export class FHSCBroker implements Broker {
       0,
     );
     const blockedBalance = paymentAccounts.reduce((sum, account) => sum + numberOf(account.blocked_balance), 0);
+    const summaryCash = numberOf(assetSummary?.money?.total);
+    const summaryDebt = numberOf(assetSummary?.debt?.total ?? assetSummary?.debt?.owe_deposit);
+    const summaryNav = numberOf(assetSummary?.net_asset_value);
     return {
       broker: NAME,
       cashVnd:
-        paymentAccounts.length > 0
+        summaryCash > 0
+          ? summaryCash
+          : paymentAccounts.length > 0
           ? paymentCash
           : numberOf(account.balance ?? account.cash ?? account.cash_balance ?? account.buying_power),
       positions,
@@ -677,7 +766,12 @@ export class FHSCBroker implements Broker {
             }))
           : undefined,
       marginUsedVnd:
-        paymentAccounts.length > 0 ? blockedBalance : numberOf(account.margin_used ?? account.marginUsed),
+        summaryDebt > 0
+          ? summaryDebt
+          : paymentAccounts.length > 0
+          ? blockedBalance
+          : numberOf(account.margin_used ?? account.marginUsed),
+      totalEquityVnd: summaryNav > 0 ? summaryNav : undefined,
     };
   }
 
