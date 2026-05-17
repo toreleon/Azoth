@@ -58,8 +58,12 @@
 }
 
 @media (max-width: 980px) {
-  .portfolio-account-grid {
+  .portfolio-account-selector {
     grid-template-columns: 1fr;
+  }
+
+  .portfolio-account-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -88,8 +92,13 @@
     grid-template-columns: 1fr;
   }
 
-  .portfolio-account-metrics {
+  .portfolio-account-metrics,
+  .portfolio-account-position {
     grid-template-columns: 1fr;
+  }
+
+  .portfolio-account-position-value {
+    text-align: left;
   }
 
   .portfolio-equity-value {

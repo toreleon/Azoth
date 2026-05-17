@@ -11,14 +11,16 @@ import { ArrowLeftIcon, ArrowRightIcon, SidebarToggleIcon } from "./components/I
 import { MarketView } from "./components/Market/MarketView.js";
 import { TickerDetailWindow } from "./components/Market/TickerDetailWindow.js";
 import { PortfolioView } from "./components/Portfolio/PortfolioView.js";
+import { PositionDetailView } from "./components/Portfolio/PositionDetailView.js";
 import { useStreamBridge } from "./lib/streamBridge.js";
 import { useChatStore } from "./store/chatStore.js";
 
-type AppView = "chat" | "markets" | "portfolio";
+type AppView = "chat" | "markets" | "portfolio" | "position";
 type NavState = {
   view: AppView;
   settingsOpen: boolean;
   tickerSymbol: string | null;
+  positionSymbol: string | null;
 };
 
 export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | null } = {}) {
@@ -27,6 +29,7 @@ export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | nu
     view: initialTickerSymbol ? "markets" : "chat",
     settingsOpen: false,
     tickerSymbol: initialTickerSymbol ? initialTickerSymbol.toUpperCase() : null,
+    positionSymbol: null,
   });
   const [backStack, setBackStack] = useState<NavState[]>([]);
   const [forwardStack, setForwardStack] = useState<NavState[]>([]);
@@ -91,11 +94,17 @@ export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | nu
       view: next.view,
       settingsOpen: next.settingsOpen,
       tickerSymbol: next.tickerSymbol ? next.tickerSymbol.toUpperCase() : null,
+      positionSymbol: next.positionSymbol ? next.positionSymbol.toUpperCase() : null,
     };
   }
 
   function sameNav(a: NavState, b: NavState): boolean {
-    return a.view === b.view && a.settingsOpen === b.settingsOpen && a.tickerSymbol === b.tickerSymbol;
+    return (
+      a.view === b.view &&
+      a.settingsOpen === b.settingsOpen &&
+      a.tickerSymbol === b.tickerSymbol &&
+      a.positionSymbol === b.positionSymbol
+    );
   }
 
   function navigateTo(next: NavState): void {
@@ -128,14 +137,17 @@ export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | nu
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const activeProject = projects.find((p) => p.id === activeProjectId);
-  const { view, settingsOpen, tickerSymbol } = nav;
+  const { view, settingsOpen, tickerSymbol, positionSymbol } = nav;
   const titleBase =
+    positionSymbol ??
     tickerSymbol ??
     (view === "markets"
       ? "Markets"
       : view === "portfolio"
         ? "My Portfolio"
-        : activeSession?.title ?? "New chat");
+        : view === "position"
+          ? "Position"
+          : activeSession?.title ?? "New chat");
   const windowTitle = `${titleBase}${
     activeProject?.name ? ` - ${activeProject.name}` : ""
   }`;
@@ -143,6 +155,7 @@ export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | nu
     "app",
     view === "markets" ? "is-markets" : "",
     view === "portfolio" ? "is-portfolio" : "",
+    view === "position" ? "is-portfolio" : "",
     sidebarCollapsed ? "is-sidebar-collapsed" : "",
   ].filter(Boolean).join(" ");
 
@@ -188,28 +201,63 @@ export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | nu
         </button>
       </div>
       <Sidebar
-        activeView={view}
-        onOpenChat={() => navigateTo({ view: "chat", settingsOpen: false, tickerSymbol: null })}
-        onOpenMarkets={() => navigateTo({ view: "markets", settingsOpen: false, tickerSymbol: null })}
-        onOpenPortfolio={() => navigateTo({ view: "portfolio", settingsOpen: false, tickerSymbol: null })}
-        onOpenSettings={() => navigateTo({ ...nav, settingsOpen: true, tickerSymbol: null })}
+        activeView={view === "position" ? "portfolio" : view}
+        onOpenChat={() =>
+          navigateTo({ view: "chat", settingsOpen: false, tickerSymbol: null, positionSymbol: null })
+        }
+        onOpenMarkets={() =>
+          navigateTo({ view: "markets", settingsOpen: false, tickerSymbol: null, positionSymbol: null })
+        }
+        onOpenPortfolio={() =>
+          navigateTo({ view: "portfolio", settingsOpen: false, tickerSymbol: null, positionSymbol: null })
+        }
+        onOpenSettings={() => navigateTo({ ...nav, settingsOpen: true, tickerSymbol: null, positionSymbol: null })}
       />
       <main className="main">
         {tickerSymbol ? (
-          <TickerDetailWindow
-            key={tickerSymbol}
-            initialSymbol={tickerSymbol}
+          <TickerDetailWindow key={tickerSymbol} initialSymbol={tickerSymbol} />
+        ) : view === "position" && positionSymbol ? (
+          <PositionDetailView
+            key={positionSymbol}
+            symbol={positionSymbol}
+            onOpenTicker={(symbol) =>
+              navigateTo({
+                view: "markets",
+                settingsOpen: false,
+                tickerSymbol: symbol.toUpperCase(),
+                positionSymbol: null,
+              })
+            }
+            onBack={goBack}
           />
         ) : view === "markets" ? (
           <MarketView
             onOpenTicker={(symbol) =>
-              navigateTo({ view: "markets", settingsOpen: false, tickerSymbol: symbol.toUpperCase() })
+              navigateTo({
+                view: "markets",
+                settingsOpen: false,
+                tickerSymbol: symbol.toUpperCase(),
+                positionSymbol: null,
+              })
             }
           />
         ) : view === "portfolio" ? (
           <PortfolioView
             onOpenTicker={(symbol) =>
-              navigateTo({ view: "markets", settingsOpen: false, tickerSymbol: symbol.toUpperCase() })
+              navigateTo({
+                view: "markets",
+                settingsOpen: false,
+                tickerSymbol: symbol.toUpperCase(),
+                positionSymbol: null,
+              })
+            }
+            onOpenPosition={(symbol) =>
+              navigateTo({
+                view: "position",
+                settingsOpen: false,
+                tickerSymbol: null,
+                positionSymbol: symbol.toUpperCase(),
+              })
             }
           />
         ) : (
@@ -221,7 +269,9 @@ export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | nu
       </main>
       {view === "chat" ? <AgentPanel /> : null}
       <ConsentToast />
-      {settingsOpen && <SettingsModal onClose={() => navigateTo({ ...nav, settingsOpen: false })} />}
+      {settingsOpen && (
+        <SettingsModal onClose={() => navigateTo({ ...nav, settingsOpen: false })} />
+      )}
     </div>
   );
 }
