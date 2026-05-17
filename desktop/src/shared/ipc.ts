@@ -100,6 +100,8 @@ export interface MarketIndexOverview {
   exchange: string;
   kind?: "index" | "stock";
   industry?: string;
+  intro?: string;
+  website?: string;
   latestClose?: number;
   previousClose?: number;
   change?: number;
@@ -141,6 +143,152 @@ export interface MarketHeatmap {
   updatedAt: number;
   assets: MarketIndexOverview[];
 }
+
+// -- Portfolio types --------------------------------------------------------
+
+export type OrderSide = "BUY" | "SELL";
+export type OrderType = "MARKET" | "LIMIT";
+export type OrderStatusUi = "PENDING" | "FILLED" | "CANCELLED" | "REJECTED";
+
+export interface PortfolioPosition {
+  ticker: string;
+  quantity: number;
+  sub_account_id: string | null;
+  custody_code: string | null;
+  avg_cost_thousand_vnd: number;
+  last_close_thousand_vnd: number | null;
+  cost_basis_vnd: number;
+  market_value_vnd: number | null;
+  unrealized_pnl_vnd: number | null;
+  unrealized_pnl_pct: number | null;
+}
+
+export interface PortfolioSubAccount {
+  id: string;
+  type?: string;
+  cashVnd: number;
+  blockedCashVnd?: number;
+  totalCashVnd?: number;
+  label?: string;
+}
+
+export interface PortfolioSnapshot {
+  broker: string;
+  cash_vnd: number;
+  total_equity_vnd: number;
+  margin_used_vnd: number;
+  sub_accounts: PortfolioSubAccount[];
+  positions: PortfolioPosition[];
+  totals: {
+    cost_basis_vnd: number;
+    market_value_vnd: number;
+    unrealized_pnl_vnd: number;
+  };
+}
+
+export interface BrokerOrderUi {
+  id: string;
+  broker: string;
+  ticker: string;
+  side: OrderSide;
+  type: OrderType;
+  quantity: number;
+  limitPrice: number | null;
+  status: OrderStatusUi;
+  rejectReason: string | null;
+  createdAt: number;
+  filledAt: number | null;
+  filledPrice: number | null;
+  filledQty: number | null;
+  notes: string | null;
+}
+
+export interface BrokerHistoryOrderUi {
+  id: string;
+  subAccountId?: string;
+  ticker: string;
+  side: OrderSide;
+  type: string;
+  status: string;
+  orderDate: string | null;
+  quantity: number;
+  limitPriceThousandVnd: number | null;
+  filledQty: number;
+  filledPriceThousandVnd: number | null;
+  feeVnd?: number;
+  taxVnd?: number;
+}
+
+export interface BrokerHistoryFillUi {
+  orderId: string;
+  subAccountId?: string;
+  ticker: string;
+  side: OrderSide;
+  tradeDate: string | null;
+  quantity: number;
+  priceThousandVnd: number | null;
+  grossValueVnd: number | null;
+  feeVnd?: number;
+  taxVnd?: number;
+}
+
+export interface BrokerCashTransactionUi {
+  id: string;
+  subAccountId?: string;
+  transactionDate: string | null;
+  businessDate: string | null;
+  type?: string;
+  flow?: string;
+  status?: string;
+  amountVnd: number;
+  title?: string;
+  description?: string;
+  code?: string;
+}
+
+export interface BrokerRightEventUi {
+  id: string;
+  subAccountId?: string;
+  ticker: string;
+  type?: string;
+  status?: string;
+  reportDate: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  finishDate?: string | null;
+  ratio?: string;
+  ownedShares?: number;
+  waitingShares?: number;
+  amountVnd?: number;
+  priceVnd?: number;
+  maxRegisterQuantity?: number;
+  registeredQuantity?: number;
+}
+
+export interface PortfolioHistory {
+  supported: true;
+  broker: string;
+  fromDate: string;
+  toDate: string;
+  subAccounts: PortfolioSubAccount[];
+  orders: BrokerHistoryOrderUi[];
+  fills: BrokerHistoryFillUi[];
+  transactions: BrokerCashTransactionUi[];
+  rights: BrokerRightEventUi[];
+  unavailable?: { source: string; subAccountId?: string; error: string }[];
+}
+
+export interface PortfolioHistoryUnsupported {
+  supported: false;
+  broker: string;
+  reason: string;
+}
+
+export type PortfolioHistoryRes = PortfolioHistory | PortfolioHistoryUnsupported;
+
+export type PortfolioPlaceOrderRes =
+  | { ok: true; order: BrokerOrderUi }
+  | { ok: false; error: "no_reference_price" | "guardrail_blocked" | "broker_error"; reasons?: string[]; message?: string; order?: BrokerOrderUi };
 
 export interface DesktopSettings {
   launchAtLogin: boolean;
@@ -250,6 +398,37 @@ export const MarketHeatmapReq = z
   })
   .optional();
 
+export const PortfolioSnapshotReq = z.object({}).optional();
+
+export const PortfolioOrdersReq = z
+  .object({
+    ticker: z.string().optional(),
+    status: z.enum(["PENDING", "FILLED", "CANCELLED", "REJECTED"]).optional(),
+    limit: z.number().int().min(1).max(200).default(50),
+  })
+  .optional();
+
+export const PortfolioHistoryReq = z.object({
+  kind: z.enum(["all", "orders", "fills", "transactions", "rights"]).default("all"),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  ticker: z.string().optional(),
+  limit: z.number().int().min(1).max(500).default(100),
+});
+
+export const PortfolioPlaceOrderReq = z.object({
+  ticker: z.string().min(1),
+  side: z.enum(["BUY", "SELL"]),
+  type: z.enum(["MARKET", "LIMIT"]).default("MARKET"),
+  quantity: z.number().int().positive(),
+  limitPrice: z.number().positive().optional(),
+  notes: z.string().optional(),
+});
+
+export const PortfolioCancelOrderReq = z.object({
+  id: z.string().min(1),
+});
+
 export const CreateProjectReq = z.object({
   name: z.string().min(1),
   rootPath: z.string().optional(),
@@ -291,6 +470,11 @@ export interface IpcChannelMap {
   "app-settings:get": { req: undefined; res: DesktopSettings };
   "app-settings:save": { req: z.infer<typeof SaveDesktopSettingsReq>; res: DesktopSettings };
   "broker:state": { req: undefined; res: unknown };
+  "portfolio:snapshot": { req: z.infer<typeof PortfolioSnapshotReq>; res: PortfolioSnapshot };
+  "portfolio:orders": { req: z.infer<typeof PortfolioOrdersReq>; res: { orders: BrokerOrderUi[] } };
+  "portfolio:history": { req: z.infer<typeof PortfolioHistoryReq>; res: PortfolioHistoryRes };
+  "portfolio:placeOrder": { req: z.infer<typeof PortfolioPlaceOrderReq>; res: PortfolioPlaceOrderRes };
+  "portfolio:cancelOrder": { req: z.infer<typeof PortfolioCancelOrderReq>; res: { ok: boolean; order: BrokerOrderUi } };
   "health:probe": { req: z.infer<typeof HealthProbeReq>; res: HealthReport };
   "market:overview": { req: z.infer<typeof MarketOverviewReq>; res: MarketOverview };
   "market:asset": { req: z.infer<typeof MarketAssetReq>; res: MarketIndexOverview };

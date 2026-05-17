@@ -2,6 +2,7 @@ import {
   ChartIcon,
   ClockIcon,
   NewChatIcon,
+  PositionsIcon,
   SearchIcon,
   SettingsIcon,
 } from "../Icon.js";
@@ -12,11 +13,13 @@ export function Sidebar({
   activeView,
   onOpenChat,
   onOpenMarkets,
+  onOpenPortfolio,
   onOpenSettings,
 }: {
-  activeView: "chat" | "markets";
+  activeView: "chat" | "markets" | "portfolio";
   onOpenChat: () => void;
   onOpenMarkets: () => void;
+  onOpenPortfolio: () => void;
   onOpenSettings: () => void;
 }) {
   const { activeProjectId, setActiveSession, setRecords, setSessions } = useChatStore();
@@ -37,12 +40,10 @@ export function Sidebar({
         <button className="sidebar-action" aria-current="false" onClick={newChat}>
           <NewChatIcon className="ico" />
           New chat
-          <kbd>⌘N</kbd>
         </button>
         <button className="sidebar-action">
           <SearchIcon className="ico" />
           Search
-          <kbd>⌘K</kbd>
         </button>
         <button
           className="sidebar-action"
@@ -52,6 +53,14 @@ export function Sidebar({
           <ChartIcon className="ico" />
           Markets
         </button>
+        <button
+          className="sidebar-action"
+          aria-current={activeView === "portfolio" ? "true" : "false"}
+          onClick={onOpenPortfolio}
+        >
+          <PositionsIcon className="ico" />
+          My Portfolio
+        </button>
         <button className="sidebar-action">
           <ClockIcon className="ico" />
           Automations
@@ -60,7 +69,6 @@ export function Sidebar({
         <button className="sidebar-action" onClick={onOpenSettings}>
           <SettingsIcon className="ico" />
           Settings
-          <kbd>⌘,</kbd>
         </button>
       </div>
 

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { MarketIndexOverview } from "../../../shared/ipc.js";
-import { RefreshIcon } from "../Icon.js";
+import { RefreshIcon, SearchIcon } from "../Icon.js";
+import { MarketTreemap, type SizeBy } from "./MarketTreemap.js";
 
 type LoadState =
   | { status: "loading"; data: MarketIndexOverview[]; updatedAt?: number; error?: string }
@@ -16,15 +17,15 @@ type MarketGroup = {
   averageChangePct: number;
 };
 
-export function MarketView() {
+const MARKET_MAP_LIMIT = 220;
+
+export function MarketView({ onOpenTicker }: { onOpenTicker: (symbol: string) => void }) {
   const [state, setState] = useState<LoadState>({ status: "loading", data: [] });
   const [heatmap, setHeatmap] = useState<MarketIndexOverview[]>([]);
-  const [assets, setAssets] = useState<MarketIndexOverview[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState("VNINDEX");
-  const [inspectedSymbol, setInspectedSymbol] = useState<string | null>(null);
   const [tickerInput, setTickerInput] = useState("");
-  const [assetLoading, setAssetLoading] = useState(false);
-  const [assetError, setAssetError] = useState<string | null>(null);
+  const [sizeBy, setSizeBy] = useState<SizeBy>("marketCap");
+  const [sectorFilter, setSectorFilter] = useState<string | null>(null);
 
   async function load(silent = false) {
     if (!silent) {
@@ -46,7 +47,7 @@ export function MarketView() {
       ]);
       setState({ status: "ready", data: overview.indices, updatedAt: overview.updatedAt });
       setHeatmap(heatmapData.assets);
-      if (!overview.indices.some((index) => index.symbol === selectedSymbol) && assets.length === 0) {
+      if (!overview.indices.some((index) => index.symbol === selectedSymbol)) {
         setSelectedSymbol(overview.indices[0]?.symbol ?? "VNINDEX");
       }
     } catch (err) {
@@ -60,95 +61,54 @@ export function MarketView() {
     }
   }
 
-  async function fetchTicker(symbolInput: string, silent = false) {
-    const symbols = parseTickerInput(symbolInput);
-    if (symbols.length === 0) return;
-    setAssetError(null);
-    if (!silent) setAssetLoading(true);
-    try {
-      const fetched = await Promise.all(
-        symbols.map((symbol) =>
-          window.azoth.invoke("market:asset", {
-            symbol,
-            resolution: "1D",
-            bars: 120,
-          }),
-        ),
-      );
-      const existingAssets = [...state.data, ...assets, ...heatmap];
-      const enriched = fetched.map((asset) => enrichAsset(asset, existingAssets));
-      const errored = enriched.find((asset) => asset.error);
-      if (errored?.error) setAssetError(`${errored.symbol}: ${errored.error}`);
-      setAssets((current) => [
-        ...enriched,
-        ...current.filter((item) => !enriched.some((asset) => asset.symbol === item.symbol)),
-      ]);
-      setSelectedSymbol(enriched[0]?.symbol ?? symbols[0] ?? "VNINDEX");
-      setInspectedSymbol(enriched[0]?.symbol ?? symbols[0] ?? null);
-      setTickerInput("");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setAssetError(formatMarketLoadError(message));
-    } finally {
-      if (!silent) setAssetLoading(false);
-    }
-  }
-
-  async function refreshAssets() {
-    const symbols = assets.map((asset) => asset.symbol);
-    if (symbols.length === 0) return;
-    const refreshed = await Promise.all(
-      symbols.map((symbol) =>
-        window.azoth.invoke("market:asset", {
-          symbol,
-          resolution: "1D",
-          bars: 120,
-        }),
-      ),
-    );
-    const existingAssets = [...state.data, ...assets, ...heatmap];
-    setAssets(refreshed.map((asset) => enrichAsset(asset, existingAssets)));
-  }
-
-  async function inspectAsset(asset: MarketIndexOverview) {
+  function inspectAsset(asset: MarketIndexOverview) {
     setSelectedSymbol(asset.symbol);
-    setInspectedSymbol(asset.symbol);
-    if (asset.bars.length > 0) return;
-    await fetchTicker(asset.symbol, true);
+    onOpenTicker(asset.symbol);
+  }
+
+  function openTicker(symbol: string) {
+    const normalized = symbol.toUpperCase();
+    setSelectedSymbol(normalized);
+    setTickerInput("");
+    onOpenTicker(normalized);
   }
 
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => {
       void load(true);
-      void refreshAssets();
     }, REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [assets]);
+  }, []);
 
   const allAssets = useMemo(() => {
     const seen = new Set<string>();
-    return [...state.data, ...assets, ...heatmap].filter((asset) => {
+    return [...state.data, ...heatmap].filter((asset) => {
       if (seen.has(asset.symbol)) return false;
       seen.add(asset.symbol);
       return true;
     });
-  }, [assets, heatmap, state.data]);
+  }, [heatmap, state.data]);
+  const tickerSuggestions = useMemo(() => suggestTickers(allAssets, tickerInput), [allAssets, tickerInput]);
   const selected = useMemo(
     () => allAssets.find((index) => index.symbol === selectedSymbol) ?? allAssets[0],
     [allAssets, selectedSymbol],
   );
-  const marketGroups = useMemo(() => groupMarketAssets(allAssets), [allAssets]);
+  const sectorAssets = useMemo(() => allAssets.filter((asset) => asset.kind !== "index"), [allAssets]);
+  const marketGroups = useMemo(() => groupMarketAssets(sectorAssets), [sectorAssets]);
+  const marketMapAssets = useMemo(() => compactMarketMapAssets(sectorAssets, MARKET_MAP_LIMIT), [sectorAssets]);
+  const sectorLeaders = useMemo(() => marketGroups.slice(0, 10), [marketGroups]);
+  const indexAssets = state.data.length > 0 ? state.data : allAssets.filter((asset) => asset.kind === "index");
   const advancing = allAssets.filter((index) => (index.change ?? 0) > 0).length;
   const declining = allAssets.filter((index) => (index.change ?? 0) < 0).length;
-  const detailOpen = inspectedSymbol != null && selected?.symbol === inspectedSymbol;
+  const unchanged = Math.max(0, allAssets.length - advancing - declining);
 
   return (
     <section className="market-view">
       <header className="market-header">
         <div>
+          <span className="ds-kicker">Vietnam market desk</span>
           <h1>Markets</h1>
-          <p>Vietnam indexes, stock tickers, charts, and RMA trend projection.</p>
         </div>
         <div className="market-header-actions">
           <span className="market-refresh-label">
@@ -167,168 +127,174 @@ export function MarketView() {
       </header>
 
       {state.status === "error" ? <div className="market-error">{state.error}</div> : null}
-      {assetError ? <div className="market-error">{assetError}</div> : null}
 
-      <div className={`market-shell ${detailOpen ? "has-detail" : "no-detail"}`}>
+      <div className="market-shell no-detail">
         <div className="market-workspace">
           <form
-            className="market-search ds-card"
+            className="market-command-bar ds-card"
             onSubmit={(event) => {
               event.preventDefault();
-              void fetchTicker(tickerInput);
+              const symbol = tickerSuggestions[0]?.symbol ?? parseTickerSymbol(tickerInput);
+              if (symbol) openTicker(symbol);
             }}
           >
-            <div>
-              <label htmlFor="market-ticker">Add ticker or index</label>
-              <span>Fetch OHLCV, quote, RMA, and projection.</span>
-            </div>
-            <input
-              id="market-ticker"
-              className="ds-input"
-              value={tickerInput}
-              onChange={(event) => setTickerInput(event.target.value)}
-              placeholder="FPT, HPG, VCB, VNINDEX"
-            />
-            <button className="ds-button primary" disabled={!tickerInput.trim() || assetLoading}>
-              {assetLoading ? "Fetching" : "Fetch"}
-            </button>
+            <label className="market-search-field" htmlFor="market-ticker">
+              <SearchIcon />
+              <input
+                id="market-ticker"
+                className="ds-input"
+                value={tickerInput}
+                onChange={(event) => setTickerInput(event.target.value)}
+                placeholder="Search ticker"
+                autoComplete="off"
+              />
+            </label>
+            {tickerInput.trim() ? (
+              <div className="market-search-suggestions" role="listbox">
+                {tickerSuggestions.length > 0 ? (
+                  tickerSuggestions.map((asset) => (
+                    <button
+                      key={asset.symbol}
+                      type="button"
+                      className="market-search-option"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => openTicker(asset.symbol)}
+                    >
+                      <strong>{asset.symbol}</strong>
+                      <span>{asset.name}</span>
+                      <em>{formatNumber(asset.latestClose)}</em>
+                    </button>
+                  ))
+                ) : (
+                  <button
+                    type="submit"
+                    className="market-search-option"
+                    disabled={!parseTickerSymbol(tickerInput)}
+                  >
+                    <strong>{tickerInput.trim().toUpperCase()}</strong>
+                    <span>Open ticker</span>
+                  </button>
+                )}
+              </div>
+            ) : null}
           </form>
 
-          <div className="market-breadth-strip">
+          <div className="market-breadth-strip" aria-label="Market breadth">
             <MetricPill label="Tracked" value={String(allAssets.length || 4)} />
-            <MetricPill label="Advancing" value={String(advancing)} tone="up" />
-            <MetricPill label="Declining" value={String(declining)} tone="down" />
-            <MetricPill label="Refresh" value="30s" />
+            <MetricPill label="Up" value={String(advancing)} tone="up" />
+            <MetricPill label="Down" value={String(declining)} tone="down" />
+            <MetricPill label="Flat" value={String(unchanged)} />
           </div>
 
-          <div className="market-heatmap" aria-label="Market heatmap by industry">
-            {marketGroups.length > 0
-              ? marketGroups.map((group) => (
-                  <section key={group.industry} className={`market-sector ${sectorToneClass(group.averageChangePct)}`}>
-                    <header className="market-sector-head">
+          <section className="market-index-strip" aria-label="Index overview">
+            {indexAssets.length > 0
+              ? indexAssets.map((index) => (
+                  <button
+                    key={index.symbol}
+                    type="button"
+                    className={`market-index-card ds-card ${index.symbol === selected?.symbol ? "is-selected" : ""}`}
+                    onClick={() => void inspectAsset(index)}
+                  >
+                    <div className="market-index-top">
                       <div>
-                        <h3>{group.industry}</h3>
-                        <span>{group.assets.length} symbols · {group.advancing} up · {group.declining} down</span>
+                        <span>{index.name}</span>
+                        <strong>{index.symbol}</strong>
                       </div>
-                      <strong className={group.averageChangePct > 0 ? "is-up" : group.averageChangePct < 0 ? "is-down" : undefined}>
-                        {formatPct(group.averageChangePct)}
-                      </strong>
-                    </header>
-                    <div className="market-sector-grid">
-                      {group.assets.map((index) => (
-                        <button
-                          key={index.symbol}
-                          type="button"
-                          className={`market-heat-tile ${heatTileClass(index)} ${index.symbol === selected?.symbol ? "is-selected" : ""}`}
-                          style={heatTileStyle(index)}
-                          onClick={() => void inspectAsset(index)}
-                        >
-                          <div className="market-heat-head">
-                            <span>{index.name}</span>
-                            <strong>{index.symbol}</strong>
-                          </div>
-                          <div className="market-heat-price">{formatNumber(index.latestClose)}</div>
-                          <ChangePill index={index} />
-                          <Sparkline bars={index.bars} />
-                          <div className="market-heat-meta">
-                            <span>{index.exchange}</span>
-                            <span>{index.error ? "Unavailable" : formatClock(index.updatedAt)}</span>
-                          </div>
-                        </button>
-                      ))}
+                      <ChangePill index={index} />
                     </div>
-                  </section>
+                    <div className="market-index-price">{formatNumber(index.latestClose)}</div>
+                    <Sparkline bars={index.bars} />
+                    <div className="market-index-meta">
+                      <span>{index.exchange}</span>
+                      <span>{index.error ? "Unavailable" : formatClock(index.updatedAt)}</span>
+                    </div>
+                  </button>
                 ))
-              : [0, 1, 2, 3].map((item) => <div key={item} className="market-heat-tile is-loading" />)}
-          </div>
+              : [0, 1, 2, 3].map((item) => <div key={item} className="market-index-card ds-card is-loading" />)}
+          </section>
 
+          <section className="market-board" aria-label="Market heatmap">
+            <div className="market-board-head">
+              <div>
+                <span className="ds-kicker">Heatmap</span>
+                <h2>Market map</h2>
+              </div>
+              <div className="market-board-controls">
+                <div className="market-toggle-group" role="group" aria-label="Size by">
+                  <span className="ds-kicker">Size</span>
+                  <button
+                    type="button"
+                    className={`market-toggle-btn ${sizeBy === "marketCap" ? "is-active" : ""}`}
+                    onClick={() => setSizeBy("marketCap")}
+                  >
+                    Market cap
+                  </button>
+                  <button
+                    type="button"
+                    className={`market-toggle-btn ${sizeBy === "volume" ? "is-active" : ""}`}
+                    onClick={() => setSizeBy("volume")}
+                  >
+                    Volume
+                  </button>
+                </div>
+                <div className="market-toggle-group" role="group" aria-label="Time window">
+                  <span className="ds-kicker">Window</span>
+                  <button type="button" className="market-toggle-btn is-active">1D</button>
+                  <button type="button" className="market-toggle-btn" disabled title="Coming soon">1W</button>
+                  <button type="button" className="market-toggle-btn" disabled title="Coming soon">1M</button>
+                </div>
+                <span className="market-board-count">{marketMapAssets.length || 0} / {sectorAssets.length || 0}</span>
+              </div>
+            </div>
+
+            <div className="market-sector-tape" aria-label="Sector filter">
+              {sectorFilter ? (
+                <button
+                  type="button"
+                  className="market-sector-chip is-clear"
+                  onClick={() => setSectorFilter(null)}
+                  title="Clear sector filter"
+                >
+                  <span>All sectors</span>
+                  <strong>×</strong>
+                </button>
+              ) : null}
+              {sectorLeaders.length > 0
+                ? sectorLeaders.map((group) => (
+                    <button
+                      key={group.industry}
+                      type="button"
+                      className={`market-sector-chip ${sectorToneClass(group.averageChangePct)} ${sectorFilter === group.industry ? "is-active" : ""}`}
+                      onClick={() =>
+                        setSectorFilter((current) => (current === group.industry ? null : group.industry))
+                      }
+                      title={`${group.industry}: ${group.assets.length} symbols`}
+                    >
+                      <span>{group.industry}</span>
+                      <strong>{formatPct(group.averageChangePct)}</strong>
+                    </button>
+                  ))
+                : [0, 1, 2, 3, 4].map((item) => <span key={item} className="market-sector-chip is-loading" />)}
+            </div>
+
+            <div className="market-treemap-wrap">
+              {marketMapAssets.length > 0 ? (
+                <MarketTreemap
+                  assets={marketMapAssets}
+                  sizeBy={sizeBy}
+                  sectorFilter={sectorFilter}
+                  selectedSymbol={selected?.symbol}
+                  onSelect={(asset) => void inspectAsset(asset)}
+                />
+              ) : (
+                <div className="market-treemap is-loading" aria-hidden="true" />
+              )}
+            </div>
+          </section>
         </div>
 
-        {detailOpen ? (
-          <TickerDetailPanel
-            key={selected?.symbol ?? "empty"}
-            selected={selected}
-            total={allAssets.length || 4}
-            advancing={advancing}
-            declining={declining}
-            onClose={() => setInspectedSymbol(null)}
-          />
-        ) : null}
       </div>
     </section>
-  );
-}
-
-function TickerDetailPanel({
-  selected,
-  total,
-  advancing,
-  declining,
-  onClose,
-}: {
-  selected: MarketIndexOverview | undefined;
-  total: number;
-  advancing: number;
-  declining: number;
-  onClose: () => void;
-}) {
-  if (!selected) {
-    return null;
-  }
-
-  return (
-    <aside className="market-detail-panel ds-card" aria-label={`${selected.symbol} details`}>
-      <div className="market-detail-hero">
-        <div className="market-detail-kicker">
-          <span>{selected.kind === "stock" ? "Ticker detail" : "Index detail"}</span>
-          <button type="button" aria-label="Close ticker details" title="Close details" onClick={onClose}>×</button>
-        </div>
-        <div className="market-detail-symbol">
-          <h2>{selected.symbol}</h2>
-          <ChangePill index={selected} />
-        </div>
-        <p>{selected.name}</p>
-        <strong>{formatNumber(selected.latestClose)}</strong>
-      </div>
-
-      <div className="market-detail-chart">
-        <MarketLineChart index={selected} compact />
-      </div>
-
-      {selected.forecast ? (
-        <div className={`market-forecast-card is-${selected.forecast.direction}`}>
-          <span>RMA forecast</span>
-          <strong>{forecastLabel(selected.forecast)}</strong>
-          <small>{selected.forecast.confidence} confidence</small>
-        </div>
-      ) : null}
-
-      <div className="market-detail-section">
-        <h3>Market</h3>
-        <StatRow label="Industry" value={selected.industry ?? "Unclassified"} />
-        <StatRow label="Exchange" value={selected.exchange} />
-        <StatRow label="Kind" value={selected.kind ?? "index"} />
-        <StatRow label="Previous close" value={formatNumber(selected.previousClose)} />
-        <StatRow label="High / low" value={`${formatNumber(selected.high)} / ${formatNumber(selected.low)}`} />
-        <StatRow label="Volume" value={formatNumber(selected.volume)} />
-      </div>
-
-      <div className="market-detail-section">
-        <h3>Quote</h3>
-        <StatRow label="Bid / offer" value={`${formatNumber(selected.quote?.bestBid)} / ${formatNumber(selected.quote?.bestOffer)}`} />
-        <StatRow label="Matched volume" value={formatNumber(selected.quote?.matchedVolume)} />
-        <StatRow label="Session" value={selected.quote?.session ?? "-"} />
-        <StatRow label="Status" value={selected.quote?.tradingStatus ?? "-"} />
-      </div>
-
-      <div className="market-detail-section">
-        <h3>Breadth</h3>
-        <StatRow label="Tracked" value={String(total)} />
-        <StatRow label="Advancing" value={String(advancing)} tone="up" />
-        <StatRow label="Declining" value={String(declining)} tone="down" />
-        <StatRow label="Bars" value={String(selected.bars.length)} />
-      </div>
-    </aside>
   );
 }
 
@@ -341,33 +307,29 @@ function MetricPill({ label, value, tone }: { label: string; value: string; tone
   );
 }
 
-function parseTickerInput(input: string): string[] {
-  const seen = new Set<string>();
-  return input
-    .split(/[\s,;]+/)
-    .map((symbol) => symbol.trim().toUpperCase())
-    .filter((symbol) => /^[A-Z0-9]{1,12}$/.test(symbol))
-    .filter((symbol) => {
-      if (seen.has(symbol)) return false;
-      seen.add(symbol);
-      return true;
-    })
-    .slice(0, 12);
+function parseTickerSymbol(input: string): string | null {
+  const symbol = input.trim().toUpperCase();
+  return /^[A-Z0-9]{1,12}$/.test(symbol) ? symbol : null;
 }
 
-function enrichAsset(
-  asset: MarketIndexOverview,
-  existingAssets: MarketIndexOverview[],
-): MarketIndexOverview {
-  const existing = existingAssets.find((item) => item.symbol === asset.symbol);
-  return {
-    ...asset,
-    industry:
-      asset.industry && asset.industry !== "Unclassified"
-        ? asset.industry
-        : existing?.industry ?? asset.industry,
-    marketCap: asset.marketCap ?? existing?.marketCap,
-  };
+function suggestTickers(assets: MarketIndexOverview[], input: string): MarketIndexOverview[] {
+  const query = input.trim().toUpperCase();
+  if (!query) return [];
+  return assets
+    .filter((asset) => {
+      const name = asset.name.toUpperCase();
+      return asset.symbol.includes(query) || name.includes(query);
+    })
+    .sort((a, b) => {
+      const aStarts = a.symbol.startsWith(query) ? 0 : 1;
+      const bStarts = b.symbol.startsWith(query) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      const aExact = a.symbol === query ? 0 : 1;
+      const bExact = b.symbol === query ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      return tileWeight(b) - tileWeight(a) || a.symbol.localeCompare(b.symbol);
+    })
+    .slice(0, 8);
 }
 
 function groupMarketAssets(assets: MarketIndexOverview[]): MarketGroup[] {
@@ -396,13 +358,33 @@ function groupMarketAssets(assets: MarketIndexOverview[]): MarketGroup[] {
   });
 }
 
+function compactMarketMapAssets(assets: MarketIndexOverview[], limit: number): MarketIndexOverview[] {
+  const byIndustry = groupMarketAssets(assets);
+  const picked = new Map<string, MarketIndexOverview>();
+  const add = (asset: MarketIndexOverview) => {
+    if (asset.latestClose == null && asset.changePct == null) return;
+    picked.set(asset.symbol, asset);
+  };
+
+  for (const group of byIndustry) {
+    for (const asset of group.assets.slice(0, 10)) add(asset);
+  }
+
+  for (const asset of [...assets].sort((a, b) => tileWeight(b) - tileWeight(a))) {
+    if (picked.size >= limit) break;
+    add(asset);
+  }
+
+  return Array.from(picked.values()).sort((a, b) => tileWeight(b) - tileWeight(a) || a.symbol.localeCompare(b.symbol));
+}
+
 function sectorToneClass(changePct: number): string {
   if (changePct > 0) return "is-up";
   if (changePct < 0) return "is-down";
   return "is-flat";
 }
 
-function ChangePill({ index }: { index: MarketIndexOverview }) {
+export function ChangePill({ index }: { index: MarketIndexOverview }) {
   const change = index.change ?? 0;
   const tone = change > 0 ? "up" : change < 0 ? "down" : "flat";
   return (
@@ -425,28 +407,11 @@ function Sparkline({ bars }: { bars: MarketIndexOverview["bars"] }) {
   );
 }
 
-function heatTileClass(index: MarketIndexOverview): string {
-  const pct = Math.abs(index.changePct ?? 0);
-  const direction = (index.change ?? 0) > 0 ? "is-up" : (index.change ?? 0) < 0 ? "is-down" : "is-flat";
-  const intensity = pct >= 2 ? "is-hot" : pct >= 0.75 ? "is-warm" : "is-cool";
-  const size = index.kind === "index" || tileWeight(index) > 30_000 ? "is-wide" : "";
-  return [direction, intensity, size].filter(Boolean).join(" ");
-}
-
-function heatTileStyle(index: MarketIndexOverview): CSSProperties {
-  const weight = tileWeight(index);
-  if (index.kind === "index" || weight >= 100_000) return { gridColumn: "span 4", gridRow: "span 3" };
-  if (weight >= 35_000) return { gridColumn: "span 3", gridRow: "span 2" };
-  if (weight >= 10_000) return { gridColumn: "span 2", gridRow: "span 2" };
-  if (weight >= 3_000) return { gridColumn: "span 2" };
-  return {};
-}
-
 function tileWeight(index: MarketIndexOverview): number {
   return index.marketCap ?? index.volume ?? 0;
 }
 
-function MarketLineChart({ index, compact = false }: { index: MarketIndexOverview; compact?: boolean }) {
+export function MarketLineChart({ index, compact = false }: { index: MarketIndexOverview; compact?: boolean }) {
   const width = 760;
   const height = compact ? 260 : 360;
   const pad = { top: 18, right: 60, bottom: 36, left: 16 };
@@ -534,7 +499,7 @@ function chartPoint(
   };
 }
 
-function StatRow({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
+export function StatRow({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
   return (
     <div className="market-stat-row">
       <span>{label}</span>
@@ -576,24 +541,24 @@ function lineSeries(
     .join(" ");
 }
 
-function forecastLabel(forecast: NonNullable<MarketIndexOverview["forecast"]>): string {
+export function forecastLabel(forecast: NonNullable<MarketIndexOverview["forecast"]>): string {
   const direction = forecast.direction === "up" ? "Up" : forecast.direction === "down" ? "Down" : "Flat";
   const target = forecast.nextClose != null ? ` ${formatNumber(forecast.nextClose)}` : "";
   const pct = forecast.changePct != null ? ` (${formatPct(forecast.changePct)})` : "";
   return `${direction}${target}${pct}`;
 }
 
-function formatNumber(value: number | undefined): string {
+export function formatNumber(value: number | undefined): string {
   if (value == null || !Number.isFinite(value)) return "-";
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value);
 }
 
-function formatPct(value: number | undefined): string {
+export function formatPct(value: number | undefined): string {
   if (value == null || !Number.isFinite(value)) return "-";
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
-function formatClock(value: number | undefined): string {
+export function formatClock(value: number | undefined): string {
   if (!value) return "-";
   return new Date(value * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

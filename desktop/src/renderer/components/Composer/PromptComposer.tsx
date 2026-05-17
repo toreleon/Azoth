@@ -324,7 +324,7 @@ export function PromptComposer() {
               onClick={() => void send()}
               disabled={!value.trim()}
               className="send-btn"
-              title="Send (⌘↵)"
+              title="Send"
             >
               <SendIcon />
             </button>

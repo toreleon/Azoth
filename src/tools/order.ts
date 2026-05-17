@@ -18,6 +18,38 @@ async function lastClose(ticker: string): Promise<number | null> {
   return bars.length ? bars[bars.length - 1]!.close : null;
 }
 
+export type PlaceOrderGuardResult =
+  | { ok: true; order: import("../broker/types.js").Order }
+  | { ok: false; error: "no_reference_price"; ticker: string }
+  | {
+      ok: false;
+      error: "guardrail_blocked";
+      reasons: string[];
+      order?: import("../broker/types.js").Order;
+    };
+
+export async function placeOrderWithGuards(
+  input: PlaceOrderInput,
+): Promise<PlaceOrderGuardResult> {
+  const inBacktest = currentBrokerName() != null;
+  const refPrice = (await lastClose(input.ticker)) ?? input.limitPrice ?? null;
+  const broker = getBroker();
+  if (refPrice == null) {
+    return { ok: false, error: "no_reference_price", ticker: input.ticker };
+  }
+  const guard = await checkOrder(broker, input, refPrice);
+  if (!guard.ok) {
+    const reason = `guardrail_blocked: ${guard.reasons.join("; ")}`;
+    const order =
+      inBacktest && broker.recordRejectedOrder
+        ? await broker.recordRejectedOrder(input, reason)
+        : undefined;
+    return { ok: false, error: "guardrail_blocked", reasons: guard.reasons, order };
+  }
+  const order = await broker.placeOrder(input);
+  return { ok: true, order };
+}
+
 export const placeOrderTool = tool(
   "place_order",
   "Place a paper or live broker order. Quantity must be a multiple of 100 (HOSE lot). limit_price is in thousand VND (e.g. 28.5 = 28,500 VND). In manual mode, the user is prompted before the tool runs. Orders always run through risk guardrails before submission.",
@@ -57,30 +89,21 @@ export const placeOrderTool = tool(
       }
     }
 
-    const broker = getBroker();
-
-    if (refPrice == null) {
-      return asText({ ok: false, error: `no reference price for ${input.ticker}` });
-    }
-    const guard = await checkOrder(broker, input, refPrice);
-    if (!guard.ok) {
-      const reason = `guardrail_blocked: ${guard.reasons.join("; ")}`;
-      const order =
-        inBacktest && broker.recordRejectedOrder
-          ? await broker.recordRejectedOrder(input, reason)
-          : undefined;
+    const result = await placeOrderWithGuards(input);
+    if (!result.ok) {
+      if (result.error === "no_reference_price") {
+        return asText({ ok: false, error: `no reference price for ${input.ticker}` });
+      }
       return asText({
         ok: false,
         error: "guardrail_blocked",
-        reasons: guard.reasons,
-        ...(order ? { order } : {}),
+        reasons: result.reasons,
+        ...(result.order ? { order: result.order } : {}),
       });
     }
-
-    const order = await broker.placeOrder(input);
     return asText({
-      ok: order.status === "FILLED" || order.status === "PENDING",
-      order,
+      ok: result.order.status === "FILLED" || result.order.status === "PENDING",
+      order: result.order,
     });
   },
 );

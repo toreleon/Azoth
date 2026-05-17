@@ -7,16 +7,30 @@ import { Onboarding } from "./components/Onboarding/Onboarding.js";
 import { ConsentToast } from "./components/Consent/ConsentToast.js";
 import { SettingsModal } from "./components/Settings/SettingsModal.js";
 import { AgentPanel } from "./components/AgentPanel/AgentPanel.js";
+import { ArrowLeftIcon, ArrowRightIcon, SidebarToggleIcon } from "./components/Icon.js";
 import { MarketView } from "./components/Market/MarketView.js";
+import { TickerDetailWindow } from "./components/Market/TickerDetailWindow.js";
+import { PortfolioView } from "./components/Portfolio/PortfolioView.js";
 import { useStreamBridge } from "./lib/streamBridge.js";
 import { useChatStore } from "./store/chatStore.js";
 
-type AppView = "chat" | "markets";
+type AppView = "chat" | "markets" | "portfolio";
+type NavState = {
+  view: AppView;
+  settingsOpen: boolean;
+  tickerSymbol: string | null;
+};
 
-export function App() {
+export function App({ initialTickerSymbol }: { initialTickerSymbol?: string | null } = {}) {
   useStreamBridge();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [view, setView] = useState<AppView>("chat");
+  const [nav, setNav] = useState<NavState>({
+    view: initialTickerSymbol ? "markets" : "chat",
+    settingsOpen: false,
+    tickerSymbol: initialTickerSymbol ? initialTickerSymbol.toUpperCase() : null,
+  });
+  const [backStack, setBackStack] = useState<NavState[]>([]);
+  const [forwardStack, setForwardStack] = useState<NavState[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const {
     activeProjectId,
     activeSessionId,
@@ -72,18 +86,41 @@ export function App() {
     })();
   }, [activeProjectId, setSessions]);
 
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
-        event.preventDefault();
-        setSettingsOpen(true);
-      } else if (event.key === "Escape") {
-        setSettingsOpen(false);
-      }
+  function normalizeNav(next: NavState): NavState {
+    return {
+      view: next.view,
+      settingsOpen: next.settingsOpen,
+      tickerSymbol: next.tickerSymbol ? next.tickerSymbol.toUpperCase() : null,
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }
+
+  function sameNav(a: NavState, b: NavState): boolean {
+    return a.view === b.view && a.settingsOpen === b.settingsOpen && a.tickerSymbol === b.tickerSymbol;
+  }
+
+  function navigateTo(next: NavState): void {
+    const normalized = normalizeNav(next);
+    if (sameNav(nav, normalized)) return;
+    setBackStack((current) => [...current, nav].slice(-50));
+    setForwardStack([]);
+    setNav(normalized);
+  }
+
+  function goBack(): void {
+    const previous = backStack.at(-1);
+    if (!previous) return;
+    setBackStack((current) => current.slice(0, -1));
+    setForwardStack((current) => [nav, ...current].slice(0, 50));
+    setNav(previous);
+  }
+
+  function goForward(): void {
+    const next = forwardStack[0];
+    if (!next) return;
+    setForwardStack((current) => current.slice(1));
+    setBackStack((current) => [...current, nav].slice(-50));
+    setNav(next);
+  }
 
   if (!onboarded) {
     return <Onboarding onDone={() => setOnboarded(true)} />;
@@ -91,12 +128,26 @@ export function App() {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const activeProject = projects.find((p) => p.id === activeProjectId);
-  const windowTitle = `${view === "markets" ? "Markets" : activeSession?.title ?? "New chat"}${
+  const { view, settingsOpen, tickerSymbol } = nav;
+  const titleBase =
+    tickerSymbol ??
+    (view === "markets"
+      ? "Markets"
+      : view === "portfolio"
+        ? "My Portfolio"
+        : activeSession?.title ?? "New chat");
+  const windowTitle = `${titleBase}${
     activeProject?.name ? ` - ${activeProject.name}` : ""
   }`;
+  const appClassName = [
+    "app",
+    view === "markets" ? "is-markets" : "",
+    view === "portfolio" ? "is-portfolio" : "",
+    sidebarCollapsed ? "is-sidebar-collapsed" : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <div className={`app ${view === "markets" ? "is-markets" : ""}`}>
+    <div className={appClassName}>
       <div className="titlebar">
         <div className="traffic">
           <span />
@@ -105,15 +156,62 @@ export function App() {
         </div>
         <div className="titlebar-title">{windowTitle}</div>
       </div>
+      <div className="app-nav-controls" aria-label="Navigation controls">
+        <button
+          type="button"
+          className="titlebar-nav-btn"
+          title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          onClick={() => setSidebarCollapsed((current) => !current)}
+        >
+          <SidebarToggleIcon />
+        </button>
+        <button
+          type="button"
+          className="titlebar-nav-btn"
+          title="Back"
+          aria-label="Back"
+          disabled={backStack.length === 0}
+          onClick={goBack}
+        >
+          <ArrowLeftIcon />
+        </button>
+        <button
+          type="button"
+          className="titlebar-nav-btn"
+          title="Forward"
+          aria-label="Forward"
+          disabled={forwardStack.length === 0}
+          onClick={goForward}
+        >
+          <ArrowRightIcon />
+        </button>
+      </div>
       <Sidebar
         activeView={view}
-        onOpenChat={() => setView("chat")}
-        onOpenMarkets={() => setView("markets")}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenChat={() => navigateTo({ view: "chat", settingsOpen: false, tickerSymbol: null })}
+        onOpenMarkets={() => navigateTo({ view: "markets", settingsOpen: false, tickerSymbol: null })}
+        onOpenPortfolio={() => navigateTo({ view: "portfolio", settingsOpen: false, tickerSymbol: null })}
+        onOpenSettings={() => navigateTo({ ...nav, settingsOpen: true, tickerSymbol: null })}
       />
       <main className="main">
-        {view === "markets" ? (
-          <MarketView />
+        {tickerSymbol ? (
+          <TickerDetailWindow
+            key={tickerSymbol}
+            initialSymbol={tickerSymbol}
+          />
+        ) : view === "markets" ? (
+          <MarketView
+            onOpenTicker={(symbol) =>
+              navigateTo({ view: "markets", settingsOpen: false, tickerSymbol: symbol.toUpperCase() })
+            }
+          />
+        ) : view === "portfolio" ? (
+          <PortfolioView
+            onOpenTicker={(symbol) =>
+              navigateTo({ view: "markets", settingsOpen: false, tickerSymbol: symbol.toUpperCase() })
+            }
+          />
         ) : (
           <>
             {activeSessionId ? <ChatView sessionId={activeSessionId} /> : <EmptyState />}
@@ -123,7 +221,7 @@ export function App() {
       </main>
       {view === "chat" ? <AgentPanel /> : null}
       <ConsentToast />
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsModal onClose={() => navigateTo({ ...nav, settingsOpen: false })} />}
     </div>
   );
 }
