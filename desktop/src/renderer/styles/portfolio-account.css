@@ -1,0 +1,212 @@
+.portfolio-account-split {
+  gap: var(--space-4);
+}
+
+.portfolio-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.portfolio-account-pane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.portfolio-account-pane-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.portfolio-account-pane-head h3 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-account-id {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-account-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in oklab, var(--fg), transparent 94%);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.portfolio-account-main .portfolio-account-badge {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+}
+
+.portfolio-account-margin .portfolio-account-badge {
+  background: color-mix(in oklab, var(--warn), transparent 86%);
+  color: var(--warn-text);
+}
+
+.portfolio-account-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.portfolio-account-metric {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--surface), var(--bg) 36%);
+}
+
+.portfolio-account-metric span,
+.portfolio-account-metric em {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-style: normal;
+  line-height: var(--leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-account-metric strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-account-metric.pnl-up strong,
+.portfolio-account-metric.pnl-up em {
+  color: var(--success-text);
+}
+
+.portfolio-account-metric.pnl-down strong,
+.portfolio-account-metric.pnl-down em {
+  color: var(--danger);
+}
+
+.portfolio-account-empty {
+  padding-block: var(--space-3);
+}
+
+.portfolio-account-position-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.portfolio-account-position {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, auto);
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.portfolio-account-position + .portfolio-account-position {
+  border-top: 1px solid var(--border-soft);
+}
+
+.portfolio-account-position:hover {
+  background: color-mix(in oklab, var(--accent), transparent 96%);
+}
+
+.portfolio-account-position-main,
+.portfolio-account-position-value {
+  min-width: 0;
+}
+
+.portfolio-account-position-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.portfolio-account-position-main span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-account-position-value {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-account-position-value strong,
+.portfolio-account-position-value span,
+.portfolio-account-position-value em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-account-position-value strong {
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+}
+
+.portfolio-account-position-value span,
+.portfolio-account-position-value em {
+  display: block;
+  font-size: var(--text-xs);
+  font-style: normal;
+  line-height: var(--leading-tight);
+}

@@ -2,6 +2,32 @@ import { randomUUID } from "node:crypto";
 import { request } from "undici";
 import { loadConfig, updateConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
+import { DEFAULT_FHSC_BASE_URL as DEFAULT_BASE, FHSC_BROKER_NAME as NAME } from "./fhsc/constants.js";
+import type {
+  FhscAssetSummary,
+  FhscCashTransactionItem,
+  FhscEnvelope,
+  FhscOrderItem,
+  FhscPaymentSubAccount,
+  FhscPortfolioItem,
+  FhscRightItem,
+  FhscSubAccount,
+} from "./fhsc/types.js";
+import {
+  daysAgoIso,
+  inDateRange,
+  isSuccess,
+  mapSide,
+  normalizeBaseUrl,
+  normalizeDate,
+  normalizeOrder,
+  numberOf,
+  payload,
+  rowsFrom,
+  todayIso,
+  todayRange,
+  vndToThousand,
+} from "./fhsc/utils.js";
 import type {
   Broker,
   BrokerAccountHistory,
@@ -42,286 +68,6 @@ import type {
  *   FHSC_BASE_URL        — defaults to https://api.vinasecurities.com
  *   FHSC_ACCOUNT_ID      — separate account id for order-history, if needed
  */
-const NAME = "fhsc";
-const DEFAULT_BASE = "https://api.vinasecurities.com";
-const LEGACY_FINHAY_GW_BASE = "https://api.finhay.com.vn/gw";
-
-interface FhscEnvelope<T = unknown> {
-  error_code?: string | number;
-  message?: string;
-  data?: T;
-  result?: T;
-  [key: string]: unknown;
-}
-
-interface FhscSubAccount {
-  balance?: number;
-  cash?: number;
-  cash_balance?: number;
-  buying_power?: number;
-  margin_used?: number;
-  marginUsed?: number;
-  sub_account_id?: string | number;
-  sub_account_ext?: string;
-  [key: string]: unknown;
-}
-
-interface FhscPortfolioItem {
-  sub_account_id?: string | number;
-  symbol?: string;
-  ticker?: string;
-  total?: number;
-  trade?: number;
-  quantity?: number;
-  close_price?: number;
-  basic_price?: number;
-  pnl_amount?: number;
-  pnl_rate?: number;
-  basic_price_amount?: number;
-  custodycd?: string;
-  cost_price?: number;
-  avg_cost?: number;
-  average_cost?: number;
-  [key: string]: unknown;
-}
-
-interface FhscPaymentSubAccount {
-  customer_id?: string;
-  sub_account_id?: string | number;
-  balance?: number;
-  total_balance?: number;
-  blocked_balance?: number;
-  type?: string;
-  sub_account_ext?: string;
-  [key: string]: unknown;
-}
-
-interface FhscAssetSummary {
-  net_asset_value?: number;
-  money?: {
-    total?: number;
-    [key: string]: unknown;
-  };
-  products?: {
-    stock?: number;
-    fund?: number;
-    bond?: number;
-    hay0?: number;
-    child_savings?: number;
-    [key: string]: unknown;
-  };
-  debt?: {
-    total?: number;
-    advance_amt?: number;
-    cidepo_fee?: number;
-    cidepo_fee_acr?: number;
-    owe_deposit?: number;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-interface FhscOrderItem {
-  order_id?: string | number;
-  id?: string | number;
-  symbol?: string;
-  side?: string;
-  orderType?: string;
-  order_type?: string;
-  order_qtty?: number;
-  quantity?: number;
-  price?: number;
-  order_price?: number;
-  status?: string;
-  reject_reason?: string;
-  tx_date?: string;
-  created_at?: string;
-  exec_price?: number;
-  exec_qtty?: number;
-  fee_amt?: number;
-  tax_amt?: number;
-  [key: string]: unknown;
-}
-
-interface FhscCashTransactionItem {
-  id?: string | number;
-  sub_account_id?: string | number;
-  transaction_date?: string;
-  bus_date?: string;
-  transaction_number?: string;
-  transaction_type?: string;
-  transaction_flow?: string;
-  transaction_status?: string;
-  amount?: number;
-  title?: string;
-  description?: string;
-  code?: string;
-  tr_desc?: string;
-  [key: string]: unknown;
-}
-
-interface FhscRightItem {
-  caMastId?: string | number;
-  id?: string | number;
-  symbol?: string;
-  type?: string;
-  catType?: string;
-  userRightRegisterStatus?: string;
-  status?: string;
-  reportDate?: string;
-  startDate?: string;
-  endDate?: string;
-  finishDate?: string;
-  lastRegisterDate?: string;
-  ratio?: string;
-  ownNumberOfShare?: number;
-  numberOfWaitingStock?: number;
-  amount?: number;
-  price?: number;
-  maxRegisterQuantity?: number;
-  registeredQuantity?: number;
-  [key: string]: unknown;
-}
-
-function numberOf(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const n = Number(value.replace(/[,_\s]/g, ""));
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
-
-function vndToThousand(vnd: unknown): number {
-  return numberOf(vnd) / 1000;
-}
-
-function payload<T>(json: FhscEnvelope<T>): T {
-  return (json.data ?? json.result ?? json) as T;
-}
-
-function rowsFrom<T>(raw: unknown, keys: string[] = ["data", "items", "rows", "records", "list"]): T[] {
-  if (Array.isArray(raw)) return raw as T[];
-  if (!raw || typeof raw !== "object") return [];
-  const obj = raw as Record<string, unknown>;
-  for (const key of keys) {
-    const value = obj[key];
-    if (Array.isArray(value)) return value as T[];
-  }
-  return [];
-}
-
-function isSuccess(json: FhscEnvelope): boolean {
-  const code = json.error_code;
-  return code == null || code === 0 || code === "0" || code === "SUCCESS";
-}
-
-function mapStatus(raw: string | undefined): OrderStatus {
-  switch ((raw ?? "").toUpperCase()) {
-    case "MATCHED_ALL":
-    case "COMPLETED":
-    case "FILLED":
-      return "FILLED";
-    case "CANCELLED":
-    case "CANCELED":
-      return "CANCELLED";
-    case "REJECTING":
-    case "REJECTED":
-    case "EXPIRED":
-      return "REJECTED";
-    default:
-      return "PENDING";
-  }
-}
-
-function mapSide(raw: unknown) {
-  const s = String(raw ?? "").toUpperCase();
-  return s === "S" || s.includes("SELL") || s.includes("BAN") || s.includes("BÁN") ? "SELL" : "BUY";
-}
-
-function parseDateSec(raw: unknown): number {
-  if (typeof raw !== "string" || !raw.trim()) return 0;
-  const direct = Date.parse(raw);
-  if (Number.isFinite(direct)) return Math.floor(direct / 1000);
-  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!m) return 0;
-  const [, dd, mm, yyyy] = m;
-  return Math.floor(Date.parse(`${yyyy}-${mm}-${dd}T00:00:00+07:00`) / 1000);
-}
-
-function normalizeDate(raw: unknown): string | null {
-  if (typeof raw !== "string" || !raw.trim()) return null;
-  const s = raw.trim();
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const dmy = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-  const parsed = Date.parse(s);
-  if (!Number.isFinite(parsed)) return null;
-  const d = new Date(parsed);
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function todayIso(): string {
-  const now = new Date();
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function inDateRange(raw: unknown, fromDate: string, toDate: string): boolean {
-  const d = normalizeDate(raw);
-  return d == null || (d >= fromDate && d <= toDate);
-}
-
-function todayRange(): { from: string; to: string } {
-  const date = todayIso();
-  return { from: date, to: date };
-}
-
-function normalizeBaseUrl(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, "");
-  return trimmed === LEGACY_FINHAY_GW_BASE ? DEFAULT_BASE : trimmed;
-}
-
-function normalizeOrder(o: FhscOrderItem): Order {
-  const rawType = String(o.orderType ?? o.order_type ?? "").toUpperCase();
-  const status = mapStatus(o.status);
-  const filledQty = numberOf(o.exec_qtty);
-  return {
-    id: String(o.order_id ?? o.id ?? ""),
-    broker: NAME,
-    ticker: String(o.symbol ?? "").toUpperCase(),
-    side: mapSide(o.side),
-    type: rawType === "LO" || rawType === "LIMIT" ? "LIMIT" : "MARKET",
-    quantity: numberOf(o.order_qtty ?? o.quantity),
-    limitPrice: o.price || o.order_price ? vndToThousand(o.price ?? o.order_price) : null,
-    status,
-    rejectReason: o.reject_reason ? String(o.reject_reason) : null,
-    createdAt: parseDateSec(o.tx_date ?? o.created_at),
-    filledAt: status === "FILLED" ? parseDateSec(o.tx_date ?? o.created_at) : null,
-    filledPrice: o.exec_price ? vndToThousand(o.exec_price) : null,
-    filledQty: filledQty || null,
-    notes: null,
-  };
-}
-
 export class FHSCBroker implements Broker {
   readonly name = NAME;
   private readonly baseUrl: string;
