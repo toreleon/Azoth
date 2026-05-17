@@ -17,8 +17,8 @@ export function abortActiveTeamRuns(): void {
 export const teamQuestionTool = tool(
   "team_question",
   [
-    "Run Azoth's multi-agent team on a complex market, portfolio, or allocation question.",
-    "Use this when the normal chat answer needs structured bull/bear/risk/portfolio debate instead of a quick single-agent response.",
+    "Run Azoth's agent-team orchestration flow on any complex market, portfolio, allocation, or single-ticker analysis request.",
+    "Use this when the normal chat answer needs coordinated bull/bear/risk/portfolio teammates instead of a quick single-agent response.",
     "Returns the final recommendation, reasons, risks, next actions, and run id.",
   ].join(" "),
   {
@@ -38,6 +38,11 @@ export const teamQuestionTool = tool(
         type: "team_question",
         runId: result.state.runId,
         asOfDateIso: result.decision.asOfDateIso,
+        orchestration: {
+          mode: "agent_team",
+          tasks: result.state.tasks,
+          messages: result.state.messages,
+        },
         decision: result.decision,
         risk: result.state.risk,
       });

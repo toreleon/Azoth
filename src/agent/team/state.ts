@@ -71,6 +71,8 @@ export interface TeamState {
   runId: string;
   ticker: string;
   asOfDateIso: string;
+  tasks: TeamTask[];
+  messages: TeamMessage[];
   analysts: AnalystReport[];
   research: ResearchReport[];
   researchPlan?: ResearchPlan;
@@ -81,6 +83,11 @@ export interface TeamState {
 
 export type TeamEvent =
   | { type: "run_start"; runId: string; ticker: string }
+  | { type: "task_created"; task: TeamTask }
+  | { type: "task_started"; task: TeamTask }
+  | { type: "task_completed"; task: TeamTask }
+  | { type: "task_failed"; task: TeamTask; message: string }
+  | { type: "message"; message: TeamMessage }
   | { type: "role_start"; role: RoleName; round?: number }
   | { type: "role_delta"; role: RoleName; text: string }
   | { type: "role_tool"; role: RoleName; tool: string; input?: string; toolUseId?: string }
@@ -95,6 +102,31 @@ export interface RoleUsage {
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
   costUsd?: number;
+}
+
+export type TeamTaskStatus = "pending" | "in_progress" | "completed" | "failed";
+export type TeamParticipant = RoleName | "lead" | "all";
+
+export interface TeamTask {
+  id: string;
+  title: string;
+  role: RoleName;
+  status: TeamTaskStatus;
+  dependsOn: string[];
+  round?: number;
+  claimedBy?: RoleName;
+  outputSummary?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TeamMessage {
+  id: string;
+  from: TeamParticipant;
+  to: TeamParticipant;
+  taskId?: string;
+  text: string;
+  createdAt: number;
 }
 
 // Zod schemas for parsing role JSON outputs from the LLM.

@@ -2,8 +2,10 @@ import {
   query,
   createSdkMcpServer,
   type Options,
+  type PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
 import { ohlcvTool, quoteTool } from "../tools/marketData.js";
+import { liveChartTool } from "../tools/liveChart.js";
 import { indicatorsTool } from "../tools/technical.js";
 import { fundamentalsTool } from "../tools/fundamentals.js";
 import { newsTool } from "../tools/news.js";
@@ -23,6 +25,7 @@ import {
 import { resolveClaudeCodeExecutable } from "./claudeCodeExecutable.js";
 import { spawnTrackedClaudeCodeProcess } from "./claudeProcess.js";
 import { loadConfig } from "../config/loader.js";
+import { rememberApprovedToolConsent, requireToolConsent } from "../tools/brokerConsent.js";
 import {
   activateSession,
   appendSessionRecord,
@@ -41,13 +44,14 @@ export function buildSystemPrompt(): string {
   const cfg = loadConfig();
   return [
     "You are Azoth, an investment analyst for the Vietnamese stock market (HOSE / HNX / UPCOM).",
-    cfg.autonomy === "advisory"
-      ? "Current autonomy mode: advisory. Order-placement tools are unavailable."
-      : `Current autonomy mode: ${cfg.autonomy}. Broker tools are available through the configured ${cfg.broker} broker, but every broker call requires explicit CLI approval first.`,
+    cfg.autonomy === "manual"
+      ? `Current autonomy mode: manual. Every tool call requires user approval before it runs. Broker tools use the configured ${cfg.broker} broker after approval.`
+      : `Current autonomy mode: auto. Tool calls run without approval prompts. Broker tools use the configured ${cfg.broker} broker and still pass risk guardrails.`,
     "",
     "Tools available:",
-    "- market_quote: latest reference / ceiling / floor / company info (SSI iBoard).",
+    "- market_quote: live SSI iBoard quote: matched price, change, volume, bid/ask, reference / ceiling / floor, company info.",
     "- market_ohlcv: OHLCV bars for a stock or index (DNSE).",
+    "- live_chart: fetch realtime/intraday OHLCV candles and show an interactive chart in the desktop app. Use resolution='1' or '5' for live/current chart requests; use '1D' only when the user asks for daily/historical candles.",
     "- technical_indicators: compute RSI / MACD / SMA / EMA / Bollinger from DNSE bars.",
     "- fundamentals_snapshot: P/E, P/B, ROE, ROA, EPS, BVPS, market cap, recent quarterly ratios (VNDirect Finfo + CafeF).",
     "- ticker_news: recent news, industry news, and company disclosures from CafeF.",
@@ -55,13 +59,11 @@ export function buildSystemPrompt(): string {
     "- macro_indices: VNINDEX/VN30/HNXINDEX/UPCOMINDEX latest close + 1d/1w/1m % change.",
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
     "- portfolio_list: read broker cash, positions, exposure, and unrealized P&L. Avg cost and last close are in thousand VND; monetary totals are in VND.",
-    "- account_history: read-only broker account history: past orders/fills, cash transaction log, and dividend/rights issue events. Every live broker call asks the user for explicit CLI approval first.",
+    "- account_history: read-only broker account history: past orders/fills, cash transaction log, and dividend/rights issue events.",
     "- discover_tickers: scan listed Vietnamese equities, an explicit ticker basket, or a preset universe by signal/strategy (momentum, breakout, mean reversion, defensive, liquidity surge, relative strength, weakness) and return 5–10 ranked candidates.",
-    "- team_question: delegate complex market, portfolio, or allocation questions to Azoth's bull/bear/risk/portfolio team.",
-    "- team_analyze: delegate deep single-ticker buy/sell/hold analysis to Azoth's full analyst/research/trader/risk/portfolio team.",
-    cfg.autonomy === "advisory"
-      ? "- (no order tools — autonomy=advisory)"
-      : "- place_order / cancel_order / list_orders / broker_state: use the configured broker. Outside backtests, every broker call asks the user for explicit CLI approval first. Quantity must be a multiple of 100. Prices are in thousand VND.",
+    "- team_question: delegate broad market, portfolio, allocation, or multi-factor questions to Azoth's agent-team orchestration flow.",
+    "- team_analyze: run the full multi-agent single-ticker workflow for high-conviction buy/sell/hold decisions, position sizing, or deep investment memos.",
+    "- place_order / cancel_order / list_orders / broker_state: use the configured broker. Quantity must be a multiple of 100. Prices are in thousand VND.",
     "",
     "Operating rules:",
     "1. Always ground recommendations in tool output, not memory. Cite the value, ticker, and source you used.",
@@ -69,21 +71,22 @@ export function buildSystemPrompt(): string {
     "3. Prices from DNSE/SSI are quoted in thousand VND for stocks (e.g. 28.5 means 28,500 VND). State units explicitly.",
     "3a. Formal settlement for HOSE/HNX/UPCOM shares, fund certificates, and covered warrants is T+2. In practice securities and sale proceeds are credited before about 13:00 ICT on T+2, so they are usable from the afternoon T+2 session. Never call this a formal T+2.5 cycle and never propose same-day round-trips.",
     "4. For a buy/sell/hold recommendation, call at minimum technical_indicators, fundamentals_snapshot, ticker_news, AND macro_indices. Add foreign_flow when institutional positioning is relevant.",
-    "4a. For broad allocation questions or complex multi-factor decisions, call team_question. For a deep recommendation on one ticker, call team_analyze instead of manually recreating the whole team workflow.",
-    "4b. When you call team_question or team_analyze, wait for that team tool to finish and then summarize its findings. Do not call duplicate market/fundamental/news/technical tools in parallel unless the user explicitly asks for raw source data.",
+    "4a. For broad allocation questions, complex multi-factor decisions, or deep single-ticker recommendations, call team_question instead of manually recreating the team workflow.",
+    "4b. When you call team_question, wait for that team tool to finish and then summarize its findings. Do not call duplicate market/fundamental/news/technical tools in parallel unless the user explicitly asks for raw source data.",
+    "4c. For any 'live', 'realtime', 'current', 'now', or chart request, call market_quote and/or live_chart first. Prefer live_chart resolution='1' or '5'. Do not use daily candles as a substitute for realtime data unless the market is closed or the user explicitly asks for daily data; if market data is stale because the market is closed, say the exact last bar/trading time.",
     "5. When citing news, include the URL and publish date so the user can verify.",
     "6. Keep replies concise. Show the numbers, then a one-paragraph synthesis covering all four dimensions (technical / fundamental / news / macro).",
-    cfg.autonomy === "advisory"
-      ? "7. Order-placement tools are NOT available in advisory mode. Recommend; do not claim to have placed an order. The user executes manually."
-      : `7. Broker tools ARE available (autonomy=${cfg.autonomy}, broker=${cfg.broker}). Outside backtests, every broker read or write first asks the user for explicit CLI approval; approved orders then go through risk guardrails.`,
+    cfg.autonomy === "manual"
+      ? `7. Manual mode: ask for approval through the tool-permission flow before every tool call. Approved broker orders still go through risk guardrails.`
+      : `7. Auto mode: tool calls run without approval prompts (autonomy=auto, broker=${cfg.broker}). Broker orders still go through risk guardrails.`,
   ].join("\n");
 }
 
 export function buildMcpServer() {
-  const cfg = loadConfig();
   const baseTools = [
     quoteTool,
     ohlcvTool,
+    liveChartTool,
     indicatorsTool,
     fundamentalsTool,
     newsTool,
@@ -101,15 +104,62 @@ export function buildMcpServer() {
     listOrdersTool,
     brokerStateTool,
   ];
-  const tools =
-    cfg.autonomy === "advisory"
-      ? baseTools
-      : [...baseTools, ...orderTools];
+  const tools = [...baseTools, ...orderTools];
   // SDK accepts a heterogeneous tool array; widen the element type.
   return createSdkMcpServer({
     name: "azoth",
     tools: tools as unknown as Parameters<typeof createSdkMcpServer>[0]["tools"],
   });
+}
+
+const ALL_ALLOWED_TOOLS = [
+  "WebSearch",
+  "mcp__azoth__market_quote",
+  "mcp__azoth__market_ohlcv",
+  "mcp__azoth__live_chart",
+  "mcp__azoth__technical_indicators",
+  "mcp__azoth__fundamentals_snapshot",
+  "mcp__azoth__ticker_news",
+  "mcp__azoth__macro_indices",
+  "mcp__azoth__foreign_flow",
+  "mcp__azoth__portfolio_list",
+  "mcp__azoth__account_history",
+  "mcp__azoth__discover_tickers",
+  "mcp__azoth__team_question",
+  "mcp__azoth__team_analyze",
+  "mcp__azoth__place_order",
+  "mcp__azoth__cancel_order",
+  "mcp__azoth__list_orders",
+  "mcp__azoth__broker_state",
+];
+
+function normalizeToolName(name: string | undefined): string | undefined {
+  return name?.replace(/^mcp__[^_]+__/, "");
+}
+
+function summarizeToolInput(input: Record<string, unknown>): string {
+  const json = JSON.stringify(input);
+  if (!json || json === "{}") return "";
+  return json.length > 1200 ? `${json.slice(0, 1200)}...` : json;
+}
+
+async function canUseTool(toolName: string, input: Record<string, unknown>): Promise<PermissionResult> {
+  const action = normalizeToolName(toolName) ?? toolName;
+  const ok = await requireToolConsent(action, summarizeToolInput(input), toolName);
+  if (!ok) {
+    return {
+      behavior: "deny",
+      message: "User declined this tool call.",
+      interrupt: true,
+    };
+  }
+  if (["portfolio_list", "account_history", "place_order", "cancel_order", "list_orders", "broker_state"].includes(action)) {
+    rememberApprovedToolConsent(action);
+  }
+  return {
+    behavior: "allow",
+    updatedInput: input,
+  };
 }
 
 export function buildOptions(opts: { resume?: string; abortController?: AbortController } = {}): Options {
@@ -130,29 +180,10 @@ export function buildOptions(opts: { resume?: string; abortController?: AbortCon
     // are unnecessary for an analyst agent and can confuse non-Claude models
     // like GLM into recursive subagent calls.
     tools: ["WebSearch"],
-    allowedTools: [
-      "WebSearch",
-      "mcp__azoth__market_quote",
-      "mcp__azoth__market_ohlcv",
-      "mcp__azoth__technical_indicators",
-      "mcp__azoth__fundamentals_snapshot",
-      "mcp__azoth__ticker_news",
-      "mcp__azoth__macro_indices",
-      "mcp__azoth__foreign_flow",
-      "mcp__azoth__portfolio_list",
-      "mcp__azoth__account_history",
-      "mcp__azoth__discover_tickers",
-      "mcp__azoth__team_question",
-      "mcp__azoth__team_analyze",
-      ...(cfg.autonomy === "advisory"
-        ? []
-        : [
-            "mcp__azoth__place_order",
-            "mcp__azoth__cancel_order",
-            "mcp__azoth__list_orders",
-            "mcp__azoth__broker_state",
-          ]),
-    ],
+    allowedTools: cfg.autonomy === "auto" ? ALL_ALLOWED_TOOLS : [],
+    ...(cfg.autonomy === "auto"
+      ? { permissionMode: "bypassPermissions" as const, allowDangerouslySkipPermissions: true }
+      : { permissionMode: "default" as const, canUseTool }),
   };
 }
 
@@ -336,6 +367,7 @@ export async function* runTurn(
   type TextBlock = { type: "assistant" | "thinking"; text: string };
   type ToolBlock = { type: "tool_use"; toolName?: string; toolUseId?: string; toolInput: string };
   let currentBlock: TextBlock | ToolBlock | null = null;
+  const toolNameByUseId = new Map<string, string>();
 
   const flushCurrentBlock = () => {
     if (!currentBlock) return;
@@ -355,6 +387,9 @@ export async function* runTurn(
         }, cwd);
       }
     } else if (currentBlock.type === "tool_use") {
+      if (currentBlock.toolUseId && currentBlock.toolName) {
+        toolNameByUseId.set(currentBlock.toolUseId, currentBlock.toolName);
+      }
       appendSessionRecord(localSessionId, {
         ...base,
         type: "tool_use",
@@ -417,12 +452,17 @@ export async function* runTurn(
                       : Array.isArray(c.content)
                         ? c.content.map((x: any) => x?.text ?? "").join("")
                         : JSON.stringify(c.content);
+                    const toolName = typeof c.tool_use_id === "string"
+                      ? toolNameByUseId.get(c.tool_use_id)
+                      : undefined;
+                    const maxTextLength = normalizeToolName(toolName) === "live_chart" ? 160_000 : 4000;
                     appendSessionRecord(localSessionId, {
                       type: "tool_result",
                       timestamp: Date.now(),
                       sessionId: localSessionId,
                       cwd,
-                      text: text.slice(0, 4000),
+                      text: text.slice(0, maxTextLength),
+                      toolName,
                       toolUseId: c.tool_use_id,
                       model: cfg.model,
                       autonomy: cfg.autonomy,

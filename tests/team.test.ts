@@ -80,7 +80,7 @@ describe("runTeamAnalysis", () => {
     writeFileSync(
       viConfig,
       [
-        "autonomy: advisory",
+        "autonomy: manual",
         "model: claude-sonnet-4-6",
         "team:",
         "  quick_model: claude-haiku-4-6",

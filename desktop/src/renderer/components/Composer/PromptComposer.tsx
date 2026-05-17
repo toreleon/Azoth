@@ -20,9 +20,7 @@ function parseSlash(input: string): { name: string; args: string } | null {
 function promptForSlash(name: string, args: string): string | null {
   switch (name) {
     case "team":
-      return args ? `Run a multi-agent debate on this question: ${args}` : null;
-    case "analyze":
-      return args ? `Run a structured team analysis for ${args}.` : null;
+      return args ? `Run agent-team orchestration for this request: ${args}` : null;
     case "backtest":
       return `Run an interval backtest with these arguments: ${args || "default previous calendar week"}.`;
     case "quote":

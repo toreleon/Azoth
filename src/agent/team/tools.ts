@@ -1,5 +1,6 @@
 import { createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { ohlcvTool, quoteTool } from "../../tools/marketData.js";
+import { liveChartTool } from "../../tools/liveChart.js";
 import { indicatorsTool } from "../../tools/technical.js";
 import { fundamentalsTool } from "../../tools/fundamentals.js";
 import { newsTool } from "../../tools/news.js";
@@ -14,6 +15,7 @@ type AnyTool = NonNullable<Parameters<typeof createSdkMcpServer>[0]["tools"]>[nu
 const TOOL_BY_NAME: Record<string, AnyTool> = {
   market_quote: quoteTool as unknown as AnyTool,
   market_ohlcv: ohlcvTool as unknown as AnyTool,
+  live_chart: liveChartTool as unknown as AnyTool,
   technical_indicators: indicatorsTool as unknown as AnyTool,
   fundamentals_snapshot: fundamentalsTool as unknown as AnyTool,
   ticker_news: newsTool as unknown as AnyTool,
@@ -29,7 +31,7 @@ const TOOL_BY_NAME: Record<string, AnyTool> = {
  * roles get nothing — their job is synthesis over prior state.
  */
 export const ROLE_TOOLS: Record<RoleName, string[]> = {
-  technical: ["market_quote", "market_ohlcv", "technical_indicators"],
+  technical: ["market_quote", "live_chart", "market_ohlcv", "technical_indicators"],
   fundamentals: ["fundamentals_snapshot", "market_quote"],
   news: ["ticker_news", "macro_indices"],
   sentiment: ["ticker_news", "foreign_flow"],

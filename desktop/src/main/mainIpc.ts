@@ -523,8 +523,8 @@ export function registerIpcHandlers(): void {
           text = `Current autonomy mode: ${loadConfig().autonomy}`;
           break;
         }
-        if (!["advisory", "confirm", "auto"].includes(mode)) {
-          text = "Usage: /autonomy <advisory|confirm|auto>";
+        if (!["manual", "auto"].includes(mode)) {
+          text = "Usage: /autonomy <manual|auto>";
           break;
         }
         const next = updateConfig({ autonomy: mode as Config["autonomy"] });
@@ -539,9 +539,6 @@ export function registerIpcHandlers(): void {
         break;
       case "team":
         text = "Usage: /team <message>";
-        break;
-      case "analyze":
-        text = "Usage: /analyze <ticker> [--rounds N]";
         break;
       case "quote":
         text = "Usage: /quote <ticker>";

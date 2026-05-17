@@ -171,13 +171,12 @@ function GeneralPane({
       <Group>
         <SettingRow
           label="Autonomy mode"
-          hint="Controls when Azoth asks before placing orders or running tools."
+          hint="Manual asks before every tool call. Auto runs tools without approval prompts."
           control={
             <Segmented
-              value={config?.autonomy ?? "advisory"}
+              value={config?.autonomy ?? "manual"}
               options={[
-                { value: "advisory", label: "Advisory" },
-                { value: "confirm", label: "Confirm" },
+                { value: "manual", label: "Manual" },
                 { value: "auto", label: "Auto" },
               ]}
               onChange={(autonomy) => void onSave({ autonomy })}

@@ -39,8 +39,6 @@ function SlashIcon({ name }: { name: string }) {
   switch (name) {
     case "team":
       return <Icon><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" /><path d="M3 19a5 5 0 0 1 10 0" /><path d="M16 10a2.5 2.5 0 1 0 0-5" /><path d="M16 14c2.4.2 4 1.8 4 4" /></Icon>;
-    case "analyze":
-      return <Icon><path d="M4 19V5" /><path d="M4 19h16" /><path d="M8 15l3-4 3 2 4-6" /><path d="M18 7h-3" /><path d="M18 7v3" /></Icon>;
     case "backtest":
       return <Icon><path d="M4 5h16v14H4z" /><path d="M8 3v4M16 3v4M4 9h16" /><path d="M8 14h2M13 14h3" /></Icon>;
     case "quote":

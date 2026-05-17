@@ -1,7 +1,7 @@
 export const DEFAULT_CONFIG_YAML = `# Azoth configuration
 
-# advisory | confirm | auto
-autonomy: advisory
+# manual | auto
+autonomy: manual
 
 # Default model for the orchestrator.
 model: glm-5.1

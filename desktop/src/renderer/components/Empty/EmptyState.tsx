@@ -2,7 +2,7 @@ import { useChatStore } from "../../store/chatStore.js";
 
 const QUICK_ACTIONS = [
   { label: "Quote VNM", prompt: "/quote VNM" },
-  { label: "Analyze HPG", prompt: "/analyze HPG" },
+  { label: "Team HPG", prompt: "/team HPG recommendation" },
   { label: "Show positions", prompt: "/positions" },
   { label: "Health probe", prompt: "/health --probe" },
 ];

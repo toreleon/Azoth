@@ -14,7 +14,7 @@ export function ConsentToast() {
   return (
     <div className="fixed bottom-6 right-6 z-40 w-80 rounded-xl border border-azoth-warn/40 bg-azoth-surface p-4 shadow-xl">
       <div className="mb-1 text-xs uppercase tracking-wider text-azoth-warn">
-        Broker action requested
+        Tool approval requested
       </div>
       <div className="mb-1 text-sm text-azoth-text">{consent.action}</div>
       {consent.detail && (
@@ -23,7 +23,7 @@ export function ConsentToast() {
         </div>
       )}
       <div className="mb-3 text-[10px] uppercase tracking-wider text-azoth-muted">
-        broker={consent.broker} · autonomy={consent.autonomy}
+        broker={consent.broker} · mode={consent.autonomy}
       </div>
       <div className="flex gap-2">
         <button

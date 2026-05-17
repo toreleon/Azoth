@@ -24,7 +24,7 @@ function filterHistory(history: BrokerAccountHistory, kind: HistoryKind): Broker
 
 export const accountHistoryTool = tool(
   "account_history",
-  "Read-only broker account history: past orders/fills, cash transaction log, and dividend/rights issue events. Outside backtests, the user is always prompted in the CLI before any broker call. Dates are YYYY-MM-DD; default range is the last 365 days.",
+  "Read-only broker account history: past orders/fills, cash transaction log, and dividend/rights issue events. In manual mode, the user is prompted before the tool runs. Dates are YYYY-MM-DD; default range is the last 365 days.",
   {
     kind: z.enum(["all", "orders", "fills", "transactions", "rights"]).default("all"),
     from_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

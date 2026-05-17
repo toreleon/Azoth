@@ -1,6 +1,7 @@
 import type { ChatRecord } from "../../../shared/ipc.js";
 import { MarkdownContent } from "./MarkdownContent.js";
 import { isTeamToolName, TeamResultCard } from "./TeamResultCard.js";
+import { isLiveChartToolName, MarketChartCard } from "./MarketChartCard.js";
 import { ToolChip } from "./ToolChip.js";
 
 export function Block({ record }: { record: ChatRecord }) {
@@ -27,6 +28,14 @@ export function Block({ record }: { record: ChatRecord }) {
         </article>
       );
     case "tool_use":
+      if (isLiveChartToolName(record.toolName) && record.text) {
+        const fallback = (
+          <article className="turn tool-turn">
+            <ToolChip record={record} state="done" />
+          </article>
+        );
+        return <MarketChartCard record={record} fallback={fallback} />;
+      }
       if (isTeamToolName(record.toolName) && record.text) {
         const fallback = (
           <article className="turn tool-turn">
@@ -41,6 +50,14 @@ export function Block({ record }: { record: ChatRecord }) {
         </article>
       );
     case "tool_result":
+      if (isLiveChartToolName(record.toolName) && record.text) {
+        const fallback = (
+          <article className="turn tool-turn">
+            <ToolChip record={record} state="done" />
+          </article>
+        );
+        return <MarketChartCard record={record} fallback={fallback} />;
+      }
       if (isTeamToolName(record.toolName) && record.text) {
         const fallback = (
           <article className="turn tool-turn">
