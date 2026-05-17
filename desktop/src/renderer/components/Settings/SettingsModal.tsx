@@ -2,6 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import type { DesktopSettings } from "../../../shared/ipc.js";
 import {
+  ArrowLeftIcon,
+  BrokerIcon,
+  ChevronRightIcon,
+  EyeIcon,
+  FolderIcon,
+  InfoIcon,
+  ModelIcon,
+  RefreshIcon,
+  SettingsIcon,
+  SlidersIcon,
+  AlertIcon,
+} from "../Icon.js";
+import {
   availableModelOrDefault,
   modelIsAvailable,
   normalizeProvider,
@@ -17,13 +30,13 @@ interface Props {
 }
 
 const panes: Array<{ id: Pane; label: string; icon: React.ReactNode; group?: "primary" | "secondary" }> = [
-  { id: "general", label: "General", icon: <GeneralIcon /> },
+  { id: "general", label: "General", icon: <SettingsIcon /> },
   { id: "models", label: "Models", icon: <ModelIcon /> },
   { id: "broker", label: "Broker", icon: <BrokerIcon /> },
-  { id: "risk", label: "Risk", icon: <RiskIcon /> },
-  { id: "sessions", label: "Data & Sessions", icon: <SessionsIcon />, group: "secondary" },
-  { id: "advanced", label: "Advanced", icon: <AdvancedIcon />, group: "secondary" },
-  { id: "about", label: "About", icon: <AboutIcon />, group: "secondary" },
+  { id: "risk", label: "Risk", icon: <AlertIcon /> },
+  { id: "sessions", label: "Data & Sessions", icon: <FolderIcon />, group: "secondary" },
+  { id: "advanced", label: "Advanced", icon: <SlidersIcon />, group: "secondary" },
+  { id: "about", label: "About", icon: <InfoIcon />, group: "secondary" },
 ];
 
 export function SettingsModal({ onClose }: Props) {
@@ -91,7 +104,7 @@ export function SettingsModal({ onClose }: Props) {
         <div className="settings-body">
           <nav className="settings-nav" aria-label="Settings sections">
             <button className="settings-back-btn" onClick={onClose}>
-              <BackIcon />
+              <ArrowLeftIcon />
               Back to app
             </button>
             {primary.map((item) => (
@@ -516,7 +529,7 @@ function BrokerPane({
   return (
     <PaneShell title="Broker" subtitle="Where Azoth places orders. Paper trading is the default and uses no real money.">
       <div className="settings-banner warn">
-        <RiskIcon />
+        <AlertIcon />
         <div>
           Live broker connections place <strong>real orders</strong>. Azoth uses your saved Risk limits as a hard
           ceiling, but a misconfigured strategy can still lose money.
@@ -587,7 +600,7 @@ function BrokerPane({
 
       <details className="settings-advanced">
         <summary>
-          <ChevronIcon />
+          <ChevronRightIcon />
           Advanced - session tokens and device binding
         </summary>
         <Group>
@@ -1083,47 +1096,6 @@ function PasswordField({
   );
 }
 
-function Svg({ children }: { children: React.ReactNode }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {children}
-    </svg>
-  );
-}
-
-function GeneralIcon() {
-  return <Svg><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></Svg>;
-}
-function ModelIcon() {
-  return <Svg><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4z" /></Svg>;
-}
-function BrokerIcon() {
-  return <Svg><path d="M3 21V10l9-6 9 6v11" /><path d="M9 21v-7h6v7" /></Svg>;
-}
-function RiskIcon() {
-  return <Svg><path d="M12 2 2 22h20L12 2z" /><path d="M12 9v5M12 17.5v.1" /></Svg>;
-}
-function SessionsIcon() {
-  return <Svg><path d="M3 5a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z" /></Svg>;
-}
-function AdvancedIcon() {
-  return <Svg><path d="M4 7h16M4 12h16M4 17h10" /></Svg>;
-}
-function AboutIcon() {
-  return <Svg><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v5h1" /></Svg>;
-}
-function BackIcon() {
-  return <Svg><path d="M15 18l-6-6 6-6" /><path d="M9 12h11" /></Svg>;
-}
-function RefreshIcon() {
-  return <Svg><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8" /><path d="M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16" /><path d="M20 20v-4h-4" /></Svg>;
-}
-function EyeIcon() {
-  return <Svg><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></Svg>;
-}
-function ChevronIcon() {
-  return <svg viewBox="0 0 10 10" fill="currentColor" aria-hidden="true"><path d="M3 1l4 4-4 4z" /></svg>;
-}
 function AzothMark() {
   return (
     <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">

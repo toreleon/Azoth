@@ -4,6 +4,7 @@ import { useChatStore } from "../../store/chatStore.js";
 import { SlashSuggest } from "./SlashSuggest.js";
 import { ModelPicker } from "./ModelPicker.js";
 import { AutonomyPicker } from "./AutonomyPicker.js";
+import { MicIcon, PlusIcon, SendIcon, StopIcon } from "../Icon.js";
 
 function newTurnId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -312,7 +313,7 @@ export function PromptComposer() {
           <span className="grow" />
           <ModelPicker />
           <button type="button" className="icon-btn" title="Voice input">
-            <VoiceIcon />
+            <MicIcon />
           </button>
           {streaming ? (
             <button onClick={abort} className="stop-btn" title="Stop">
@@ -331,67 +332,5 @@ export function PromptComposer() {
         </div>
       </div>
     </div>
-  );
-}
-
-function VoiceIcon() {
-  return (
-    <svg
-      viewBox="0 0 14 14"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <rect x="5.5" y="2" width="3" height="6.5" rx="1.5" />
-      <path d="M3.5 7a3.5 3.5 0 0 0 7 0M7 10.5v1.5" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      className="h-3.5 w-3.5"
-      viewBox="0 0 14 14"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M7 2.5v9M2.5 7h9" />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg
-      className="h-3.5 w-3.5"
-      viewBox="0 0 14 14"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M7 11.2V2.8M3.3 6.5 7 2.8l3.7 3.7" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg
-      className="h-3.5 w-3.5"
-      viewBox="0 0 14 14"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <rect x="3.25" y="3.25" width="7.5" height="7.5" rx="1.4" />
-    </svg>
   );
 }

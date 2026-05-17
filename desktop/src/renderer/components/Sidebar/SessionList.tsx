@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { SessionDescriptor } from "../../../shared/ipc.js";
+import { ArchiveIcon } from "../Icon.js";
 import { useChatStore } from "../../store/chatStore.js";
 
 const UNDO_MS = 5000;
@@ -9,7 +10,7 @@ interface PendingArchive {
   startedAt: number;
 }
 
-export function SessionList() {
+export function SessionList({ onOpenSession }: { onOpenSession?: () => void }) {
   const {
     sessions,
     activeProjectId,
@@ -36,6 +37,7 @@ export function SessionList() {
     });
     setRecords(session.id, records);
     setActiveSession(session.id);
+    onOpenSession?.();
   }
 
   function clearPendingTimer() {
@@ -150,20 +152,4 @@ function formatAge(timestamp: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
   return `${Math.floor(days / 7)}w`;
-}
-
-function ArchiveIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 4h12M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1M6.5 7.5h3" />
-    </svg>
-  );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChatRecord } from "../../../shared/ipc.js";
+import { AlertIcon, CheckIcon, ChevronDownIcon, ListIcon } from "../Icon.js";
 import { summarizeToolInput, toolLabel } from "../../lib/toolSummary.js";
 
 const MAX_BODY_LINES = 8;
@@ -170,31 +171,14 @@ function truncateText(text: string, max: number): string {
 
 function ToolIcon({ state }: { state: "running" | "done" | "error" }) {
   if (state === "error") {
-    return (
-      <svg className="ticon" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="7" cy="7" r="5.2" />
-        <path d="M7 4.5v3M7 9.5v.01" />
-      </svg>
-    );
+    return <AlertIcon className="ticon" />;
   }
   if (state === "running") {
-    return (
-      <svg className="ticon" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2.5 3.5h9M2.5 7h9M2.5 10.5h6" />
-      </svg>
-    );
+    return <ListIcon className="ticon" />;
   }
-  return (
-    <svg className="ticon" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 10.5 5.5 7l2.5 2.5L12 4" />
-    </svg>
-  );
+  return <CheckIcon className="ticon" />;
 }
 
 function ChevronIcon() {
-  return (
-    <svg className="chev" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m2 3.5 3 3 3-3" />
-    </svg>
-  );
+  return <ChevronDownIcon className="chev" />;
 }

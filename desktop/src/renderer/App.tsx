@@ -6,12 +6,17 @@ import { PromptComposer } from "./components/Composer/PromptComposer.js";
 import { Onboarding } from "./components/Onboarding/Onboarding.js";
 import { ConsentToast } from "./components/Consent/ConsentToast.js";
 import { SettingsModal } from "./components/Settings/SettingsModal.js";
+import { AgentPanel } from "./components/AgentPanel/AgentPanel.js";
+import { MarketView } from "./components/Market/MarketView.js";
 import { useStreamBridge } from "./lib/streamBridge.js";
 import { useChatStore } from "./store/chatStore.js";
+
+type AppView = "chat" | "markets";
 
 export function App() {
   useStreamBridge();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [view, setView] = useState<AppView>("chat");
   const {
     activeProjectId,
     activeSessionId,
@@ -86,12 +91,12 @@ export function App() {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const activeProject = projects.find((p) => p.id === activeProjectId);
-  const windowTitle = `${activeSession?.title ?? "New chat"}${
+  const windowTitle = `${view === "markets" ? "Markets" : activeSession?.title ?? "New chat"}${
     activeProject?.name ? ` - ${activeProject.name}` : ""
   }`;
 
   return (
-    <div className="app">
+    <div className={`app ${view === "markets" ? "is-markets" : ""}`}>
       <div className="titlebar">
         <div className="traffic">
           <span />
@@ -100,11 +105,23 @@ export function App() {
         </div>
         <div className="titlebar-title">{windowTitle}</div>
       </div>
-      <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
+      <Sidebar
+        activeView={view}
+        onOpenChat={() => setView("chat")}
+        onOpenMarkets={() => setView("markets")}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       <main className="main">
-        {activeSessionId ? <ChatView sessionId={activeSessionId} /> : <EmptyState />}
-        <PromptComposer />
+        {view === "markets" ? (
+          <MarketView />
+        ) : (
+          <>
+            {activeSessionId ? <ChatView sessionId={activeSessionId} /> : <EmptyState />}
+            <PromptComposer />
+          </>
+        )}
       </main>
+      {view === "chat" ? <AgentPanel /> : null}
       <ConsentToast />
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>

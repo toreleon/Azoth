@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { ChevronDownIcon } from "../Icon.js";
 import { availableModelOrDefault, normalizeProvider } from "../../lib/providerModels.js";
 import { useProviderModels } from "../../lib/useProviderModels.js";
 import { useChatStore } from "../../store/chatStore.js";
@@ -48,15 +49,7 @@ export function ModelPicker() {
           </option>
         ))}
       </select>
-      <ChevronIcon />
+      <ChevronDownIcon className="grip" />
     </label>
-  );
-}
-
-function ChevronIcon() {
-  return (
-    <svg className="grip" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="m3 5 3 3 3-3" />
-    </svg>
   );
 }

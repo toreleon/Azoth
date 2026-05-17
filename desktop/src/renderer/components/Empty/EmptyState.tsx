@@ -44,7 +44,7 @@ function ProjectIndicator() {
   if (!project) return null;
   return (
     <div className="project-indicator">
-      Project: <span className="text-azoth-text">{project.name}</span>
+      Project: <strong>{project.name}</strong>
     </div>
   );
 }

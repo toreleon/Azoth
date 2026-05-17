@@ -1,4 +1,16 @@
+import type React from "react";
 import { matchSlash, type SlashCommand } from "../../../shared/slashCommands.js";
+import {
+  CalendarIcon,
+  ChartIcon,
+  HeartbeatIcon,
+  InfoIcon,
+  ListIcon,
+  NewChatIcon,
+  PositionsIcon,
+  ShieldIcon,
+  UsersIcon,
+} from "../Icon.js";
 
 interface Props {
   input: string;
@@ -38,34 +50,32 @@ function displayName(name: string): string {
 function SlashIcon({ name }: { name: string }) {
   switch (name) {
     case "team":
-      return <Icon><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" /><path d="M3 19a5 5 0 0 1 10 0" /><path d="M16 10a2.5 2.5 0 1 0 0-5" /><path d="M16 14c2.4.2 4 1.8 4 4" /></Icon>;
+      return <IconSlot><UsersIcon /></IconSlot>;
     case "backtest":
-      return <Icon><path d="M4 5h16v14H4z" /><path d="M8 3v4M16 3v4M4 9h16" /><path d="M8 14h2M13 14h3" /></Icon>;
+      return <IconSlot><CalendarIcon /></IconSlot>;
     case "quote":
-      return <Icon><path d="M4 17l5-5 3 3 7-8" /><path d="M15 7h4v4" /><path d="M4 5h5" /></Icon>;
+      return <IconSlot><ChartIcon /></IconSlot>;
     case "positions":
-      return <Icon><path d="M4 19V5" /><path d="M4 19h16" /><path d="M8 16V9M12 16V6M16 16v-4" /></Icon>;
+      return <IconSlot><PositionsIcon /></IconSlot>;
     case "autonomy":
-      return <Icon><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z" /><path d="M9 12l2 2 4-5" /></Icon>;
+      return <IconSlot><ShieldIcon /></IconSlot>;
     case "health":
-      return <Icon><path d="M20 12h-4l-2 5-4-10-2 5H4" /></Icon>;
+      return <IconSlot><HeartbeatIcon /></IconSlot>;
     case "about":
-      return <Icon><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v5h1" /></Icon>;
+      return <IconSlot><InfoIcon /></IconSlot>;
     case "new":
-      return <Icon><path d="M12 5v14M5 12h14" /><circle cx="12" cy="12" r="9" /></Icon>;
+      return <IconSlot><NewChatIcon /></IconSlot>;
     case "sessions":
-      return <Icon><path d="M4 6h16M4 12h16M4 18h10" /></Icon>;
+      return <IconSlot><ListIcon /></IconSlot>;
     default:
-      return <Icon><path d="M6 9l6-5v16l6-5" /></Icon>;
+      return <IconSlot><ListIcon /></IconSlot>;
   }
 }
 
-function Icon({ children }: { children: React.ReactNode }) {
+function IconSlot({ children }: { children: React.ReactNode }) {
   return (
     <span className="slash-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        {children}
-      </svg>
+      {children}
     </span>
   );
 }

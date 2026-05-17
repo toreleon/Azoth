@@ -59,6 +59,8 @@ function buildOptions(
     tools,
     mcpServers: { [mcpName]: buildRoleMcpServer(role) },
     allowedTools,
+    permissionMode: "bypassPermissions",
+    allowDangerouslySkipPermissions: true,
   };
   return opts;
 }

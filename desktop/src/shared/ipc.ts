@@ -85,6 +85,63 @@ export interface HealthReport {
   rows: HealthRow[];
 }
 
+export interface MarketBar {
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+export interface MarketIndexOverview {
+  symbol: string;
+  name: string;
+  exchange: string;
+  kind?: "index" | "stock";
+  industry?: string;
+  latestClose?: number;
+  previousClose?: number;
+  change?: number;
+  changePct?: number;
+  high?: number;
+  low?: number;
+  volume?: number;
+  marketCap?: number;
+  updatedAt?: number;
+  bars: MarketBar[];
+  overlays?: {
+    sma20?: Array<{ t: number; value: number }>;
+    ema20?: Array<{ t: number; value: number }>;
+    rma14?: Array<{ t: number; value: number }>;
+  };
+  forecast?: {
+    method: string;
+    nextClose?: number;
+    changePct?: number;
+    direction: "up" | "down" | "flat";
+    confidence: "low" | "medium" | "high";
+  };
+  quote?: {
+    bestBid?: number;
+    bestOffer?: number;
+    matchedVolume?: number;
+    session?: string;
+    tradingStatus?: string;
+  };
+  error?: string;
+}
+
+export interface MarketOverview {
+  updatedAt: number;
+  indices: MarketIndexOverview[];
+}
+
+export interface MarketHeatmap {
+  updatedAt: number;
+  assets: MarketIndexOverview[];
+}
+
 export interface DesktopSettings {
   launchAtLogin: boolean;
   hideOnClose: boolean;
@@ -173,6 +230,26 @@ export const HealthProbeReq = z.object({
   probe: z.boolean().default(false),
 });
 
+export const MarketOverviewReq = z
+  .object({
+    resolution: z.enum(["1", "5", "15", "30", "1H", "1D", "1W", "1M"]).default("1D"),
+    bars: z.number().int().min(20).max(240).default(90),
+  })
+  .optional();
+
+export const MarketAssetReq = z.object({
+  symbol: z.string().min(1).max(12),
+  kind: z.enum(["stock", "index"]).optional(),
+  resolution: z.enum(["1", "5", "15", "30", "1H", "1D", "1W", "1M"]).default("1D"),
+  bars: z.number().int().min(20).max(240).default(120),
+});
+
+export const MarketHeatmapReq = z
+  .object({
+    includeIndexes: z.boolean().default(true),
+  })
+  .optional();
+
 export const CreateProjectReq = z.object({
   name: z.string().min(1),
   rootPath: z.string().optional(),
@@ -215,6 +292,9 @@ export interface IpcChannelMap {
   "app-settings:save": { req: z.infer<typeof SaveDesktopSettingsReq>; res: DesktopSettings };
   "broker:state": { req: undefined; res: unknown };
   "health:probe": { req: z.infer<typeof HealthProbeReq>; res: HealthReport };
+  "market:overview": { req: z.infer<typeof MarketOverviewReq>; res: MarketOverview };
+  "market:asset": { req: z.infer<typeof MarketAssetReq>; res: MarketIndexOverview };
+  "market:heatmap": { req: z.infer<typeof MarketHeatmapReq>; res: MarketHeatmap };
   "project:list": { req: undefined; res: { projects: Project[]; activeId: string | null } };
   "project:create": { req: z.infer<typeof CreateProjectReq>; res: Project };
   "project:delete": { req: z.infer<typeof DeleteProjectReq>; res: { ok: true } };

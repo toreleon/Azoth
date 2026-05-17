@@ -28,12 +28,61 @@ export interface CafefCompanyIntro {
   [key: string]: unknown;
 }
 
+export interface CafefScreenerItem {
+  Url?: string;
+  CenterName?: string;
+  Symbol: string;
+  TradeCenterID?: number;
+  ChangePrice?: number;
+  ChangeVolume?: number;
+  VonHoa?: number;
+  EPS?: number;
+  PE?: number;
+  Beta?: number;
+  Price?: number;
+  UpdatedDate?: string;
+  FullName?: string;
+  ParentCategoryId?: number;
+}
+
+export interface CafefScreenerSnapshot {
+  categories: Record<number, string>;
+  items: CafefScreenerItem[];
+}
+
 export async function getCompanyIntro(ticker: string): Promise<CafefCompanyIntro | null> {
   const url = `${CAFEF}/du-lieu/Ajax/PageNew/CompanyIntro.ashx?Symbol=${encodeURIComponent(
     ticker.toUpperCase(),
   )}`;
   const json = await getJson<{ Success: boolean; Data: CafefCompanyIntro | null }>(url);
   return json.Success ? json.Data : null;
+}
+
+export async function getScreenerSnapshot(): Promise<CafefScreenerSnapshot> {
+  const url = `${CAFEF}/du-lieu/screener.aspx`;
+  const { statusCode, body } = await request(url, {
+    method: "GET",
+    headers: HEADERS,
+  });
+  if (statusCode !== 200) {
+    throw new Error(`CafeF screener ${statusCode}: ${url}`);
+  }
+  const html = await body.text();
+  const dataMatch = /var\s+jsonData\s*=\s*(\[[\s\S]*?\]);/.exec(html);
+  if (!dataMatch?.[1]) {
+    throw new Error("CafeF screener did not include jsonData");
+  }
+
+  const categories: Record<number, string> = {};
+  const categorySelect = /<select[^>]*id="Category"[\s\S]*?<\/select>/i.exec(html)?.[0] ?? "";
+  for (const match of categorySelect.matchAll(/<option\s+value="(\d+)">([^<]+)<\/option>/gi)) {
+    categories[Number(match[1])] = decodeHtml(match[2] ?? "");
+  }
+
+  return {
+    categories,
+    items: JSON.parse(dataMatch[1].replace(/\bNaN\b/g, "null")) as CafefScreenerItem[],
+  };
 }
 
 export interface CafefNewsItem {
@@ -61,6 +110,15 @@ export function parseCafefDate(input?: string): string | undefined {
   // Already ISO-ish
   const d = new Date(input);
   return Number.isNaN(d.getTime()) ? input : d.toISOString();
+}
+
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
 export async function getTickerNews(

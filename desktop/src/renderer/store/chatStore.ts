@@ -257,11 +257,6 @@ export const useChatStore = create<ChatState>((set) => ({
         case "turn:done": {
           const { [event.sessionId]: _cleared, ...remainingLive } = state.liveRecordsBySession;
           const { [event.sessionId]: activeTurnId, ...activeTurnsBySession } = state.activeTurnsBySession;
-          const nextTeamRuns = removeTeamRunsForTurn(
-            state.teamRunsBySession,
-            event.sessionId,
-            event.turnId,
-          );
           const nextTurns =
             activeTurnId == null || activeTurnId === event.turnId
               ? activeTurnsBySession
@@ -269,7 +264,6 @@ export const useChatStore = create<ChatState>((set) => ({
           return {
             activeTurnsBySession: nextTurns,
             liveRecordsBySession: remainingLive,
-            teamRunsBySession: nextTeamRuns,
             cumulative: {
               tokens:
                 state.cumulative.tokens +
@@ -281,10 +275,11 @@ export const useChatStore = create<ChatState>((set) => ({
         }
         case "turn:error":
           const { [event.sessionId]: failedTurnId, ...remainingTurns } = state.activeTurnsBySession;
-          const errorTeamRuns = removeTeamRunsForTurn(
+          const errorTeamRuns = markTeamRunsForTurnError(
             state.teamRunsBySession,
             event.sessionId,
             event.turnId,
+            event.message,
           );
           const nextActiveTurns =
             failedTurnId == null || failedTurnId === event.turnId
@@ -465,16 +460,21 @@ function findTeamRoleIndex(roles: TeamRoleView[], role: string, round: number | 
   return -1;
 }
 
-function removeTeamRunsForTurn(
+function markTeamRunsForTurnError(
   teamRunsBySession: Record<string, TeamRunView[]>,
   sessionId: string,
   turnId: string,
+  message: string,
 ): Record<string, TeamRunView[]> {
   const runs = teamRunsBySession[sessionId] ?? [];
   if (runs.length === 0) return teamRunsBySession;
   return {
     ...teamRunsBySession,
-    [sessionId]: runs.filter((run) => run.turnId !== turnId),
+    [sessionId]: runs.map((run) =>
+      run.turnId === turnId && run.status === "running"
+        ? { ...run, status: "error", message, updatedAt: Date.now() }
+        : run,
+    ),
   };
 }
 

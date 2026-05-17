@@ -59,18 +59,18 @@ export function Onboarding({ onDone }: Props) {
   }
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-azoth-bg px-6">
-      <div className="w-[480px] rounded-2xl border border-azoth-border bg-azoth-surface p-8">
+    <div className="onboarding-screen">
+      <div className="onboarding-card ds-card">
         {step === "welcome" && (
           <>
-            <h1 className="mb-2 text-xl text-azoth-text">Welcome to Azoth</h1>
-            <p className="mb-6 text-sm text-azoth-muted">
+            <h1 className="ds-title onboarding-title">Welcome to Azoth</h1>
+            <p className="ds-copy onboarding-copy">
               AI co-pilot for Vietnamese equities — analysis, paper trading, and live broker
               workflows. Let&apos;s get you set up.
             </p>
             <button
               onClick={() => setStep("llm")}
-              className="w-full rounded-md bg-azoth-accent px-4 py-2 text-sm text-white"
+              className="ds-button primary full-width"
             >
               Get started
             </button>
@@ -79,12 +79,12 @@ export function Onboarding({ onDone }: Props) {
 
         {step === "llm" && (
           <>
-            <h2 className="mb-4 text-lg text-azoth-text">LLM access</h2>
+            <h2 className="ds-title onboarding-subtitle">LLM access</h2>
             <Field label="Provider">
               <select
                 value={provider}
                 onChange={(e) => updateProvider(e.target.value)}
-                className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text"
+                className="ds-select"
               >
                 <option value="anthropic">Anthropic</option>
                 <option value="compatible">Anthropic-compatible</option>
@@ -96,7 +96,7 @@ export function Onboarding({ onDone }: Props) {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="sk-ant-…"
-                className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text outline-none focus:border-azoth-accent"
+                className="ds-input"
               />
             </Field>
             {provider === "compatible" && (
@@ -104,7 +104,7 @@ export function Onboarding({ onDone }: Props) {
                 <input
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text outline-none focus:border-azoth-accent"
+                  className="ds-input"
                 />
               </Field>
             )}
@@ -115,7 +115,7 @@ export function Onboarding({ onDone }: Props) {
                   : availableModelOrDefault(modelList.models, model)}
                 disabled={modelList.loading || Boolean(modelList.error) || modelList.models.length === 0}
                 onChange={(e) => setModel(e.target.value)}
-                className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text outline-none focus:border-azoth-accent"
+                className="ds-select"
               >
                 {modelList.loading || modelList.error || modelList.models.length === 0 ? (
                   <option value="">
@@ -132,7 +132,7 @@ export function Onboarding({ onDone }: Props) {
             <button
               onClick={saveLlm}
               disabled={!apiKey.trim() || modelList.loading || Boolean(modelList.error) || !availableModelOrDefault(modelList.models, model)}
-              className="mt-2 w-full rounded-md bg-azoth-accent px-4 py-2 text-sm text-white disabled:opacity-40"
+              className="ds-button primary full-width onboarding-next"
             >
               Continue
             </button>
@@ -141,15 +141,15 @@ export function Onboarding({ onDone }: Props) {
 
         {step === "broker" && (
           <>
-            <h2 className="mb-4 text-lg text-azoth-text">Broker</h2>
-            <p className="mb-4 text-xs text-azoth-muted">
+            <h2 className="ds-title onboarding-subtitle">Broker</h2>
+            <p className="ds-copy onboarding-copy small">
               Choose how Azoth simulates orders. You can switch later in Settings.
             </p>
             <Field label="Broker">
               <select
                 value={broker}
                 onChange={(e) => setBroker(e.target.value)}
-                className="w-full rounded border border-azoth-border bg-azoth-panel px-3 py-2 text-sm text-azoth-text"
+                className="ds-select"
               >
                 <option value="paper">Paper (recommended)</option>
                 <option value="dnse">DNSE</option>
@@ -158,7 +158,7 @@ export function Onboarding({ onDone }: Props) {
             </Field>
             <button
               onClick={saveBroker}
-              className="mt-2 w-full rounded-md bg-azoth-accent px-4 py-2 text-sm text-white"
+              className="ds-button primary full-width onboarding-next"
             >
               Finish
             </button>
@@ -177,8 +177,8 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="mb-3 block">
-      <span className="mb-1 block text-xs uppercase tracking-wider text-azoth-muted">{label}</span>
+    <label className="ds-field">
+      <span className="ds-field-label">{label}</span>
       {children}
     </label>
   );

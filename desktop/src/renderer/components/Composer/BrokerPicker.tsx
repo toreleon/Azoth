@@ -15,7 +15,7 @@ export function BrokerPicker() {
     <select
       value={config?.broker ?? "paper"}
       onChange={(e) => void update(e.target.value)}
-      className="azoth-select h-[30px] rounded-full border border-azoth-border bg-white px-2.5 py-1 text-xs text-azoth-text outline-none transition hover:border-black/20"
+      className="picker picker-select-control"
       title="Broker"
     >
       {BROKERS.map((b) => (
