@@ -21,11 +21,11 @@ import { classifySession } from "./lib/marketSession.js";
 import { formatBigVnd, formatPct, truncate } from "./lib/format.js";
 import { theme, glyph } from "./lib/theme.js";
 import { BACKTEST_DEFAULT_INTERVAL, runBacktestSession, type EquityPayload, type SummaryPayload } from "../agent/backtestRunner.js";
-import { runTeamAnalysis, runTeamQuestion } from "../agent/team/index.js";
-import type { FinalDecision, TeamEvent, TeamState } from "../agent/team/state.js";
+import { runTeamQuestion } from "../agent/team/index.js";
+import type { TeamEvent } from "../agent/team/state.js";
 import { setBrokerConsentHandler, type BrokerConsentRequest } from "../tools/brokerConsent.js";
 
-type Autonomy = "advisory" | "confirm" | "auto";
+type Autonomy = "manual" | "auto";
 
 type PendingBrokerConsent = BrokerConsentRequest & {
   resolve: (approved: boolean) => void;
@@ -52,7 +52,7 @@ export function previousWeekRange(now = new Date()): { start: string; end: strin
   return { start: isoLocalDate(start), end: isoLocalDate(end) };
 }
 
-function teamRoleDesc(output: Record<string, unknown>, mode: "analyze" | "question" | "backtest") {
+function teamRoleDesc(output: Record<string, unknown>, mode: "question" | "backtest") {
   if ("score" in output) {
     const suffix = mode === "backtest" ? "" : ` ${truncate(String(output.summary ?? ""), 60)}`;
     return `score=${Number(output.score).toFixed(2)}${suffix}`;
@@ -91,28 +91,6 @@ function renderTeamToolCall(ev: Extract<TeamEvent, { type: "role_tool" }>, prefi
 
 function renderTeamToolResult(ev: Extract<TeamEvent, { type: "role_tool_result" }>, prefix = "") {
   return `${prefix}[${ev.role}] ${ev.tool ?? "tool"} result received: ${compactToolResult(ev.content)}\n`;
-}
-
-function renderAnalyzeResult(state: TeamState, decision: FinalDecision) {
-  const lines = [
-    "",
-    `Final: ${decision.rating} ${(decision.sizingPct * 100).toFixed(1)}% ${decision.ticker}`,
-    `Run: ${decision.teamRunId.slice(0, 8)}`,
-  ];
-  if (state.analysts.length) {
-    lines.push("", "Analysts:");
-    for (const a of state.analysts) {
-      const score = `${a.score >= 0 ? "+" : ""}${a.score.toFixed(2)}`;
-      lines.push(`- ${a.role}: ${score} ${truncate(a.summary, 90)}`);
-    }
-  }
-  if (state.risk) {
-    const concerns = state.risk.concerns.length ? `; ${truncate(state.risk.concerns.join("; "), 90)}` : "";
-    lines.push("", `Risk: ${state.risk.approved ? "approved" : "rejected"}${concerns}`);
-  }
-  lines.push("", decision.rationale);
-  if (decision.exitPlan) lines.push("", `Exit: ${decision.exitPlan}`);
-  return lines.join("\n");
 }
 
 function renderTeamQuestionResult(data: {
@@ -317,54 +295,6 @@ function AppInner({ verifyLlm }: AppProps) {
     return items;
   }, [stream.committed]);
 
-  const runAnalyze = async (args: string[]) => {
-    if (!args.length || args[0] === "help") {
-      stream.systemMessage("/analyze <ticker> [--rounds N] [--as-of YYYY-MM-DD]");
-      return;
-    }
-    let ticker: string | undefined;
-    let rounds: number | undefined;
-    let asOf: string | undefined;
-    for (let i = 0; i < args.length; i++) {
-      const a = args[i]!;
-      if (a === "--rounds") rounds = Number(args[++i]);
-      else if (a === "--as-of") asOf = args[++i];
-      else if (!a.startsWith("-")) ticker = a.toUpperCase();
-    }
-    if (!ticker) {
-      stream.systemMessage("✗ /analyze requires a ticker");
-      return;
-    }
-    stream.beginLocalResponse(`/analyze ${ticker} (rounds=${rounds ?? 2})`);
-    stream.appendLocalResponse(`Running team analysis for ${ticker}...\n`);
-    try {
-      const result = await runTeamAnalysis(
-        { ticker, debateRounds: rounds, asOfDateIso: asOf },
-        {
-          emit: (ev: TeamEvent) => {
-            if (ev.type === "role_start") {
-              const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.appendLocalResponse(`${glyph.toolRunning} ${tag}\n`);
-            } else if (ev.type === "role_tool") {
-              stream.appendLocalResponse(renderTeamToolCall(ev, "  "));
-            } else if (ev.type === "role_tool_result") {
-              stream.appendLocalResponse(renderTeamToolResult(ev, "  "));
-            } else if (ev.type === "role_end") {
-              const desc = teamRoleDesc(ev.output as Record<string, unknown>, "analyze");
-              const tag = ev.round != null ? `${ev.role}#${ev.round}` : ev.role;
-              stream.appendLocalResponse(`  ${glyph.toolDone} ${tag}: ${desc}\n`);
-            }
-          },
-        },
-      );
-      stream.appendLocalResponse(renderAnalyzeResult(result.state, result.decision));
-    } catch (e) {
-      stream.appendLocalResponse(`Analyze error: ${(e as Error).message}`);
-    } finally {
-      stream.finishLocalResponse();
-    }
-  };
-
   const runTeamChat = async (message: string) => {
     if (!message) {
       stream.systemMessage("/team <message>");
@@ -399,8 +329,8 @@ function AppInner({ verifyLlm }: AppProps) {
 
   const runAutonomy = (args: string[]) => {
     const next = args[0] as Autonomy | undefined;
-    if (!next || !["advisory", "confirm", "auto"].includes(next)) {
-      stream.systemMessage(`Current autonomy: ${loadConfig().autonomy}\n/autonomy <advisory|confirm|auto>`);
+    if (!next || !["manual", "auto"].includes(next)) {
+      stream.systemMessage(`Current autonomy: ${loadConfig().autonomy}\n/autonomy <manual|auto>`);
       return;
     }
     const updated = updateConfig({ autonomy: next });
@@ -588,7 +518,6 @@ function AppInner({ verifyLlm }: AppProps) {
         stream.systemMessage(text);
       }
       else if (cmd === "team") void runTeamChat(arg);
-      else if (cmd === "analyze") void runAnalyze(rest);
       else if (cmd === "backtest") void runBacktest(rest);
       else if (cmd === "setup-llm") setSetupLlm(true);
       else if (cmd === "setup-fhsc") setSetupFhsc(true);
@@ -670,15 +599,15 @@ function AppInner({ verifyLlm }: AppProps) {
       </Box>
       {pendingBrokerConsent ? (
         <Box borderStyle="round" borderColor={theme.flat} paddingX={1} flexDirection="column" marginTop={1}>
-          <Text color={theme.flat} bold>Allow broker action?</Text>
+          <Text color={theme.flat} bold>Allow tool call?</Text>
           <Text><Text dimColor>action   </Text>{pendingBrokerConsent.action}</Text>
           <Text><Text dimColor>broker   </Text>{pendingBrokerConsent.broker}</Text>
           <Text><Text dimColor>autonomy </Text>{pendingBrokerConsent.autonomy}</Text>
           {pendingBrokerConsent.detail ? <Text><Text dimColor>detail   </Text>{pendingBrokerConsent.detail}</Text> : null}
           <Box marginTop={1} flexDirection="column">
             {[
-              { label: "Yes, allow once", hint: "Run this broker action now." },
-              { label: "No, deny", hint: "Do not contact the broker." },
+              { label: "Yes, allow once", hint: "Run this tool call now." },
+              { label: "No, deny", hint: "Do not run this tool call." },
             ].map((option, i) => {
               const active = brokerConsentSel === i;
               return (
@@ -698,7 +627,7 @@ function AppInner({ verifyLlm }: AppProps) {
         <Text color={inputBorder} bold>{"› "}</Text>
         <Box flexGrow={1}>
           {pendingBrokerConsent ? (
-            <Text color={theme.muted}>broker approval pending</Text>
+          <Text color={theme.muted}>tool approval pending</Text>
           ) : (
             <TextInput value={input} onChange={handleChange} onSubmit={handleSubmit} placeholder="Ask the agent — type / for commands" />
           )}

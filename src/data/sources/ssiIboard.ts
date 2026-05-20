@@ -8,6 +8,24 @@ export interface SsiQuote {
   ref: number;
   ceiling: number;
   floor: number;
+  matchedPrice?: number;
+  matchedVolume?: number;
+  priceChange?: number;
+  priceChangePercent?: number;
+  openPrice?: number;
+  highest?: number;
+  lowest?: number;
+  avgPrice?: number;
+  totalTradedQty?: number;
+  totalTradedValue?: number;
+  bestBid?: number;
+  bestBidVol?: number;
+  bestOffer?: number;
+  bestOfferVol?: number;
+  tradingDate?: string;
+  session?: string;
+  tradingStatus?: string;
+  expectedLastUpdate?: number;
   companyNameVi?: string;
   companyNameEn?: string;
   raw: unknown;
@@ -36,8 +54,31 @@ export async function getQuote(symbol: string): Promise<SsiQuote> {
     ref: Number(d.ref ?? d.refPrice ?? 0),
     ceiling: Number(d.ceiling ?? d.ceilingPrice ?? 0),
     floor: Number(d.floor ?? d.floorPrice ?? 0),
+    matchedPrice: optionalNumber(d.matchedPrice ?? d.expectedMatchedPrice),
+    matchedVolume: optionalNumber(d.matchedVolume ?? d.expectedMatchedVolume),
+    priceChange: optionalNumber(d.priceChange ?? d.expectedPriceChange),
+    priceChangePercent: optionalNumber(d.priceChangePercent ?? d.expectedPriceChangePercent),
+    openPrice: optionalNumber(d.openPrice),
+    highest: optionalNumber(d.highest),
+    lowest: optionalNumber(d.lowest),
+    avgPrice: optionalNumber(d.avgPrice),
+    totalTradedQty: optionalNumber(d.stockVol ?? d.nmTotalTradedQty),
+    totalTradedValue: optionalNumber(d.nmTotalTradedValue),
+    bestBid: optionalNumber(d.best1Bid),
+    bestBidVol: optionalNumber(d.best1BidVol),
+    bestOffer: optionalNumber(d.best1Offer),
+    bestOfferVol: optionalNumber(d.best1OfferVol),
+    tradingDate: typeof d.tradingDate === "string" ? d.tradingDate : undefined,
+    session: typeof d.session === "string" ? d.session : undefined,
+    tradingStatus: typeof d.tradingStatus === "string" ? d.tradingStatus : undefined,
+    expectedLastUpdate: optionalNumber(d.expectedLastUpdate),
     companyNameVi: d.companyNameVi as string | undefined,
     companyNameEn: d.companyNameEn as string | undefined,
     raw: d,
   };
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }

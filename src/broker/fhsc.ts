@@ -1,7 +1,33 @@
 import { randomUUID } from "node:crypto";
 import { request } from "undici";
-import { loadConfig } from "../config/loader.js";
+import { loadConfig, updateConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
+import { DEFAULT_FHSC_BASE_URL as DEFAULT_BASE, FHSC_BROKER_NAME as NAME } from "./fhsc/constants.js";
+import type {
+  FhscAssetSummary,
+  FhscCashTransactionItem,
+  FhscEnvelope,
+  FhscOrderItem,
+  FhscPaymentSubAccount,
+  FhscPortfolioItem,
+  FhscRightItem,
+  FhscSubAccount,
+} from "./fhsc/types.js";
+import {
+  daysAgoIso,
+  inDateRange,
+  isSuccess,
+  mapSide,
+  normalizeBaseUrl,
+  normalizeDate,
+  normalizeOrder,
+  numberOf,
+  payload,
+  rowsFrom,
+  todayIso,
+  todayRange,
+  vndToThousand,
+} from "./fhsc/utils.js";
 import type {
   Broker,
   BrokerAccountHistory,
@@ -33,6 +59,7 @@ import type {
  * Auth config or env, choose one:
  *   FHSC_ACCESS_TOKEN    — browser/API bearer token
  *   FHSC_ACCESS_KEY      — browser session access key used as x-access-key
+ *   FHSC_REFRESH_TOKEN   — browser session refresh token used by invest.fhsc.com.vn
  *   FHSC_DEVICE_ID       — browser session device id used as device-id
  *   FHSC_API_KEY         — OpenAPI key from invest.fhsc.com.vn/quan-ly-api
  *   FHSC_API_SECRET      — OpenAPI secret paired with FHSC_API_KEY
@@ -41,268 +68,14 @@ import type {
  *   FHSC_BASE_URL        — defaults to https://api.vinasecurities.com
  *   FHSC_ACCOUNT_ID      — separate account id for order-history, if needed
  */
-const NAME = "fhsc";
-const DEFAULT_BASE = "https://api.vinasecurities.com";
-const LEGACY_FINHAY_GW_BASE = "https://api.finhay.com.vn/gw";
-
-interface FhscEnvelope<T = unknown> {
-  error_code?: string | number;
-  message?: string;
-  data?: T;
-  result?: T;
-  [key: string]: unknown;
-}
-
-interface FhscSubAccount {
-  balance?: number;
-  cash?: number;
-  cash_balance?: number;
-  buying_power?: number;
-  margin_used?: number;
-  marginUsed?: number;
-  sub_account_id?: string | number;
-  sub_account_ext?: string;
-  [key: string]: unknown;
-}
-
-interface FhscPortfolioItem {
-  sub_account_id?: string | number;
-  symbol?: string;
-  ticker?: string;
-  total?: number;
-  trade?: number;
-  quantity?: number;
-  close_price?: number;
-  basic_price?: number;
-  pnl_amount?: number;
-  pnl_rate?: number;
-  basic_price_amount?: number;
-  custodycd?: string;
-  cost_price?: number;
-  avg_cost?: number;
-  average_cost?: number;
-  [key: string]: unknown;
-}
-
-interface FhscPaymentSubAccount {
-  customer_id?: string;
-  sub_account_id?: string | number;
-  balance?: number;
-  total_balance?: number;
-  blocked_balance?: number;
-  type?: string;
-  sub_account_ext?: string;
-  [key: string]: unknown;
-}
-
-interface FhscOrderItem {
-  order_id?: string | number;
-  id?: string | number;
-  symbol?: string;
-  side?: string;
-  orderType?: string;
-  order_type?: string;
-  order_qtty?: number;
-  quantity?: number;
-  price?: number;
-  order_price?: number;
-  status?: string;
-  reject_reason?: string;
-  tx_date?: string;
-  created_at?: string;
-  exec_price?: number;
-  exec_qtty?: number;
-  fee_amt?: number;
-  tax_amt?: number;
-  [key: string]: unknown;
-}
-
-interface FhscCashTransactionItem {
-  id?: string | number;
-  sub_account_id?: string | number;
-  transaction_date?: string;
-  bus_date?: string;
-  transaction_number?: string;
-  transaction_type?: string;
-  transaction_flow?: string;
-  transaction_status?: string;
-  amount?: number;
-  title?: string;
-  description?: string;
-  code?: string;
-  tr_desc?: string;
-  [key: string]: unknown;
-}
-
-interface FhscRightItem {
-  caMastId?: string | number;
-  id?: string | number;
-  symbol?: string;
-  type?: string;
-  catType?: string;
-  userRightRegisterStatus?: string;
-  status?: string;
-  reportDate?: string;
-  startDate?: string;
-  endDate?: string;
-  finishDate?: string;
-  lastRegisterDate?: string;
-  ratio?: string;
-  ownNumberOfShare?: number;
-  numberOfWaitingStock?: number;
-  amount?: number;
-  price?: number;
-  maxRegisterQuantity?: number;
-  registeredQuantity?: number;
-  [key: string]: unknown;
-}
-
-function numberOf(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const n = Number(value.replace(/[,_\s]/g, ""));
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
-
-function vndToThousand(vnd: unknown): number {
-  return numberOf(vnd) / 1000;
-}
-
-function payload<T>(json: FhscEnvelope<T>): T {
-  return (json.data ?? json.result ?? json) as T;
-}
-
-function rowsFrom<T>(raw: unknown, keys: string[] = ["data", "items", "rows", "records", "list"]): T[] {
-  if (Array.isArray(raw)) return raw as T[];
-  if (!raw || typeof raw !== "object") return [];
-  const obj = raw as Record<string, unknown>;
-  for (const key of keys) {
-    const value = obj[key];
-    if (Array.isArray(value)) return value as T[];
-  }
-  return [];
-}
-
-function isSuccess(json: FhscEnvelope): boolean {
-  const code = json.error_code;
-  return code == null || code === 0 || code === "0" || code === "SUCCESS";
-}
-
-function mapStatus(raw: string | undefined): OrderStatus {
-  switch ((raw ?? "").toUpperCase()) {
-    case "MATCHED_ALL":
-    case "COMPLETED":
-    case "FILLED":
-      return "FILLED";
-    case "CANCELLED":
-    case "CANCELED":
-      return "CANCELLED";
-    case "REJECTING":
-    case "REJECTED":
-    case "EXPIRED":
-      return "REJECTED";
-    default:
-      return "PENDING";
-  }
-}
-
-function mapSide(raw: unknown) {
-  const s = String(raw ?? "").toUpperCase();
-  return s === "S" || s.includes("SELL") || s.includes("BAN") || s.includes("BÁN") ? "SELL" : "BUY";
-}
-
-function parseDateSec(raw: unknown): number {
-  if (typeof raw !== "string" || !raw.trim()) return 0;
-  const direct = Date.parse(raw);
-  if (Number.isFinite(direct)) return Math.floor(direct / 1000);
-  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!m) return 0;
-  const [, dd, mm, yyyy] = m;
-  return Math.floor(Date.parse(`${yyyy}-${mm}-${dd}T00:00:00+07:00`) / 1000);
-}
-
-function normalizeDate(raw: unknown): string | null {
-  if (typeof raw !== "string" || !raw.trim()) return null;
-  const s = raw.trim();
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const dmy = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-  const parsed = Date.parse(s);
-  if (!Number.isFinite(parsed)) return null;
-  const d = new Date(parsed);
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function todayIso(): string {
-  const now = new Date();
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function inDateRange(raw: unknown, fromDate: string, toDate: string): boolean {
-  const d = normalizeDate(raw);
-  return d == null || (d >= fromDate && d <= toDate);
-}
-
-function todayRange(): { from: string; to: string } {
-  const date = todayIso();
-  return { from: date, to: date };
-}
-
-function normalizeBaseUrl(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, "");
-  return trimmed === LEGACY_FINHAY_GW_BASE ? DEFAULT_BASE : trimmed;
-}
-
-function normalizeOrder(o: FhscOrderItem): Order {
-  const rawType = String(o.orderType ?? o.order_type ?? "").toUpperCase();
-  const status = mapStatus(o.status);
-  const filledQty = numberOf(o.exec_qtty);
-  return {
-    id: String(o.order_id ?? o.id ?? ""),
-    broker: NAME,
-    ticker: String(o.symbol ?? "").toUpperCase(),
-    side: mapSide(o.side),
-    type: rawType === "LO" || rawType === "LIMIT" ? "LIMIT" : "MARKET",
-    quantity: numberOf(o.order_qtty ?? o.quantity),
-    limitPrice: o.price || o.order_price ? vndToThousand(o.price ?? o.order_price) : null,
-    status,
-    rejectReason: o.reject_reason ? String(o.reject_reason) : null,
-    createdAt: parseDateSec(o.tx_date ?? o.created_at),
-    filledAt: status === "FILLED" ? parseDateSec(o.tx_date ?? o.created_at) : null,
-    filledPrice: o.exec_price ? vndToThousand(o.exec_price) : null,
-    filledQty: filledQty || null,
-    notes: null,
-  };
-}
-
 export class FHSCBroker implements Broker {
   readonly name = NAME;
   private readonly baseUrl: string;
   private readonly subAccountId: string;
   private readonly accountId: string;
-  private readonly accessToken: string;
+  private accessToken: string;
   private readonly accessKey: string;
+  private readonly refreshToken: string;
   private readonly deviceId: string;
   private readonly userId: string;
   private readonly custId: string;
@@ -315,6 +88,7 @@ export class FHSCBroker implements Broker {
     const subAccountId = process.env.FHSC_SUB_ACCOUNT_ID?.trim() || cfg.sub_account_id.trim();
     const accessToken = process.env.FHSC_ACCESS_TOKEN?.trim() || cfg.access_token.trim();
     const accessKey = process.env.FHSC_ACCESS_KEY?.trim() || cfg.access_key.trim();
+    const refreshToken = process.env.FHSC_REFRESH_TOKEN?.trim() || cfg.refresh_token.trim();
     const deviceId = process.env.FHSC_DEVICE_ID?.trim() || cfg.device_id.trim();
     const userId = process.env.FHSC_USER_ID?.trim() || cfg.user_id.trim();
     const custId = process.env.FHSC_CUST_ID?.trim() || cfg.cust_id.trim();
@@ -323,15 +97,16 @@ export class FHSCBroker implements Broker {
     if (!subAccountId) {
       throw new Error("FHSCBroker requires FHSC sub_account_id in config or env FHSC_SUB_ACCOUNT_ID");
     }
-    if (!(accessToken && accessKey) && !(apiKey && apiSecret)) {
+    if (!((accessToken || refreshToken) && accessKey) && !(apiKey && apiSecret)) {
       throw new Error(
-        "FHSCBroker requires config/env auth: access_token + access_key, or api_key + api_secret",
+        "FHSCBroker requires config/env auth: browser session access_key + access_token/refresh_token, or api_key + api_secret",
       );
     }
     this.subAccountId = subAccountId;
     this.accountId = process.env.FHSC_ACCOUNT_ID?.trim() || cfg.account_id.trim() || subAccountId;
     this.accessToken = accessToken;
     this.accessKey = accessKey;
+    this.refreshToken = refreshToken;
     this.deviceId = deviceId;
     this.userId = userId;
     this.custId = custId;
@@ -347,8 +122,8 @@ export class FHSCBroker implements Broker {
       "device-type": "WEB",
       "x-channel": "ONLINE",
     };
-    if (this.accessToken && this.accessKey) {
-      headers.authorization = `Bearer ${this.accessToken}`;
+    if ((this.accessToken || this.refreshToken) && this.accessKey) {
+      if (this.accessToken) headers.authorization = `Bearer ${this.accessToken}`;
       headers["x-access-key"] = this.accessKey;
       if (this.deviceId) headers["device-id"] = this.deviceId;
       return headers;
@@ -358,7 +133,37 @@ export class FHSCBroker implements Broker {
     return headers;
   }
 
-  private async getJson<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
+  private async refreshAccessToken(): Promise<boolean> {
+    if (!this.refreshToken || !this.accessKey) return false;
+    const url = new URL(`${this.baseUrl}/auth/v1/authentication`);
+    url.searchParams.set("scope", "refresh_token_v1");
+    url.searchParams.set("token", this.refreshToken);
+    const { statusCode, body } = await request(url, {
+      method: "GET",
+      headers: this.authHeaders(),
+    });
+    const text = await body.text();
+    if (statusCode < 200 || statusCode >= 300) return false;
+    const json = JSON.parse(text) as FhscEnvelope<{ access_token?: string }>;
+    if (!isSuccess(json)) return false;
+    const nextToken = (json.result as { access_token?: string } | undefined)?.access_token
+      ?? (json.data as { access_token?: string } | undefined)?.access_token;
+    if (!nextToken) return false;
+    this.accessToken = nextToken;
+    try {
+      const current = loadConfig();
+      updateConfig({ fhsc: { ...current.fhsc, access_token: nextToken } });
+    } catch {
+      // Runtime refresh should not fail the broker read if persisting the token fails.
+    }
+    return true;
+  }
+
+  private async getJson<T>(
+    path: string,
+    params: Record<string, string | number> = {},
+    retryOnUnauthorized = true,
+  ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, String(value));
@@ -368,6 +173,9 @@ export class FHSCBroker implements Broker {
       headers: this.authHeaders(),
     });
     const text = await body.text();
+    if (statusCode === 401 && retryOnUnauthorized && await this.refreshAccessToken()) {
+      return this.getJson<T>(path, params, false);
+    }
     if (statusCode < 200 || statusCode >= 300) {
       const hint =
         text.includes("InvalidTokenException") || text.includes("Thông tin xác thực không hợp lệ")
@@ -389,11 +197,28 @@ export class FHSCBroker implements Broker {
     ).catch(() => []);
   }
 
+  private async assetsSummary(): Promise<FhscAssetSummary | null> {
+    if (!this.userId) return null;
+    const paths = [
+      `/accounts/v3/users/${encodeURIComponent(this.userId)}/assets/summary`,
+      `/accounts/v4/users/${encodeURIComponent(this.userId)}/assets/summary`,
+    ];
+    for (const path of paths) {
+      try {
+        return await this.getJson<FhscAssetSummary>(path);
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
   private async portfolioForSubAccount(subAccountId: string): Promise<FhscPortfolioItem[]> {
     const raw = await this.getJson<{ portfolio?: FhscPortfolioItem[] } | FhscPortfolioItem[]>(
       `/trade/v2/sub-accounts/${encodeURIComponent(subAccountId)}/portfolio`,
     );
-    return Array.isArray(raw) ? raw : (raw.portfolio ?? []);
+    const rows = Array.isArray(raw) ? raw : (raw.portfolio ?? []);
+    return rows.map((row) => ({ ...row, sub_account_id: row.sub_account_id ?? subAccountId }));
   }
 
   private async historySubAccounts(): Promise<BrokerSubAccount[]> {
@@ -575,12 +400,13 @@ export class FHSCBroker implements Broker {
     const byTicker = new Map<
       string,
       {
+        ticker: string;
         quantity: number;
         costValue: number;
         marketValueVnd: number;
         unrealizedPnlVnd: number;
-        subAccountIds: Set<string>;
-        custodyCodes: Set<string>;
+        subAccountId?: string;
+        custodyCode?: string;
         lastPrice?: number;
       }
     >();
@@ -594,25 +420,25 @@ export class FHSCBroker implements Broker {
       const unrealizedPnlVnd = numberOf(p.pnl_amount);
       const subAccountId = String(p.sub_account_id ?? "").trim();
       const custodyCode = String(p.custodycd ?? "").trim();
-      const current = byTicker.get(ticker) ?? {
+      const key = `${ticker}|${subAccountId}|${custodyCode}`;
+      const current = byTicker.get(key) ?? {
+        ticker,
         quantity: 0,
         costValue: 0,
         marketValueVnd: 0,
         unrealizedPnlVnd: 0,
-        subAccountIds: new Set<string>(),
-        custodyCodes: new Set<string>(),
+        subAccountId: subAccountId || undefined,
+        custodyCode: custodyCode || undefined,
       };
       current.quantity += quantity;
       current.costValue += avgCost * quantity;
       current.marketValueVnd += marketValueVnd;
       current.unrealizedPnlVnd += unrealizedPnlVnd;
       if (lastPrice > 0) current.lastPrice = lastPrice;
-      if (subAccountId) current.subAccountIds.add(subAccountId);
-      if (custodyCode) current.custodyCodes.add(custodyCode);
-      byTicker.set(ticker, current);
+      byTicker.set(key, current);
     }
-    return Array.from(byTicker.entries()).map(([ticker, value]) => ({
-      ticker,
+    return Array.from(byTicker.values()).map((value) => ({
+      ticker: value.ticker,
       quantity: value.quantity,
       avgCost: value.quantity > 0 ? value.costValue / value.quantity : 0,
       lastPrice: value.lastPrice,
@@ -620,13 +446,16 @@ export class FHSCBroker implements Broker {
       unrealizedPnlVnd: value.unrealizedPnlVnd || undefined,
       unrealizedPnlPct:
         value.costValue > 0 ? (value.unrealizedPnlVnd / (value.costValue * 1000)) * 100 : undefined,
-      subAccountId: Array.from(value.subAccountIds).join(",") || undefined,
-      custodyCode: Array.from(value.custodyCodes).join(",") || undefined,
+      subAccountId: value.subAccountId,
+      custodyCode: value.custodyCode,
     }));
   }
 
   async snapshot(): Promise<BrokerSnapshot> {
-    const paymentAccounts = await this.paymentSubAccounts();
+    const [paymentAccounts, assetSummary] = await Promise.all([
+      this.paymentSubAccounts(),
+      this.assetsSummary(),
+    ]);
     const subAccountIds = Array.from(
       new Set(
         [
@@ -642,7 +471,8 @@ export class FHSCBroker implements Broker {
     if (
       paymentAccounts.length === 0 &&
       accountResult.status === "rejected" &&
-      portfolioResults.every((result) => result.status === "rejected")
+      portfolioResults.every((result) => result.status === "rejected") &&
+      !assetSummary
     ) {
       throw new Error(
         `FHSC snapshot failed: ${String(accountResult.reason)}; ${portfolioResults
@@ -658,10 +488,15 @@ export class FHSCBroker implements Broker {
       0,
     );
     const blockedBalance = paymentAccounts.reduce((sum, account) => sum + numberOf(account.blocked_balance), 0);
+    const summaryCash = numberOf(assetSummary?.money?.total);
+    const summaryDebt = numberOf(assetSummary?.debt?.total ?? assetSummary?.debt?.owe_deposit);
+    const summaryNav = numberOf(assetSummary?.net_asset_value);
     return {
       broker: NAME,
       cashVnd:
-        paymentAccounts.length > 0
+        summaryCash > 0
+          ? summaryCash
+          : paymentAccounts.length > 0
           ? paymentCash
           : numberOf(account.balance ?? account.cash ?? account.cash_balance ?? account.buying_power),
       positions,
@@ -677,7 +512,12 @@ export class FHSCBroker implements Broker {
             }))
           : undefined,
       marginUsedVnd:
-        paymentAccounts.length > 0 ? blockedBalance : numberOf(account.margin_used ?? account.marginUsed),
+        summaryDebt > 0
+          ? summaryDebt
+          : paymentAccounts.length > 0
+          ? blockedBalance
+          : numberOf(account.margin_used ?? account.marginUsed),
+      totalEquityVnd: summaryNav > 0 ? summaryNav : undefined,
     };
   }
 

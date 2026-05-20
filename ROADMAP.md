@@ -70,7 +70,7 @@ Azoth v0.1.0, released on May 4, 2026, provides the public baseline:
 - Add comparison workflows for pairs, sectors, and portfolio candidates.
 - Improve drawdown, realized P&L, turnover, exposure, and concentration
   reporting.
-- Add pre-trade impact previews before confirm or auto execution.
+- Add pre-trade impact previews before manual approval or auto execution.
 - Add configurable risk presets for conservative, balanced, and aggressive
   operation.
 - Improve team synthesis with structured evidence tables and source timestamps.

@@ -1,7 +1,6 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { getBroker } from "../broker/index.js";
-import { loadConfig } from "../config/loader.js";
 import { checkOrder } from "../risk/guardrails.js";
 import { getStockOhlcv } from "../data/sources/dnsePublic.js";
 import type { OrderStatus, PlaceOrderInput } from "../broker/types.js";
@@ -19,9 +18,41 @@ async function lastClose(ticker: string): Promise<number | null> {
   return bars.length ? bars[bars.length - 1]!.close : null;
 }
 
+export type PlaceOrderGuardResult =
+  | { ok: true; order: import("../broker/types.js").Order }
+  | { ok: false; error: "no_reference_price"; ticker: string }
+  | {
+      ok: false;
+      error: "guardrail_blocked";
+      reasons: string[];
+      order?: import("../broker/types.js").Order;
+    };
+
+export async function placeOrderWithGuards(
+  input: PlaceOrderInput,
+): Promise<PlaceOrderGuardResult> {
+  const inBacktest = currentBrokerName() != null;
+  const refPrice = (await lastClose(input.ticker)) ?? input.limitPrice ?? null;
+  const broker = getBroker();
+  if (refPrice == null) {
+    return { ok: false, error: "no_reference_price", ticker: input.ticker };
+  }
+  const guard = await checkOrder(broker, input, refPrice);
+  if (!guard.ok) {
+    const reason = `guardrail_blocked: ${guard.reasons.join("; ")}`;
+    const order =
+      inBacktest && broker.recordRejectedOrder
+        ? await broker.recordRejectedOrder(input, reason)
+        : undefined;
+    return { ok: false, error: "guardrail_blocked", reasons: guard.reasons, order };
+  }
+  const order = await broker.placeOrder(input);
+  return { ok: true, order };
+}
+
 export const placeOrderTool = tool(
   "place_order",
-  "Place a paper or live broker order. Quantity must be a multiple of 100 (HOSE lot). limit_price is in thousand VND (e.g. 28.5 = 28,500 VND). Outside backtests, the user is always prompted in the CLI before any broker call. If approved, the order is run through risk guardrails before submission.",
+  "Place a paper or live broker order. Quantity must be a multiple of 100 (HOSE lot). limit_price is in thousand VND (e.g. 28.5 = 28,500 VND). In manual mode, the user is prompted before the tool runs. Orders always run through risk guardrails before submission.",
   {
     ticker: z.string(),
     side: z.enum(["BUY", "SELL"]),
@@ -31,14 +62,7 @@ export const placeOrderTool = tool(
     notes: z.string().optional(),
   },
   async ({ ticker, side, type, quantity, limit_price, notes }) => {
-    const cfg = loadConfig();
     const inBacktest = currentBrokerName() != null;
-    if (!inBacktest && cfg.autonomy === "advisory") {
-      return asText({
-        ok: false,
-        error: "autonomy=advisory; place_order is disabled. Recommend manually instead.",
-      });
-    }
 
     const input: PlaceOrderInput = {
       ticker: ticker.toUpperCase(),
@@ -65,49 +89,31 @@ export const placeOrderTool = tool(
       }
     }
 
-    const broker = getBroker();
-
-    if (inBacktest || cfg.autonomy === "auto" || cfg.autonomy === "confirm") {
-      if (refPrice == null) {
+    const result = await placeOrderWithGuards(input);
+    if (!result.ok) {
+      if (result.error === "no_reference_price") {
         return asText({ ok: false, error: `no reference price for ${input.ticker}` });
       }
-      const guard = await checkOrder(broker, input, refPrice);
-      if (!guard.ok) {
-        const reason = `guardrail_blocked: ${guard.reasons.join("; ")}`;
-        const order =
-          inBacktest && broker.recordRejectedOrder
-            ? await broker.recordRejectedOrder(input, reason)
-            : undefined;
-        return asText({
-          ok: false,
-          error: "guardrail_blocked",
-          reasons: guard.reasons,
-          ...(order ? { order } : {}),
-        });
-      }
+      return asText({
+        ok: false,
+        error: "guardrail_blocked",
+        reasons: result.reasons,
+        ...(result.order ? { order: result.order } : {}),
+      });
     }
-
-    const order = await broker.placeOrder(input);
     return asText({
-      ok: order.status === "FILLED" || order.status === "PENDING",
-      order,
+      ok: result.order.status === "FILLED" || result.order.status === "PENDING",
+      order: result.order,
     });
   },
 );
 
 export const cancelOrderTool = tool(
   "cancel_order",
-  "Cancel a pending broker order by id. Outside backtests, the user is always prompted in the CLI before any broker call.",
+  "Cancel a pending broker order by id. In manual mode, the user is prompted before the tool runs.",
   { id: z.string() },
   async ({ id }) => {
-    const cfg = loadConfig();
     const inBacktest = currentBrokerName() != null;
-    if (!inBacktest && cfg.autonomy === "advisory") {
-      return asText({
-        ok: false,
-        error: "autonomy=advisory; cancel_order is disabled.",
-      });
-    }
     if (!inBacktest) {
       const ok = await requireBrokerConsent("cancel_order", `order_id=${id}`);
       if (!ok) return asText({ ok: false, error: "user_declined" });
@@ -120,7 +126,7 @@ export const cancelOrderTool = tool(
 
 export const listOrdersTool = tool(
   "list_orders",
-  "List recent broker orders (paper or live), optionally filtered by ticker or status. Outside backtests, the user is always prompted in the CLI before any broker call.",
+  "List recent broker orders (paper or live), optionally filtered by ticker or status. In manual mode, the user is prompted before the tool runs.",
   {
     ticker: z.string().optional(),
     status: z.enum(["PENDING", "FILLED", "CANCELLED", "REJECTED"]).optional(),
@@ -148,7 +154,7 @@ export const listOrdersTool = tool(
 
 export const brokerStateTool = tool(
   "broker_state",
-  "Get the broker's current cash + open positions (paper or live). Outside backtests, the user is always prompted in the CLI before any broker call.",
+  "Get the broker's current cash + open positions (paper or live). In manual mode, the user is prompted before the tool runs.",
   {},
   async () => {
     if (currentBrokerName() == null) {

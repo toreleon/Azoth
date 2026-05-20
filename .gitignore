@@ -40,6 +40,11 @@ out/
 .eslintcache
 .nyc_output/
 
+# Desktop app
+desktop/node_modules/
+desktop/out/
+desktop/release/
+
 # Editor and OS files
 .DS_Store
 Thumbs.db

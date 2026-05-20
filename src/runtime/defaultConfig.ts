@@ -1,7 +1,7 @@
 export const DEFAULT_CONFIG_YAML = `# Azoth configuration
 
-# advisory | confirm | auto
-autonomy: advisory
+# manual | auto
+autonomy: manual
 
 # Default model for the orchestrator.
 model: glm-5.1
@@ -30,6 +30,7 @@ fhsc:
   base_url: https://api.vinasecurities.com
   access_token: ""
   access_key: ""
+  refresh_token: ""
   device_id: ""
   user_id: ""
   cust_id: ""

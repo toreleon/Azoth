@@ -26,12 +26,18 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async () => {
       __mcp: cfg.name,
       tools: cfg.tools,
     }),
-    query: ({ prompt, options }: { prompt: string; options: { systemPrompt?: string; allowedTools?: string[] } }) => {
+    query: ({ prompt, options }: { prompt: string; options: { systemPrompt?: string; allowedTools?: string[]; permissionMode?: string; allowDangerouslySkipPermissions?: boolean } }) => {
       const next = ROLE_SCRIPTS.shift();
       if (!next) {
         throw new Error("no scripted response left for query()");
       }
-      observedRoleOrder.push({ role: next.role, allowedTools: options.allowedTools ?? [], prompt });
+      observedRoleOrder.push({
+        role: next.role,
+        allowedTools: options.allowedTools ?? [],
+        prompt,
+        permissionMode: options.permissionMode,
+        allowDangerouslySkipPermissions: options.allowDangerouslySkipPermissions,
+      });
       const text = JSON.stringify(next.payload);
       const messages = [
         {
@@ -61,7 +67,13 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async () => {
   };
 });
 
-const observedRoleOrder: Array<{ role: string; allowedTools: string[]; prompt: string }> = [];
+const observedRoleOrder: Array<{
+  role: string;
+  allowedTools: string[];
+  prompt: string;
+  permissionMode?: string;
+  allowDangerouslySkipPermissions?: boolean;
+}> = [];
 
 beforeEach(() => {
   process.env.AZOTH_DB = TMP_DB;
@@ -80,7 +92,7 @@ describe("runTeamAnalysis", () => {
     writeFileSync(
       viConfig,
       [
-        "autonomy: advisory",
+        "autonomy: manual",
         "model: claude-sonnet-4-6",
         "team:",
         "  quick_model: claude-haiku-4-6",
@@ -263,11 +275,17 @@ describe("runTeamAnalysis", () => {
     expect(technical!.allowedTools.some((t) => t.includes("place_order"))).toBe(false);
     expect(technical!.allowedTools.some((t) => t.includes("technical_indicators"))).toBe(true);
     expect(technical!.allowedTools).toContain("WebSearch");
+    expect(technical!.permissionMode).toBe("bypassPermissions");
+    expect(technical!.allowDangerouslySkipPermissions).toBe(true);
 
     const bull = observedRoleOrder.find((r) => r.role === "bull");
     expect(bull!.allowedTools).toEqual(["WebSearch"]);
+    expect(bull!.permissionMode).toBe("bypassPermissions");
+    expect(bull!.allowDangerouslySkipPermissions).toBe(true);
     const researchManager = observedRoleOrder.find((r) => r.role === "researchManager");
     expect(researchManager!.allowedTools).toEqual(["WebSearch"]);
+    expect(researchManager!.permissionMode).toBe("bypassPermissions");
+    expect(researchManager!.allowDangerouslySkipPermissions).toBe(true);
   });
 
   it("downgrades bullish directional ratings to HOLD when risk rejects", async () => {

@@ -22,7 +22,7 @@ beforeEach(async () => {
   writeFileSync(
     process.env.AZOTH_CONFIG,
     [
-      "autonomy: advisory",
+      "autonomy: manual",
       "model: test-model",
       "team:",
       "  quick_model: test-quick",
@@ -64,13 +64,40 @@ describe("outer agent team delegation", () => {
     expect(prompt).toContain("Never call this a formal T+2.5 cycle");
 
     const opts = buildOptions();
-    expect(opts.allowedTools).toContain("mcp__azoth__team_question");
-    expect(opts.allowedTools).toContain("mcp__azoth__team_analyze");
-    expect(opts.allowedTools).toContain("mcp__azoth__account_history");
+    expect(opts.allowedTools).toEqual([]);
+    expect(opts.canUseTool).toBeTypeOf("function");
 
     const server = opts.mcpServers?.azoth as unknown as { tools: Array<{ name?: string }> };
     expect(server.tools.map((t) => t.name)).toEqual(
       expect.arrayContaining(["team_question", "team_analyze", "account_history"]),
     );
+  });
+
+  it("auto mode bypasses tool permissions", async () => {
+    writeFileSync(
+      process.env.AZOTH_CONFIG!,
+      [
+        "autonomy: auto",
+        "model: test-model",
+        "broker: paper",
+        "risk:",
+        "  max_position_pct: 0.15",
+        "  max_daily_loss_pct: 0.03",
+        "  max_order_notional_vnd: 50000000",
+        "  ticker_whitelist: []",
+        "  allow_margin: false",
+        "",
+      ].join("\n"),
+    );
+    const { resetConfigCacheForTests } = await import("../src/config/loader.js");
+    resetConfigCacheForTests();
+    const { buildOptions } = await import("../src/agent/orchestrator.js");
+
+    const opts = buildOptions();
+    expect(opts.allowedTools).toContain("mcp__azoth__team_question");
+    expect(opts.allowedTools).toContain("mcp__azoth__team_analyze");
+    expect(opts.allowedTools).toContain("mcp__azoth__account_history");
+    expect(opts.permissionMode).toBe("bypassPermissions");
+    expect(opts.allowDangerouslySkipPermissions).toBe(true);
   });
 });

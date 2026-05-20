@@ -5,8 +5,8 @@ import { z } from "zod";
 import { DEFAULT_CONFIG_YAML } from "../runtime/defaultConfig.js";
 import { azothPaths, ensureAzothDirs } from "../runtime/paths.js";
 
-const ConfigSchema = z.object({
-  autonomy: z.enum(["advisory", "confirm", "auto"]),
+export const ConfigSchema = z.object({
+  autonomy: z.enum(["manual", "auto"]),
   model: z.string().min(1),
   llm: z
     .object({
@@ -32,6 +32,7 @@ const ConfigSchema = z.object({
       base_url: z.string().default("https://api.vinasecurities.com"),
       access_token: z.string().default(""),
       access_key: z.string().default(""),
+      refresh_token: z.string().default(""),
       device_id: z.string().default(""),
       user_id: z.string().default(""),
       cust_id: z.string().default(""),
@@ -45,6 +46,7 @@ const ConfigSchema = z.object({
       base_url: "https://api.vinasecurities.com",
       access_token: "",
       access_key: "",
+      refresh_token: "",
       device_id: "",
       user_id: "",
       cust_id: "",
@@ -97,7 +99,7 @@ export function loadConfig(): Config {
     throw new Error(`Config path points to a directory: ${path}. Set AZOTH_CONFIG to a YAML file path.`);
   }
   const raw = readFileSync(path, "utf8");
-  const parsed = parseYaml(raw);
+  const parsed = normalizeLegacyConfig(parseYaml(raw));
   cached = ConfigSchema.parse(parsed);
   applyLlmEnvironment(cached);
   return cached;
@@ -129,4 +131,11 @@ export function updateConfig(patch: Partial<Config>): Config {
 
 export function resetConfigCacheForTests(): void {
   cached = null;
+}
+
+function normalizeLegacyConfig(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parsed;
+  const cfg = { ...parsed } as Record<string, unknown>;
+  if (cfg.autonomy === "advisory" || cfg.autonomy === "confirm") cfg.autonomy = "manual";
+  return cfg;
 }

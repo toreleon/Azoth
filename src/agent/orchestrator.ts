@@ -2,8 +2,10 @@ import {
   query,
   createSdkMcpServer,
   type Options,
+  type PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
 import { ohlcvTool, quoteTool } from "../tools/marketData.js";
+import { liveChartTool } from "../tools/liveChart.js";
 import { indicatorsTool } from "../tools/technical.js";
 import { fundamentalsTool } from "../tools/fundamentals.js";
 import { newsTool } from "../tools/news.js";
@@ -20,7 +22,10 @@ import {
   listOrdersTool,
   brokerStateTool,
 } from "../tools/order.js";
+import { resolveClaudeCodeExecutable } from "./claudeCodeExecutable.js";
+import { spawnTrackedClaudeCodeProcess } from "./claudeProcess.js";
 import { loadConfig } from "../config/loader.js";
+import { rememberApprovedToolConsent, requireToolConsent } from "../tools/brokerConsent.js";
 import {
   activateSession,
   appendSessionRecord,
@@ -39,13 +44,14 @@ export function buildSystemPrompt(): string {
   const cfg = loadConfig();
   return [
     "You are Azoth, an investment analyst for the Vietnamese stock market (HOSE / HNX / UPCOM).",
-    cfg.autonomy === "advisory"
-      ? "Current autonomy mode: advisory. Order-placement tools are unavailable."
-      : `Current autonomy mode: ${cfg.autonomy}. Broker tools are available through the configured ${cfg.broker} broker, but every broker call requires explicit CLI approval first.`,
+    cfg.autonomy === "manual"
+      ? `Current autonomy mode: manual. Every tool call requires user approval before it runs. Broker tools use the configured ${cfg.broker} broker after approval.`
+      : `Current autonomy mode: auto. Tool calls run without approval prompts. Broker tools use the configured ${cfg.broker} broker and still pass risk guardrails.`,
     "",
     "Tools available:",
-    "- market_quote: latest reference / ceiling / floor / company info (SSI iBoard).",
+    "- market_quote: live SSI iBoard quote: matched price, change, volume, bid/ask, reference / ceiling / floor, company info.",
     "- market_ohlcv: OHLCV bars for a stock or index (DNSE).",
+    "- live_chart: fetch realtime/intraday OHLCV candles and show an interactive chart in the desktop app. Use resolution='1' or '5' for live/current chart requests; use '1D' only when the user asks for daily/historical candles.",
     "- technical_indicators: compute RSI / MACD / SMA / EMA / Bollinger from DNSE bars.",
     "- fundamentals_snapshot: P/E, P/B, ROE, ROA, EPS, BVPS, market cap, recent quarterly ratios (VNDirect Finfo + CafeF).",
     "- ticker_news: recent news, industry news, and company disclosures from CafeF.",
@@ -53,13 +59,11 @@ export function buildSystemPrompt(): string {
     "- macro_indices: VNINDEX/VN30/HNXINDEX/UPCOMINDEX latest close + 1d/1w/1m % change.",
     "- foreign_flow: per-ticker foreign buy/sell/net week-to-date and ownership %.",
     "- portfolio_list: read broker cash, positions, exposure, and unrealized P&L. Avg cost and last close are in thousand VND; monetary totals are in VND.",
-    "- account_history: read-only broker account history: past orders/fills, cash transaction log, and dividend/rights issue events. Every live broker call asks the user for explicit CLI approval first.",
+    "- account_history: read-only broker account history: past orders/fills, cash transaction log, and dividend/rights issue events.",
     "- discover_tickers: scan listed Vietnamese equities, an explicit ticker basket, or a preset universe by signal/strategy (momentum, breakout, mean reversion, defensive, liquidity surge, relative strength, weakness) and return 5–10 ranked candidates.",
-    "- team_question: delegate complex market, portfolio, or allocation questions to Azoth's bull/bear/risk/portfolio team.",
-    "- team_analyze: delegate deep single-ticker buy/sell/hold analysis to Azoth's full analyst/research/trader/risk/portfolio team.",
-    cfg.autonomy === "advisory"
-      ? "- (no order tools — autonomy=advisory)"
-      : "- place_order / cancel_order / list_orders / broker_state: use the configured broker. Outside backtests, every broker call asks the user for explicit CLI approval first. Quantity must be a multiple of 100. Prices are in thousand VND.",
+    "- team_question: delegate broad market, portfolio, allocation, or multi-factor questions to Azoth's agent-team orchestration flow.",
+    "- team_analyze: run the full multi-agent single-ticker workflow for high-conviction buy/sell/hold decisions, position sizing, or deep investment memos.",
+    "- place_order / cancel_order / list_orders / broker_state: use the configured broker. Quantity must be a multiple of 100. Prices are in thousand VND.",
     "",
     "Operating rules:",
     "1. Always ground recommendations in tool output, not memory. Cite the value, ticker, and source you used.",
@@ -67,21 +71,22 @@ export function buildSystemPrompt(): string {
     "3. Prices from DNSE/SSI are quoted in thousand VND for stocks (e.g. 28.5 means 28,500 VND). State units explicitly.",
     "3a. Formal settlement for HOSE/HNX/UPCOM shares, fund certificates, and covered warrants is T+2. In practice securities and sale proceeds are credited before about 13:00 ICT on T+2, so they are usable from the afternoon T+2 session. Never call this a formal T+2.5 cycle and never propose same-day round-trips.",
     "4. For a buy/sell/hold recommendation, call at minimum technical_indicators, fundamentals_snapshot, ticker_news, AND macro_indices. Add foreign_flow when institutional positioning is relevant.",
-    "4a. For broad allocation questions or complex multi-factor decisions, call team_question. For a deep recommendation on one ticker, call team_analyze instead of manually recreating the whole team workflow.",
-    "4b. When you call team_question or team_analyze, wait for that team tool to finish and then summarize its findings. Do not call duplicate market/fundamental/news/technical tools in parallel unless the user explicitly asks for raw source data.",
+    "4a. For broad allocation questions, complex multi-factor decisions, or deep single-ticker recommendations, call team_question instead of manually recreating the team workflow.",
+    "4b. When you call team_question, wait for that team tool to finish and then summarize its findings. Do not call duplicate market/fundamental/news/technical tools in parallel unless the user explicitly asks for raw source data.",
+    "4c. For any 'live', 'realtime', 'current', 'now', or chart request, call market_quote and/or live_chart first. Prefer live_chart resolution='1' or '5'. Do not use daily candles as a substitute for realtime data unless the market is closed or the user explicitly asks for daily data; if market data is stale because the market is closed, say the exact last bar/trading time.",
     "5. When citing news, include the URL and publish date so the user can verify.",
     "6. Keep replies concise. Show the numbers, then a one-paragraph synthesis covering all four dimensions (technical / fundamental / news / macro).",
-    cfg.autonomy === "advisory"
-      ? "7. Order-placement tools are NOT available in advisory mode. Recommend; do not claim to have placed an order. The user executes manually."
-      : `7. Broker tools ARE available (autonomy=${cfg.autonomy}, broker=${cfg.broker}). Outside backtests, every broker read or write first asks the user for explicit CLI approval; approved orders then go through risk guardrails.`,
+    cfg.autonomy === "manual"
+      ? `7. Manual mode: ask for approval through the tool-permission flow before every tool call. Approved broker orders still go through risk guardrails.`
+      : `7. Auto mode: tool calls run without approval prompts (autonomy=auto, broker=${cfg.broker}). Broker orders still go through risk guardrails.`,
   ].join("\n");
 }
 
 export function buildMcpServer() {
-  const cfg = loadConfig();
   const baseTools = [
     quoteTool,
     ohlcvTool,
+    liveChartTool,
     indicatorsTool,
     fundamentalsTool,
     newsTool,
@@ -99,10 +104,7 @@ export function buildMcpServer() {
     listOrdersTool,
     brokerStateTool,
   ];
-  const tools =
-    cfg.autonomy === "advisory"
-      ? baseTools
-      : [...baseTools, ...orderTools];
+  const tools = [...baseTools, ...orderTools];
   // SDK accepts a heterogeneous tool array; widen the element type.
   return createSdkMcpServer({
     name: "azoth",
@@ -110,13 +112,66 @@ export function buildMcpServer() {
   });
 }
 
+const ALL_ALLOWED_TOOLS = [
+  "WebSearch",
+  "mcp__azoth__market_quote",
+  "mcp__azoth__market_ohlcv",
+  "mcp__azoth__live_chart",
+  "mcp__azoth__technical_indicators",
+  "mcp__azoth__fundamentals_snapshot",
+  "mcp__azoth__ticker_news",
+  "mcp__azoth__macro_indices",
+  "mcp__azoth__foreign_flow",
+  "mcp__azoth__portfolio_list",
+  "mcp__azoth__account_history",
+  "mcp__azoth__discover_tickers",
+  "mcp__azoth__team_question",
+  "mcp__azoth__team_analyze",
+  "mcp__azoth__place_order",
+  "mcp__azoth__cancel_order",
+  "mcp__azoth__list_orders",
+  "mcp__azoth__broker_state",
+];
+
+function normalizeToolName(name: string | undefined): string | undefined {
+  return name?.replace(/^mcp__[^_]+__/, "");
+}
+
+function summarizeToolInput(input: Record<string, unknown>): string {
+  const json = JSON.stringify(input);
+  if (!json || json === "{}") return "";
+  return json.length > 1200 ? `${json.slice(0, 1200)}...` : json;
+}
+
+async function canUseTool(toolName: string, input: Record<string, unknown>): Promise<PermissionResult> {
+  const action = normalizeToolName(toolName) ?? toolName;
+  const ok = await requireToolConsent(action, summarizeToolInput(input), toolName);
+  if (!ok) {
+    return {
+      behavior: "deny",
+      message: "User declined this tool call.",
+      interrupt: true,
+    };
+  }
+  if (["portfolio_list", "account_history", "place_order", "cancel_order", "list_orders", "broker_state"].includes(action)) {
+    rememberApprovedToolConsent(action);
+  }
+  return {
+    behavior: "allow",
+    updatedInput: input,
+  };
+}
+
 export function buildOptions(opts: { resume?: string; abortController?: AbortController } = {}): Options {
   const cfg = loadConfig();
+  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable();
   return {
     model: cfg.model,
     systemPrompt: buildSystemPrompt(),
+    ...(pathToClaudeCodeExecutable ? { pathToClaudeCodeExecutable } : {}),
     ...(opts.resume ? { resume: opts.resume } : {}),
     ...(opts.abortController ? { abortController: opts.abortController } : {}),
+    spawnClaudeCodeProcess: spawnTrackedClaudeCodeProcess,
     mcpServers: {
       azoth: buildMcpServer(),
     },
@@ -125,29 +180,10 @@ export function buildOptions(opts: { resume?: string; abortController?: AbortCon
     // are unnecessary for an analyst agent and can confuse non-Claude models
     // like GLM into recursive subagent calls.
     tools: ["WebSearch"],
-    allowedTools: [
-      "WebSearch",
-      "mcp__azoth__market_quote",
-      "mcp__azoth__market_ohlcv",
-      "mcp__azoth__technical_indicators",
-      "mcp__azoth__fundamentals_snapshot",
-      "mcp__azoth__ticker_news",
-      "mcp__azoth__macro_indices",
-      "mcp__azoth__foreign_flow",
-      "mcp__azoth__portfolio_list",
-      "mcp__azoth__account_history",
-      "mcp__azoth__discover_tickers",
-      "mcp__azoth__team_question",
-      "mcp__azoth__team_analyze",
-      ...(cfg.autonomy === "advisory"
-        ? []
-        : [
-            "mcp__azoth__place_order",
-            "mcp__azoth__cancel_order",
-            "mcp__azoth__list_orders",
-            "mcp__azoth__broker_state",
-          ]),
-    ],
+    allowedTools: cfg.autonomy === "auto" ? ALL_ALLOWED_TOOLS : [],
+    ...(cfg.autonomy === "auto"
+      ? { permissionMode: "bypassPermissions" as const, allowDangerouslySkipPermissions: true }
+      : { permissionMode: "default" as const, canUseTool }),
   };
 }
 
@@ -155,9 +191,10 @@ let activeSessionId: string | undefined;
 let activeLocalSessionId: string | undefined;
 const pendingLocalContext: string[] = [];
 
-export function resetSession() {
+export function resetSession(cwd = process.cwd()) {
   const cfg = loadConfig();
   const session = createSession({
+    cwd,
     model: cfg.model,
     autonomy: cfg.autonomy,
   });
@@ -166,9 +203,10 @@ export function resetSession() {
   pendingLocalContext.length = 0;
 }
 
-export function startNewSession(title?: string): SessionIndexEntry {
+export function startNewSession(title?: string, cwd = process.cwd()): SessionIndexEntry {
   const cfg = loadConfig();
   const session = createSession({
+    cwd,
     title,
     model: cfg.model,
     autonomy: cfg.autonomy,
@@ -179,31 +217,31 @@ export function startNewSession(title?: string): SessionIndexEntry {
   return session;
 }
 
-export function resumeLatestSession(): SessionIndexEntry | undefined {
-  const active = getActiveSession();
-  const session = active ? findSession(active.id) : latestSession();
+export function resumeLatestSession(cwd = process.cwd()): SessionIndexEntry | undefined {
+  const active = getActiveSession(cwd);
+  const session = active ? findSession(active.id, cwd) : latestSession(cwd);
   if (!session) return undefined;
   activeLocalSessionId = session.id;
   activeSessionId = session.sdkSessionId;
-  activateSession(session.id);
+  activateSession(session.id, cwd);
   return session;
 }
 
-export function resumeSession(id: string): SessionIndexEntry | undefined {
-  const session = activateSession(id);
+export function resumeSession(id: string, cwd = process.cwd()): SessionIndexEntry | undefined {
+  const session = activateSession(id, cwd);
   if (!session) return undefined;
   activeLocalSessionId = session.id;
   activeSessionId = session.sdkSessionId;
   return session;
 }
 
-export function recentSessions(limit = 10): SessionIndexEntry[] {
-  return listSessions().slice(0, limit);
+export function recentSessions(limit = 10, cwd = process.cwd()): SessionIndexEntry[] {
+  return listSessions(cwd).slice(0, limit);
 }
 
-export function readActiveSessionRecords(): SessionRecord[] {
-  const session = resumeLatestSession();
-  return session ? readSessionRecords(session.id) : [];
+export function readActiveSessionRecords(cwd = process.cwd()): SessionRecord[] {
+  const session = resumeLatestSession(cwd);
+  return session ? readSessionRecords(session.id, cwd) : [];
 }
 
 export function recordLocalTurn(prompt: string, response: string): void {
@@ -231,10 +269,10 @@ export function recordLocalTurn(prompt: string, response: string): void {
   pendingLocalContext.push(`User command: ${prompt}\nCommand response:\n${response}`);
 }
 
-function ensureActiveChatSession(prompt: string): SessionIndexEntry {
-  const existing = activeLocalSessionId ? findSession(activeLocalSessionId) : resumeLatestSession();
+function ensureActiveChatSession(prompt: string, cwd = process.cwd()): SessionIndexEntry {
+  const existing = activeLocalSessionId ? findSession(activeLocalSessionId, cwd) : resumeLatestSession(cwd);
   if (existing) return existing;
-  return startNewSession(prompt.slice(0, 80) || "Untitled session");
+  return startNewSession(prompt.slice(0, 80) || "Untitled session", cwd);
 }
 
 function pendingContextFromRecords(records: SessionRecord[]): string[] {
@@ -258,33 +296,50 @@ function pendingContextFromRecords(records: SessionRecord[]): string[] {
   return contexts;
 }
 
-function recordSessionId(sdkSessionId: string, cfg: ReturnType<typeof loadConfig>) {
-  if (!activeLocalSessionId) return;
-  activeSessionId = sdkSessionId;
-  touchSession(activeLocalSessionId, { sdkSessionId, model: cfg.model, autonomy: cfg.autonomy });
-  appendSessionRecord(activeLocalSessionId, {
+function recordSessionId(
+  localSessionId: string,
+  cwd: string,
+  sdkSessionId: string,
+  cfg: ReturnType<typeof loadConfig>,
+  updateActiveGlobals: boolean,
+) {
+  if (updateActiveGlobals) activeSessionId = sdkSessionId;
+  touchSession(localSessionId, { sdkSessionId, model: cfg.model, autonomy: cfg.autonomy }, cwd);
+  appendSessionRecord(localSessionId, {
     type: "system",
     timestamp: Date.now(),
-    sessionId: activeLocalSessionId,
-    cwd: process.cwd(),
+    sessionId: localSessionId,
+    cwd,
     sdkSessionId,
     model: cfg.model,
     autonomy: cfg.autonomy,
-  });
+  }, cwd);
 }
 
-export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = {}) {
+export async function* runTurn(
+  prompt: string,
+  opts: { signal?: AbortSignal; sessionId?: string; cwd?: string; displayPrompt?: string } = {},
+) {
   const cfg = loadConfig();
+  const cwd = opts.cwd ?? process.cwd();
   const abortController = new AbortController();
   const abortFromSignal = () => abortController.abort(opts.signal?.reason);
   if (opts.signal?.aborted) abortFromSignal();
   else opts.signal?.addEventListener("abort", abortFromSignal, { once: true });
-  const session = ensureActiveChatSession(prompt);
-  activeLocalSessionId = session.id;
-  activeSessionId = session.sdkSessionId;
-  const localContext = pendingLocalContext.length
+  const session = opts.sessionId
+    ? findSession(opts.sessionId, cwd)
+    : ensureActiveChatSession(prompt, cwd);
+  if (!session) throw new Error(`Session not found: ${opts.sessionId}`);
+  const localSessionId = session.id;
+  const managesGlobalActiveSession = opts.sessionId == null;
+  if (managesGlobalActiveSession) {
+    activeLocalSessionId = session.id;
+    activeSessionId = session.sdkSessionId;
+  }
+  let sdkSessionId = session.sdkSessionId;
+  const localContext = managesGlobalActiveSession && pendingLocalContext.length
     ? pendingLocalContext.splice(0)
-    : pendingContextFromRecords(readSessionRecords(session.id));
+    : pendingContextFromRecords(readSessionRecords(session.id, cwd));
   const sdkPrompt = localContext.length
     ? [
         "Context from local Azoth commands run earlier in this chat. Use it as prior conversation context for this turn:",
@@ -298,11 +353,11 @@ export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = 
     type: "user",
     timestamp: Date.now(),
     sessionId: session.id,
-    cwd: process.cwd(),
-    text: prompt,
+    cwd,
+    text: opts.displayPrompt ?? prompt,
     model: cfg.model,
     autonomy: cfg.autonomy,
-  });
+  }, cwd);
 
   // Attempt to resume the prior SDK session. If Claude Code can no longer
   // find that conversation (subprocess exits with code 1 on startup), drop
@@ -312,32 +367,36 @@ export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = 
   type TextBlock = { type: "assistant" | "thinking"; text: string };
   type ToolBlock = { type: "tool_use"; toolName?: string; toolUseId?: string; toolInput: string };
   let currentBlock: TextBlock | ToolBlock | null = null;
+  const toolNameByUseId = new Map<string, string>();
 
   const flushCurrentBlock = () => {
-    if (!currentBlock || !activeLocalSessionId) return;
+    if (!currentBlock) return;
     const base = {
       timestamp: Date.now(),
-      sessionId: activeLocalSessionId,
-      cwd: process.cwd(),
+      sessionId: localSessionId,
+      cwd,
       model: cfg.model,
       autonomy: cfg.autonomy,
     };
     if (currentBlock.type === "assistant" || currentBlock.type === "thinking") {
       if (currentBlock.text) {
-        appendSessionRecord(activeLocalSessionId, {
+        appendSessionRecord(localSessionId, {
           ...base,
           type: currentBlock.type,
           text: currentBlock.text,
-        });
+        }, cwd);
       }
     } else if (currentBlock.type === "tool_use") {
-      appendSessionRecord(activeLocalSessionId, {
+      if (currentBlock.toolUseId && currentBlock.toolName) {
+        toolNameByUseId.set(currentBlock.toolUseId, currentBlock.toolName);
+      }
+      appendSessionRecord(localSessionId, {
         ...base,
         type: "tool_use",
         toolName: currentBlock.toolName,
         toolUseId: currentBlock.toolUseId,
         toolInput: currentBlock.toolInput,
-      });
+      }, cwd);
     }
     currentBlock = null;
   };
@@ -347,112 +406,122 @@ export async function* runTurn(prompt: string, opts: { signal?: AbortSignal } = 
     for await (const message of stream) yield message;
   };
 
-  let attempt: AsyncGenerator<any, void, void> = consume(activeSessionId);
-  let triedFreshRetry = activeSessionId == null;
+  let attempt: AsyncGenerator<any, void, void> = consume(sdkSessionId);
+  let triedFreshRetry = sdkSessionId == null;
 
   try {
     while (true) {
       try {
         for await (const message of attempt) {
-    if (message.type === "stream_event") {
-      const ev = (message as { event: any }).event;
-      if (ev?.type === "content_block_start") {
-        flushCurrentBlock();
-        const cb = ev.content_block;
-        if (cb?.type === "thinking") {
-          currentBlock = { type: "thinking", text: "" };
-        } else if (cb?.type === "text") {
-          currentBlock = { type: "assistant", text: "" };
-        } else if (cb?.type === "tool_use") {
-          currentBlock = {
-            type: "tool_use",
-            toolName: cb.name,
-            toolUseId: cb.id,
-            toolInput: "",
-          };
-        }
-      } else if (ev?.type === "content_block_delta") {
-        const d = ev.delta;
-        if (d?.type === "thinking_delta" && d.thinking && currentBlock?.type === "thinking") {
-          currentBlock.text += d.thinking;
-        } else if (d?.type === "text_delta" && d.text && currentBlock?.type === "assistant") {
-          currentBlock.text += d.text;
-        } else if (d?.type === "input_json_delta" && d.partial_json && currentBlock?.type === "tool_use") {
-          currentBlock.toolInput += d.partial_json;
-        }
-      } else if (ev?.type === "content_block_stop" || ev?.type === "message_stop") {
-        flushCurrentBlock();
-      }
-    } else if (message.type === "user") {
-      const content = (message as any).message?.content;
-      if (Array.isArray(content) && activeLocalSessionId) {
-        for (const c of content) {
-          if (c?.type === "tool_result") {
-            const text = typeof c.content === "string"
-              ? c.content
-              : Array.isArray(c.content)
-                ? c.content.map((x: any) => x?.text ?? "").join("")
-                : JSON.stringify(c.content);
-            appendSessionRecord(activeLocalSessionId, {
-              type: "tool_result",
-              timestamp: Date.now(),
-              sessionId: activeLocalSessionId,
-              cwd: process.cwd(),
-              text: text.slice(0, 4000),
-              toolUseId: c.tool_use_id,
-              model: cfg.model,
-              autonomy: cfg.autonomy,
-            });
+            if (message.type === "stream_event") {
+              const ev = (message as { event: any }).event;
+              if (ev?.type === "content_block_start") {
+                flushCurrentBlock();
+                const cb = ev.content_block;
+                if (cb?.type === "thinking") {
+                  currentBlock = { type: "thinking", text: "" };
+                } else if (cb?.type === "text") {
+                  currentBlock = { type: "assistant", text: "" };
+                } else if (cb?.type === "tool_use") {
+                  currentBlock = {
+                    type: "tool_use",
+                    toolName: cb.name,
+                    toolUseId: cb.id,
+                    toolInput: "",
+                  };
+                }
+              } else if (ev?.type === "content_block_delta") {
+                const d = ev.delta;
+                if (d?.type === "thinking_delta" && d.thinking && currentBlock?.type === "thinking") {
+                  currentBlock.text += d.thinking;
+                } else if (d?.type === "text_delta" && d.text && currentBlock?.type === "assistant") {
+                  currentBlock.text += d.text;
+                } else if (d?.type === "input_json_delta" && d.partial_json && currentBlock?.type === "tool_use") {
+                  currentBlock.toolInput += d.partial_json;
+                }
+              } else if (ev?.type === "content_block_stop" || ev?.type === "message_stop") {
+                flushCurrentBlock();
+              }
+            } else if (message.type === "user") {
+              const content = (message as any).message?.content;
+              if (Array.isArray(content)) {
+                for (const c of content) {
+                  if (c?.type === "tool_result") {
+                    const text = typeof c.content === "string"
+                      ? c.content
+                      : Array.isArray(c.content)
+                        ? c.content.map((x: any) => x?.text ?? "").join("")
+                        : JSON.stringify(c.content);
+                    const toolName = typeof c.tool_use_id === "string"
+                      ? toolNameByUseId.get(c.tool_use_id)
+                      : undefined;
+                    const maxTextLength = normalizeToolName(toolName) === "live_chart" ? 160_000 : 4000;
+                    appendSessionRecord(localSessionId, {
+                      type: "tool_result",
+                      timestamp: Date.now(),
+                      sessionId: localSessionId,
+                      cwd,
+                      text: text.slice(0, maxTextLength),
+                      toolName,
+                      toolUseId: c.tool_use_id,
+                      model: cfg.model,
+                      autonomy: cfg.autonomy,
+                    }, cwd);
+                  }
+                }
+              }
+            }
+            if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
+              const sid = (message as { session_id?: string }).session_id;
+              if (sid) {
+                sdkSessionId = sid;
+                recordSessionId(localSessionId, cwd, sid, cfg, managesGlobalActiveSession);
+              }
+            } else if (message.type === "result") {
+              flushCurrentBlock();
+              const r = message as unknown as {
+                session_id?: string;
+                total_cost_usd?: number;
+                usage?: {
+                  input_tokens?: number;
+                  output_tokens?: number;
+                  cache_read_input_tokens?: number;
+                  cache_creation_input_tokens?: number;
+                };
+              };
+              if (r.session_id) {
+                sdkSessionId = r.session_id;
+                recordSessionId(localSessionId, cwd, r.session_id, cfg, managesGlobalActiveSession);
+              }
+              appendSessionRecord(localSessionId, {
+                type: "result",
+                timestamp: Date.now(),
+                sessionId: localSessionId,
+                cwd,
+                sdkSessionId: r.session_id,
+                usage: {
+                  inputTokens: r.usage?.input_tokens,
+                  outputTokens: r.usage?.output_tokens,
+                  cacheReadTokens: r.usage?.cache_read_input_tokens,
+                  cacheCreationTokens: r.usage?.cache_creation_input_tokens,
+                },
+                costUsd: r.total_cost_usd,
+                model: cfg.model,
+                autonomy: cfg.autonomy,
+              }, cwd);
+            }
+            yield message;
           }
-        }
-      }
-    }
-    if (message.type === "system" && (message as { subtype?: string }).subtype === "init") {
-      const sid = (message as { session_id?: string }).session_id;
-      if (sid) recordSessionId(sid, cfg);
-    } else if (message.type === "result") {
-      flushCurrentBlock();
-      const r = message as unknown as {
-        session_id?: string;
-        total_cost_usd?: number;
-        usage?: {
-          input_tokens?: number;
-          output_tokens?: number;
-          cache_read_input_tokens?: number;
-          cache_creation_input_tokens?: number;
-        };
-      };
-      if (r.session_id) recordSessionId(r.session_id, cfg);
-      if (activeLocalSessionId) {
-        appendSessionRecord(activeLocalSessionId, {
-          type: "result",
-          timestamp: Date.now(),
-          sessionId: activeLocalSessionId,
-          cwd: process.cwd(),
-          sdkSessionId: r.session_id,
-          usage: {
-            inputTokens: r.usage?.input_tokens,
-            outputTokens: r.usage?.output_tokens,
-            cacheReadTokens: r.usage?.cache_read_input_tokens,
-            cacheCreationTokens: r.usage?.cache_creation_input_tokens,
-          },
-          costUsd: r.total_cost_usd,
-          model: cfg.model,
-          autonomy: cfg.autonomy,
-        });
-      }
-    }
-      yield message;
-        }
-        break;
-      } catch (err) {
-        const msg = (err as Error)?.message ?? "";
-        if (!triedFreshRetry && /exited with code 1|No conversation found/i.test(msg)) {
-          triedFreshRetry = true;
-          activeSessionId = undefined;
-          currentBlock = null;
-          attempt = consume(undefined);
-          continue;
+          break;
+        } catch (err) {
+          const msg = (err as Error)?.message ?? "";
+          if (!triedFreshRetry && /exited with code 1|No conversation found/i.test(msg)) {
+            triedFreshRetry = true;
+            sdkSessionId = undefined;
+            if (managesGlobalActiveSession) activeSessionId = undefined;
+            currentBlock = null;
+            attempt = consume(undefined);
+            continue;
         }
         throw err;
       }

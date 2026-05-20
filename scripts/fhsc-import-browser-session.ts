@@ -5,6 +5,17 @@ import { azothPaths } from "../src/runtime/paths.js";
 
 const ORIGIN = "invest.fhsc.com.vn";
 const DEFAULT_BASE = "https://api.vinasecurities.com";
+const SESSION_MARKERS = [
+  ORIGIN,
+  "access_token",
+  "accessToken",
+  "access_key",
+  "accessKey",
+  "refresh_token",
+  "refreshToken",
+  "device_id",
+  "deviceId",
+];
 
 interface Candidate {
   profile: string;
@@ -12,6 +23,7 @@ interface Candidate {
   mtimeMs: number;
   accessToken?: string;
   accessKey?: string;
+  refreshToken?: string;
   deviceId?: string;
   userId?: string;
   custId?: string;
@@ -53,7 +65,18 @@ function rejectToken(token: string): boolean {
     token.includes(ORIGIN) ||
     token.startsWith("https:") ||
     token.startsWith("_https:") ||
-    ["access_key", "access_token", "device_id", "cust_id", "persist:root"].includes(token)
+    [
+      "access_key",
+      "accessKey",
+      "access_token",
+      "accessToken",
+      "refresh_token",
+      "refreshToken",
+      "device_id",
+      "deviceId",
+      "cust_id",
+      "persist:root",
+    ].includes(token)
   );
 }
 
@@ -64,10 +87,11 @@ function firstTokenAfter(window: string, key: string): string | undefined {
 function extractFromWindow(window: string): Omit<Candidate, "profile" | "file" | "mtimeMs"> {
   const accessToken = window.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/)?.[0];
   const accessKey = firstTokenAfter(window, "access_key") ?? firstTokenAfter(window, "accessKey");
+  const refreshToken = firstTokenAfter(window, "refresh_token") ?? firstTokenAfter(window, "refreshToken");
   const deviceId = firstTokenAfter(window, "device_id") ?? firstTokenAfter(window, "deviceId");
   const userId = tokensAfter(window, "user_id").find((token) => /^\d{3,}$/.test(token));
   const custId = tokensAfter(window, "cust_id").find((token) => /^\d{6,}$/.test(token));
-  return { accessToken, accessKey, deviceId, userId, custId };
+  return { accessToken, accessKey, refreshToken, deviceId, userId, custId };
 }
 
 function candidatesFromFile(profile: string, file: string): Candidate[] {
@@ -75,14 +99,23 @@ function candidatesFromFile(profile: string, file: string): Candidate[] {
   const text = buf.toString("latin1");
   const stat = statSync(file);
   const candidates: Candidate[] = [];
-  let index = 0;
-  while ((index = text.indexOf(ORIGIN, index)) >= 0) {
-    const window = text.slice(Math.max(0, index - 250), index + 2_500);
-    const found = extractFromWindow(window);
-    if (found.accessToken || found.accessKey || found.deviceId) {
-      candidates.push({ profile, file, mtimeMs: stat.mtimeMs, ...found });
+  const seen = new Set<number>();
+  for (const marker of SESSION_MARKERS) {
+    let index = 0;
+    while ((index = text.indexOf(marker, index)) >= 0) {
+      const start = Math.max(0, index - 500);
+      if (seen.has(start)) {
+        index += marker.length;
+        continue;
+      }
+      seen.add(start);
+      const window = text.slice(start, index + 3_500);
+      const found = extractFromWindow(window);
+      if (found.accessToken || found.accessKey || found.refreshToken || found.deviceId) {
+        candidates.push({ profile, file, mtimeMs: stat.mtimeMs, ...found });
+      }
+      index += marker.length;
     }
-    index += ORIGIN.length;
   }
   return candidates;
 }
@@ -91,9 +124,38 @@ function score(candidate: Candidate): number {
   return (
     (candidate.accessToken ? 4 : 0) +
     (candidate.accessKey ? 4 : 0) +
+    (candidate.refreshToken ? 3 : 0) +
     (candidate.deviceId ? 2 : 0) +
     (candidate.custId ? 1 : 0)
   );
+}
+
+function mergeProfileCandidates(candidates: Candidate[]): Candidate[] {
+  const byProfile = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    const list = byProfile.get(candidate.profile) ?? [];
+    list.push(candidate);
+    byProfile.set(candidate.profile, list);
+  }
+
+  return Array.from(byProfile.entries()).map(([profile, list]) => {
+    const best = list.slice().sort((a, b) => score(b) - score(a) || b.mtimeMs - a.mtimeMs)[0];
+    const newestWith = (field: keyof Omit<Candidate, "profile" | "file" | "mtimeMs">) =>
+      list
+        .filter((candidate) => candidate[field])
+        .sort((a, b) => b.mtimeMs - a.mtimeMs || score(b) - score(a))[0]?.[field];
+    return {
+      profile,
+      file: best.file,
+      mtimeMs: best.mtimeMs,
+      accessToken: newestWith("accessToken"),
+      accessKey: newestWith("accessKey"),
+      refreshToken: newestWith("refreshToken"),
+      deviceId: newestWith("deviceId"),
+      userId: newestWith("userId"),
+      custId: newestWith("custId"),
+    };
+  });
 }
 
 function bestCandidate(): Candidate | undefined {
@@ -104,7 +166,7 @@ function bestCandidate(): Candidate | undefined {
       candidates.push(...candidatesFromFile(profile, join(dir, name)));
     }
   }
-  return candidates
+  return mergeProfileCandidates(candidates)
     .filter((candidate) => candidate.accessToken && candidate.accessKey)
     .sort((a, b) => score(b) - score(a) || b.mtimeMs - a.mtimeMs)[0];
 }
@@ -127,6 +189,7 @@ function main() {
       base_url: current.fhsc.base_url.trim() || DEFAULT_BASE,
       access_token: candidate.accessToken,
       access_key: candidate.accessKey,
+      refresh_token: candidate.refreshToken ?? current.fhsc.refresh_token,
       device_id: candidate.deviceId ?? current.fhsc.device_id,
       user_id: candidate.userId ?? current.fhsc.user_id,
       cust_id: candidate.custId ?? current.fhsc.cust_id,
@@ -134,6 +197,7 @@ function main() {
   });
 
   const fields = ["access_token", "access_key"];
+  if (candidate.refreshToken) fields.push("refresh_token");
   if (candidate.deviceId) fields.push("device_id");
   if (candidate.userId) fields.push("user_id");
   if (candidate.custId) fields.push("cust_id");

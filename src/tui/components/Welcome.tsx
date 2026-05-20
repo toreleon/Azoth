@@ -11,11 +11,10 @@ export const AZOTH_LOGO = [
 ];
 
 const TIPS = [
-  ["/team <message>", "multi-agent team debate"],
-  ["/analyze <TICKER>", "structured team analysis"],
+  ["/team <message>", "agent-team orchestration"],
   ["/quote <TICKER>", "price · technicals · news"],
   ["/positions", "portfolio · PnL · exposures"],
-  ["/autonomy", "persist advisory · confirm · auto"],
+  ["/autonomy", "persist manual · auto"],
   ["/health", "runtime · broker · provider checks"],
   ["/backtest", "team-driven interval simulation"],
 ];
@@ -75,8 +74,8 @@ export function Welcome({ version, autonomy, broker, cwd }: WelcomeProps) {
         <Box marginTop={1} flexDirection="column">
           <Text color={theme.accent} bold>What&apos;s new</Text>
           <Text dimColor>· Chat-first layout — market data flows into chat, no dashboard grid.</Text>
-          <Text dimColor>· /team, /analyze, /quote, /positions, and /backtest render inline.</Text>
-          <Text dimColor>· /autonomy persists advisory, confirm, or auto mode.</Text>
+          <Text dimColor>· /team, /quote, /positions, and /backtest render inline.</Text>
+          <Text dimColor>· /autonomy persists manual or auto mode.</Text>
         </Box>
       </Box>
     </Box>
