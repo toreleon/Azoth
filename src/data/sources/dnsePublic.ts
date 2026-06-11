@@ -47,7 +47,7 @@ async function fetchOhlcs(
 
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
-  for (let i = 0; i < s.t.length; i++) {
+  for (let i = 0; i < (s.t?.length || 0); i++) {
     if (s.c[i] == null) continue; // skip empty intraday slots
     out.push({
       time: s.t[i]!,

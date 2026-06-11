@@ -3,7 +3,7 @@ import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
 import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
-import { DISCOVERY_UNIVERSE, discoverTickers } from "../tools/discover.js";
+import { DISCOVERY_UNIVERSE, discoverTickers, mapLimit } from "../tools/discover.js";
 import { setActiveAsOf } from "./clock.js";
 import { runTeamAnalysis } from "./team/index.js";
 import type { FinalDecision, TeamEvent } from "./team/state.js";
@@ -259,10 +259,12 @@ export async function runBacktestSession(
   const fetchFrom = startSec - 7 * 86400;
   const fetchTo = endSec + 7 * 86400;
   const bars: Record<string, Bar[]> = {};
-  for (const t of universe) {
+
+  await mapLimit(universe, 10, async (t) => {
     bars[t] = await getStockOhlcv(t, "30", fetchFrom, fetchTo);
     if (cb.signal?.aborted) throw new Error("aborted");
-  }
+  });
+
   const vnindex = await getIndexOhlcv("VNINDEX", "30", fetchFrom, fetchTo);
 
   const intervalTurns = intervalCloses(vnindex, startSec, endSec, interval.minutes);
