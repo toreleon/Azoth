@@ -9,7 +9,7 @@ describe("portfolio units", () => {
         cashVnd: 1_000_000,
         positions: [{ ticker: "FPT", quantity: 100, avgCost: 25 }],
       },
-      async () => 30,
+      async (tickers) => Object.fromEntries(tickers.map(t => [t, 30])),
     );
 
     expect(shaped.cash_vnd).toBe(1_000_000);
