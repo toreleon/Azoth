@@ -285,7 +285,7 @@ async function resolveUniverse(
   return { universe: "all_listed", tickers: await listedTickers(["HOSE", "HNX", "UPCOM"]) };
 }
 
-async function mapLimit<T, R>(
+export async function mapLimit<T, R>(
   items: readonly T[],
   concurrency: number,
   fn: (item: T) => Promise<R>,
