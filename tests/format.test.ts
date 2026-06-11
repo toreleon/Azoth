@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatTokens } from '../src/tui/lib/format';
+import { formatTokens } from '../src/tui/lib/format.js';
 
 describe('formatTokens', () => {
   it('returns "0" for null', () => {
