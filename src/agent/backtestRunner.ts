@@ -119,6 +119,23 @@ function lotRound(qty: number): number {
   return Math.floor(qty / 100) * 100;
 }
 
+function findLatestClose(series: Bar[] | undefined, asOf: number): number | null {
+  if (!series || series.length === 0) return null;
+  let low = 0;
+  let high = series.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (series[mid]!.time <= asOf) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans >= 0 ? series[ans]!.close : null;
+}
+
 function positionValue(p: BrokerPosition, price: number | null): number {
   return (price ?? p.avgCost) * p.quantity * 1000;
 }
@@ -298,8 +315,7 @@ export async function runBacktestSession(
   );
 
   const vnindexAt = (asOf: number): number | null => {
-    const series = vnindex.filter((b) => b.time <= asOf);
-    return series.length ? series[series.length - 1]!.close : null;
+    return findLatestClose(vnindex, asOf);
   };
   const vnindexBaseline = vnindexAt(intervalTurns[0]!);
   if (vnindexBaseline == null) throw new Error(`no VNINDEX data at first ${interval.label} turn`);
@@ -312,8 +328,7 @@ export async function runBacktestSession(
       throwIfAborted(cb.signal);
       const dateIso = ictLabel(asOf);
       const priceOverride = (sym: string): number | null => {
-        const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
-        return series.length ? series[series.length - 1]!.close : null;
+        return findLatestClose(bars[sym], asOf);
       };
       broker.setPriceOverride(priceOverride);
       cb.onTurnStart?.({ asOf, dateIso });
