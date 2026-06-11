@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCafefDate } from "../src/data/sources/cafef";
+import { parseCafefDate } from "../src/data/sources/cafef.js";
 
 describe("parseCafefDate", () => {
   it("should return undefined for empty inputs", () => {
