@@ -10,6 +10,7 @@ import { sparkline } from "../src/tui/lib/sparkline.js";
 import { vnColor, pctColor } from "../src/tui/lib/colors.js";
 import { classifySession } from "../src/tui/lib/marketSession.js";
 import { formatBigVnd, formatPct, formatPrice } from "../src/tui/lib/format.js";
+import { sessionColor } from "../src/tui/lib/theme.js";
 import { getDb } from "../src/storage/db.js";
 import { appendSessionRecord, createSession, latestSession, readSessionRecords } from "../src/runtime/sessionStore.js";
 import { loadConfig, resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
@@ -907,5 +908,13 @@ describe("TUI lib helpers", () => {
     expect(classifySession(Date.UTC(2026, 4, 4, 5, 0, 0) / 1000).label).toBe("lunch");
     expect(classifySession(Date.UTC(2026, 4, 4, 7, 0, 0) / 1000).label).toBe("afternoon");
     expect(classifySession(Date.UTC(2026, 4, 2, 7, 0, 0) / 1000).label).toBe("weekend");
+  });
+
+  it("sessionColor", () => {
+    expect(sessionColor("morning")).toBe("green");
+    expect(sessionColor("afternoon")).toBe("green");
+    expect(sessionColor("atc")).toBe("yellow");
+    expect(sessionColor("lunch")).toBe("yellow");
+    expect(sessionColor("closed")).toBe("gray");
   });
 });
