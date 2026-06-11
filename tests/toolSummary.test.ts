@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { summarizeToolInput } from "../src/tui/lib/toolSummary";
+import { summarizeToolInput } from "../src/tui/lib/toolSummary.js";
 
 describe("summarizeToolInput", () => {
   it("returns empty string for undefined or empty input", () => {
