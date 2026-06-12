@@ -7,7 +7,7 @@ import { render } from "ink-testing-library";
 import { App, previousWeekRange } from "../src/tui/App.js";
 import { LlmSetup } from "../src/tui/components/LlmSetup.js";
 import { sparkline } from "../src/tui/lib/sparkline.js";
-import { vnColor, pctColor } from "../src/tui/lib/colors.js";
+import { vnColor, pctColor, pnlColor } from "../src/tui/lib/colors.js";
 import { classifySession } from "../src/tui/lib/marketSession.js";
 import { formatBigVnd, formatPct, formatPrice, formatDate } from "../src/tui/lib/format.js";
 import { getDb } from "../src/storage/db.js";
@@ -885,6 +885,16 @@ describe("TUI lib helpers", () => {
     expect(pctColor(0)).toBe("yellow");
     expect(pctColor(1)).toBe("green");
     expect(pctColor(-1)).toBe("red");
+  });
+
+  it("pnlColor", () => {
+    expect(pnlColor(null)).toBe("white");
+    expect(pnlColor(undefined)).toBe("white");
+    expect(pnlColor(0)).toBe("white");
+    expect(pnlColor(1)).toBe("green");
+    expect(pnlColor(100)).toBe("green");
+    expect(pnlColor(-1)).toBe("red");
+    expect(pnlColor(-100)).toBe("red");
   });
 
   it("sparkline", () => {
