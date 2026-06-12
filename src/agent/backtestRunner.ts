@@ -297,10 +297,24 @@ export async function runBacktestSession(
     Math.floor(Date.now() / 1000),
   );
 
-  const vnindexAt = (asOf: number): number | null => {
-    const series = vnindex.filter((b) => b.time <= asOf);
-    return series.length ? series[series.length - 1]!.close : null;
+  const findPriceAt = (barsList: Bar[] | undefined, asOf: number): number | null => {
+    if (!barsList || barsList.length === 0) return null;
+    let l = 0;
+    let r = barsList.length - 1;
+    let ans: number | null = null;
+    while (l <= r) {
+      const m = (l + r) >> 1;
+      if (barsList[m]!.time <= asOf) {
+        ans = barsList[m]!.close;
+        l = m + 1;
+      } else {
+        r = m - 1;
+      }
+    }
+    return ans;
   };
+
+  const vnindexAt = (asOf: number): number | null => findPriceAt(vnindex, asOf);
   const vnindexBaseline = vnindexAt(intervalTurns[0]!);
   if (vnindexBaseline == null) throw new Error(`no VNINDEX data at first ${interval.label} turn`);
 
@@ -311,10 +325,7 @@ export async function runBacktestSession(
     for (const asOf of intervalTurns) {
       throwIfAborted(cb.signal);
       const dateIso = ictLabel(asOf);
-      const priceOverride = (sym: string): number | null => {
-        const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
-        return series.length ? series[series.length - 1]!.close : null;
-      };
+      const priceOverride = (sym: string): number | null => findPriceAt(bars[sym], asOf);
       broker.setPriceOverride(priceOverride);
       cb.onTurnStart?.({ asOf, dateIso });
 
