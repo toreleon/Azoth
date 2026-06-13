@@ -24,6 +24,26 @@ export interface Bar {
   volume: number;
 }
 
+/**
+ * Binary search to find the index of the last bar with time <= asOf.
+ * This is O(log n) compared to O(n) array filtering.
+ */
+export function findLastBarIndex(bars: readonly Bar[], asOf: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    if (bars[mid]!.time <= asOf) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
 async function fetchOhlcs(
   kind: "stock" | "index",
   symbol: string,
@@ -68,7 +88,9 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const index = findLastBarIndex(bars, asOf);
+  if (index === -1) return [];
+  return bars.slice(0, index + 1);
 }
 
 export async function getStockOhlcv(
