@@ -45,6 +45,27 @@ async function fetchOhlcs(
   return (await body.json()) as OhlcvSeries;
 }
 
+/**
+ * Uses binary search to find the last index where bar.time <= asOf.
+ * Time series market data arrays are chronologically sorted.
+ * @returns The index of the bar, or -1 if no such bar exists.
+ */
+export function findLastBarIndex(bars: Bar[], asOf: number): number {
+  let l = 0;
+  let r = bars.length - 1;
+  let ans = -1;
+  while (l <= r) {
+    const m = Math.floor((l + r) / 2);
+    if (bars[m]!.time <= asOf) {
+      ans = m;
+      l = m + 1;
+    } else {
+      r = m - 1;
+    }
+  }
+  return ans;
+}
+
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
   for (let i = 0; i < s.t.length; i++) {
@@ -68,7 +89,11 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+
+  // Use O(log n) binary search instead of O(n) array filter
+  const idx = findLastBarIndex(bars, asOf);
+  if (idx === -1) return [];
+  return bars.slice(0, idx + 1);
 }
 
 export async function getStockOhlcv(

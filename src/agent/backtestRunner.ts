@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
-import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
+import { getStockOhlcv, getIndexOhlcv, findLastBarIndex, type Bar } from "../data/sources/dnsePublic.js";
 import { DISCOVERY_UNIVERSE, discoverTickers } from "../tools/discover.js";
 import { setActiveAsOf } from "./clock.js";
 import { runTeamAnalysis } from "./team/index.js";
@@ -298,8 +298,8 @@ export async function runBacktestSession(
   );
 
   const vnindexAt = (asOf: number): number | null => {
-    const series = vnindex.filter((b) => b.time <= asOf);
-    return series.length ? series[series.length - 1]!.close : null;
+    const idx = findLastBarIndex(vnindex, asOf);
+    return idx === -1 ? null : vnindex[idx]!.close;
   };
   const vnindexBaseline = vnindexAt(intervalTurns[0]!);
   if (vnindexBaseline == null) throw new Error(`no VNINDEX data at first ${interval.label} turn`);
@@ -312,8 +312,10 @@ export async function runBacktestSession(
       throwIfAborted(cb.signal);
       const dateIso = ictLabel(asOf);
       const priceOverride = (sym: string): number | null => {
-        const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
-        return series.length ? series[series.length - 1]!.close : null;
+        const symBars = bars[sym];
+        if (!symBars || symBars.length === 0) return null;
+        const idx = findLastBarIndex(symBars, asOf);
+        return idx === -1 ? null : symBars[idx]!.close;
       };
       broker.setPriceOverride(priceOverride);
       cb.onTurnStart?.({ asOf, dateIso });
