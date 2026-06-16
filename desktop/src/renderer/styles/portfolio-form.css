@@ -1,0 +1,106 @@
+.portfolio-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.portfolio-form .ds-field {
+  margin-bottom: 0;
+}
+
+.portfolio-form .ds-input,
+.portfolio-history-controls .ds-input {
+  background: var(--bg);
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-symbol-input {
+  text-transform: uppercase;
+}
+
+.portfolio-segment {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.portfolio-segment-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  line-height: 1;
+}
+
+.portfolio-segment-option:hover:not(.is-active) {
+  color: var(--fg);
+  background: color-mix(in oklab, var(--fg), transparent 96%);
+}
+
+.portfolio-segment-option.is-active {
+  background: var(--surface);
+  color: var(--accent-text);
+  box-shadow: var(--elev-ring);
+}
+
+.portfolio-segment-option.is-active.portfolio-side-buy {
+  color: var(--success-text);
+}
+
+.portfolio-segment-option.is-active.portfolio-side-sell {
+  color: var(--danger);
+}
+
+.portfolio-submit {
+  min-height: 38px;
+  margin-top: var(--space-1);
+  font-weight: 700;
+}
+
+.portfolio-submit-buy {
+  background: var(--success);
+}
+
+.portfolio-submit-buy:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--success), black 8%);
+}
+
+.portfolio-submit-sell {
+  background: var(--danger);
+}
+
+.portfolio-submit-sell:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--danger), black 8%);
+}
+
+.portfolio-result {
+  margin-top: var(--space-1);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.portfolio-result-ok {
+  border: 1px solid color-mix(in oklab, var(--success), transparent 70%);
+  background: color-mix(in oklab, var(--success), transparent 88%);
+  color: var(--success-text);
+}
+
+.portfolio-result-error {
+  border: 1px solid color-mix(in oklab, var(--danger), transparent 60%);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.portfolio-result-error ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}

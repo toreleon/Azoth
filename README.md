@@ -19,7 +19,7 @@ HNX, and UPCOM: every recommendation should be grounded in tool output and
 constrained by explicit autonomy and risk settings.
 
 > Azoth is investment software, not financial advice. Live trading can place
-> real orders against a real account. Use advisory or paper mode until you have
+> real orders against a real account. Use manual or paper mode until you have
 > verified configuration, data quality, account state, and risk limits.
 
 Latest release: [v0.1.2](docs/releases/v0.1.2.md)
@@ -70,8 +70,8 @@ Check market, portfolio, and backtest state:
 - **Multi-agent desk**: structured analyst workflow with technical,
   fundamentals, news, sentiment, bull, bear, research manager, trader, risk,
   and portfolio roles.
-- **Broker-aware execution**: advisory, confirm, and auto autonomy modes with
-  explicit user approval before broker calls, paper broker support, and DNSE
+- **Broker-aware execution**: manual and auto autonomy modes with explicit user
+  approval before every tool call in manual mode, paper broker support, and DNSE
   Entrade X integration for live accounts.
 - **Risk controls**: position sizing limits, order notional limits, optional
   ticker whitelist checks, market-session checks, margin-disabled enforcement,
@@ -140,7 +140,7 @@ checks.
 | Team desk | Technical, fundamentals, news, sentiment, bull, bear, research manager, trader, risk, and portfolio roles. |
 | Market data | Quotes, OHLCV, technical indicators, fundamentals, CafeF news, macro indices, foreign flow, and ticker discovery. |
 | Portfolio | Broker state, sub-accounts, positions, cash, market value, and unrealized P&L. |
-| Execution | Paper broker, optional DNSE broker, advisory/confirm/auto autonomy, human confirmation gate. |
+| Execution | Paper broker, optional DNSE broker, manual/auto autonomy, human confirmation gate. |
 | Risk | Notional cap, concentration cap, whitelist, market session, no-margin cash check, daily-loss halt, drawdown buy freeze. |
 | Backtesting | Weekly team-driven replay, paper fills, fees, rejected guardrail orders, benchmark comparison, running-peak max drawdown. |
 | Runtime | `~/.azoth` config, SQLite state, project session logs, build-safe schema fallback. |
@@ -239,7 +239,7 @@ still stream the full local team flow.
 | `/positions` | Summarize current portfolio positions and exposures. |
 | `/setup-llm` | Change LLM provider, API key, endpoint, and model after first-time setup. |
 | `/setup-fhsc` | Configure FHSC broker access and switch `broker` to `fhsc`. |
-| `/autonomy <advisory\|confirm\|auto>` | Persist the autonomy mode and rebuild tool access for new turns. |
+| `/autonomy <manual\|auto>` | Persist the autonomy mode and rebuild tool access for new turns. |
 | `/health [--probe]` | Check API key, config, DB, broker state, live-trading arm flag, market session, and optionally data providers. |
 | `/about` | Show version, runtime paths, broker, provider, and release references. |
 | `/new` | Start a new resumable session. |
@@ -272,7 +272,7 @@ Useful environment variables:
 Default config:
 
 ```yaml
-autonomy: advisory
+autonomy: manual
 model: glm-5.1
 
 llm:
@@ -309,12 +309,10 @@ risk:
 
 Autonomy modes:
 
-- `advisory`: no order tools are exposed. Azoth recommends; the user executes.
-- `confirm`: broker tools are available, but each broker read/write requires
-  CLI approval before Azoth contacts the broker.
-- `auto`: broker tools still require CLI approval before Azoth contacts the
-  broker; approved orders then run through configured guardrails before
-  submission.
+- `manual`: all tools are available, but each tool call requires user approval
+  before it runs.
+- `auto`: all tools run without approval prompts. Broker orders still run
+  through configured guardrails before submission.
 
 Broker modes:
 
@@ -387,7 +385,7 @@ and creates the matching GitHub release.
 
 ## Live Trading With DNSE
 
-Live mode places real orders. Keep `autonomy: advisory` or `broker: paper`
+Live mode places real orders. Keep `autonomy: manual` or `broker: paper`
 until the checklist below is complete.
 
 1. Open a DNSE account and enable Entrade X / LightSpeed API access.
@@ -397,8 +395,8 @@ until the checklist below is complete.
    `GET https://api.dnse.com.vn/margin-service/loan-products` with the JWT and
    choose the correct loan product id for your equity sub-account.
 4. Set `broker: dnse` in `~/.azoth/config.yaml`.
-5. Set `autonomy: confirm` first while testing. All broker calls prompt for
-   approval in both `confirm` and `auto`.
+5. Set `autonomy: manual` first while testing. Manual mode prompts before every
+   tool call; auto mode bypasses approval prompts.
 6. Run `pnpm test` and then `DNSE_TEST_LIVE=1 pnpm test` for read-only live
    probes.
 7. Verify `broker_state` and `list_orders` return the expected cash, positions,
@@ -487,6 +485,5 @@ Azoth is built around a few explicit constraints:
 - Buy, sell, or hold recommendations should include technicals, fundamentals,
   news, and macro context.
 - News citations should include source URL and publish date.
-- Order placement is disabled in advisory mode. In confirm/auto modes, every
-  broker call requires user approval before Azoth contacts the broker, and
-  approved orders still run through guardrails.
+- Manual mode requires user approval before each tool call. Auto mode bypasses
+  approval prompts. Broker orders still run through guardrails in both modes.

@@ -1,0 +1,314 @@
+.team-card-head {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: var(--hairline);
+}
+
+.team-mark {
+  width: 28px;
+  height: 28px;
+  border: 1px solid color-mix(in oklab, var(--accent), transparent 62%);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 6px;
+  color: var(--accent);
+  background: var(--accent-softer);
+}
+
+.team-mark span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.team-card.is-running .team-mark span:nth-child(1) {
+  animation: team-dot 1.2s ease-in-out infinite;
+}
+
+.team-card.is-running .team-mark span:nth-child(2) {
+  animation: team-dot 1.2s ease-in-out 140ms infinite;
+}
+
+.team-card.is-running .team-mark span:nth-child(3) {
+  animation: team-dot 1.2s ease-in-out 280ms infinite;
+}
+
+.team-mark.is-complete {
+  color: var(--success);
+  background: color-mix(in oklab, var(--success), transparent 90%);
+  border-color: color-mix(in oklab, var(--success), transparent 68%);
+}
+
+@keyframes team-dot {
+  0%, 100% { transform: translateY(0); opacity: 0.45; }
+  50% { transform: translateY(-2px); opacity: 1; }
+}
+
+.team-head-text {
+  min-width: 0;
+}
+
+.team-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.team-subtitle {
+  margin-top: 2px;
+  min-height: 16px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-pill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--fg), transparent 97%);
+  white-space: nowrap;
+}
+
+.team-card.is-running .team-pill {
+  color: var(--accent-text);
+  border-color: var(--accent-border);
+  background: var(--accent-softer);
+}
+
+.team-card.is-error .team-pill {
+  color: var(--danger);
+  border-color: color-mix(in oklab, var(--danger), transparent 64%);
+  background: var(--danger-soft);
+}
+
+.team-role-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.team-role-row {
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 14px minmax(120px, 190px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-top: var(--hairline);
+}
+
+.team-role-row:first-child {
+  border-top: 0;
+}
+
+.team-role-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 86%);
+}
+
+.team-role-row.is-done .team-role-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--success), transparent 86%);
+}
+
+.team-role-row.is-error .team-role-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger), transparent 86%);
+}
+
+.team-role-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.team-role-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.team-empty {
+  padding: 12px 14px 14px 60px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.team-result-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: var(--hairline);
+}
+
+.team-metric {
+  min-width: 0;
+  padding: 10px 14px;
+  border-right: var(--hairline);
+}
+
+.team-metric:last-child {
+  border-right: 0;
+}
+
+.team-metric span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-metric strong {
+  display: block;
+  margin-top: 2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.team-result-summary {
+  padding: 12px 14px;
+  border-bottom: var(--hairline);
+  color: var(--fg);
+}
+
+.team-result-summary > :first-child {
+  margin-top: 0;
+}
+
+.team-result-summary > :last-child {
+  margin-bottom: 0;
+}
+
+.team-result-details {
+  padding: 0;
+}
+
+.team-result-details summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  user-select: none;
+}
+
+.team-result-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-result-details[open] summary {
+  border-bottom: var(--hairline);
+  color: var(--fg);
+}
+
+.team-detail-list {
+  max-height: min(320px, 42vh);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.team-detail-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 10px 14px;
+  border-top: var(--hairline);
+}
+
+.team-detail-row:first-child {
+  border-top: 0;
+}
+
+.team-detail-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.team-detail-row p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 760px) {
+  .team-card-head {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .team-card-head .team-pill {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .team-role-row {
+    grid-template-columns: 14px minmax(0, 1fr);
+  }
+
+  .team-role-meta {
+    grid-column: 2;
+  }
+
+  .team-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-metric:nth-child(2n),
+  .chart-metric:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .chart-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .chart-last {
+    align-items: flex-start;
+  }
+
+  .chart-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-detail-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

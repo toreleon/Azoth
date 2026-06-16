@@ -12,6 +12,8 @@ import {
   type ResearchReport,
   type RiskReview,
   type RoleName,
+  type TeamMessage,
+  type TeamTask,
   type TeamEvent,
   type TeamInput,
   type TeamState,
@@ -34,6 +36,7 @@ import {
   traderPrompt,
 } from "./prompts.js";
 import { runRole } from "./runner.js";
+import { TeamOrchestrator, compact } from "./orchestration.js";
 import {
   finalizeTeamRun,
   recordRoleOutput,
@@ -95,6 +98,8 @@ export interface TeamQuestionState {
   runId: string;
   question: string;
   asOfDateIso: string;
+  tasks: TeamTask[];
+  messages: TeamMessage[];
   research: ResearchReport[];
   risk?: RiskReview;
   final?: TeamQuestionDecision;
@@ -122,6 +127,8 @@ export async function runTeamAnalysis(
     runId,
     ticker,
     asOfDateIso,
+    tasks: [],
+    messages: [],
     analysts: [],
     research: [],
   };
@@ -320,25 +327,71 @@ export async function runTeamQuestion(
   recordTeamRunStart(runId, "TEAM", asOfDateIso);
   emit({ type: "run_start", runId, ticker: "TEAM" });
   throwIfAborted(opts.signal);
+  const orchestrator = new TeamOrchestrator({ runId, emit });
+  orchestrator.sendMessage(
+    "lead",
+    "all",
+    `Create an agent team for this question. Work independently, challenge weak assumptions, then report back to the lead for synthesis: ${trimmed}`,
+  );
+  orchestrator.createTasks([
+    {
+      id: "bull-r1",
+      title: "Build the strongest constructive thesis",
+      role: "bull",
+      round: 1,
+    },
+    {
+      id: "bear-r1",
+      title: "Build the strongest skeptical thesis",
+      role: "bear",
+      round: 1,
+    },
+    {
+      id: "risk-review",
+      title: "Review bull and bear findings for risk constraints",
+      role: "risk",
+      dependsOn: ["bull-r1", "bear-r1"],
+    },
+    {
+      id: "portfolio-final",
+      title: "Synthesize teammate findings into final user answer",
+      role: "portfolio",
+      dependsOn: ["risk-review"],
+    },
+  ]);
 
   const state: TeamQuestionState = {
     runId,
     question: trimmed,
     asOfDateIso,
+    tasks: orchestrator.tasks,
+    messages: orchestrator.messages,
     research: [],
   };
 
-  const { output: bullOut, raw: bullRaw } = await runRole({
-    role: "bull",
-    systemPrompt: SYSTEM_OPERATING_RULES,
-    userPrompt: teamBullQuestionPrompt(trimmed, asOfDateIso),
-    schema: ResearchOutputSchema,
-    round: 1,
-    emit,
-    modelOverride: opts.modelOverride,
-    allowWebSearch: opts.allowWebSearch,
-    signal: opts.signal,
-  });
+  const [bullResult, bearResult] = await Promise.all([
+    orchestrator.runRoleTask({
+      taskId: "bull-r1",
+      systemPrompt: SYSTEM_OPERATING_RULES,
+      userPrompt: teamBullQuestionPrompt(trimmed, asOfDateIso),
+      schema: ResearchOutputSchema,
+      summary: (output) => `Bull thesis: ${output.thesis}. Key points: ${(output.keyPoints ?? []).join("; ")}`,
+      modelOverride: opts.modelOverride,
+      allowWebSearch: opts.allowWebSearch,
+      signal: opts.signal,
+    }),
+    orchestrator.runRoleTask({
+      taskId: "bear-r1",
+      systemPrompt: SYSTEM_OPERATING_RULES,
+      userPrompt: teamBearQuestionPrompt(trimmed, asOfDateIso, []),
+      schema: ResearchOutputSchema,
+      summary: (output) => `Bear thesis: ${output.thesis}. Key points: ${(output.keyPoints ?? []).join("; ")}`,
+      modelOverride: opts.modelOverride,
+      allowWebSearch: opts.allowWebSearch,
+      signal: opts.signal,
+    }),
+  ]);
+  const { output: bullOut, raw: bullRaw } = bullResult;
   const bullReport: ResearchReport = {
     role: "bull",
     round: 1,
@@ -348,17 +401,7 @@ export async function runTeamQuestion(
   state.research.push(bullReport);
   recordRoleOutput(runId, "bull", 1, bullReport, bullRaw.usage);
 
-  const { output: bearOut, raw: bearRaw } = await runRole({
-    role: "bear",
-    systemPrompt: SYSTEM_OPERATING_RULES,
-    userPrompt: teamBearQuestionPrompt(trimmed, asOfDateIso, state.research),
-    schema: ResearchOutputSchema,
-    round: 1,
-    emit,
-    modelOverride: opts.modelOverride,
-    allowWebSearch: opts.allowWebSearch,
-    signal: opts.signal,
-  });
+  const { output: bearOut, raw: bearRaw } = bearResult;
   const bearReport: ResearchReport = {
     role: "bear",
     round: 1,
@@ -367,13 +410,19 @@ export async function runTeamQuestion(
   };
   state.research.push(bearReport);
   recordRoleOutput(runId, "bear", 1, bearReport, bearRaw.usage);
+  orchestrator.sendMessage(
+    "lead",
+    "risk",
+    `Bull and bear teammates finished. Challenge both before approving any recommendation. Bull: ${compact(bullReport.thesis, 220)} Bear: ${compact(bearReport.thesis, 220)}`,
+  );
 
-  const { output: riskOut, raw: riskRaw } = await runRole({
-    role: "risk",
+  const { output: riskOut, raw: riskRaw } = await orchestrator.runRoleTask({
+    taskId: "risk-review",
     systemPrompt: SYSTEM_OPERATING_RULES,
     userPrompt: teamRiskQuestionPrompt(trimmed, asOfDateIso, state.research),
     schema: RiskOutputSchema,
-    emit,
+    summary: (output) =>
+      `Risk review: ${output.approved ? "approved" : "rejected"} at ${Math.round(output.adjustedSizingPct * 100)}% NAV. Concerns: ${(output.concerns ?? []).join("; ")}`,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
     signal: opts.signal,
@@ -386,13 +435,18 @@ export async function runTeamQuestion(
   };
   state.risk = risk;
   recordRoleOutput(runId, "risk", 0, risk, riskRaw.usage);
+  orchestrator.sendMessage(
+    "lead",
+    "portfolio",
+    `Risk teammate finished. Synthesize the team into a direct answer for the user. Risk: ${compact(risk.notes || risk.concerns.join("; "), 300)}`,
+  );
 
-  const { output: finalOut, raw: finalRaw } = await runRole({
-    role: "portfolio",
+  const { output: finalOut, raw: finalRaw } = await orchestrator.runRoleTask({
+    taskId: "portfolio-final",
     systemPrompt: SYSTEM_OPERATING_RULES,
     userPrompt: teamPortfolioQuestionPrompt(trimmed, asOfDateIso, state.research, risk),
     schema: TeamQuestionOutputSchema,
-    emit,
+    summary: (output) => `Final recommendation: ${output.recommendation}. ${output.answer}`,
     modelOverride: opts.modelOverride,
     allowWebSearch: opts.allowWebSearch,
     signal: opts.signal,
@@ -408,6 +462,8 @@ export async function runTeamQuestion(
     teamRunId: runId,
   };
   state.final = decision;
+  state.tasks = orchestrator.tasks;
+  state.messages = orchestrator.messages;
   recordRoleOutput(runId, "portfolio", 0, decision, finalRaw.usage);
 
   return { state, decision };

@@ -1,0 +1,293 @@
+.thread {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-8) max(48px, calc(50% - 420px)) 180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.turn.tool-turn {
+  margin-top: calc(-1 * var(--space-6) + 10px);
+  margin-bottom: calc(-1 * var(--space-6) + 10px);
+}
+
+.turn.tool-turn + .turn.tool-turn,
+.thread > .turn.tool-turn:first-child {
+  margin-top: 0;
+}
+
+.turn .role {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.turn.user {
+  align-items: flex-end;
+}
+
+.turn.user .bubble {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  align-self: flex-end;
+  max-width: 80%;
+  color: var(--accent-text);
+}
+
+.thread,
+.turn .bubble,
+.turn.thinking,
+.team-card,
+.team-result-card,
+.market-chart-card,
+.tool-call .body,
+.error-bubble {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.turn.assistant .bubble {
+  padding: 4px 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.turn.thinking {
+  border-left: 2px solid color-mix(in oklab, var(--warn), transparent 45%);
+  padding-left: var(--space-4);
+  margin-left: 2px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.turn.thinking .label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--warn-text);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.turn.team-turn {
+  width: 100%;
+}
+
+.team-card,
+.team-result-card,
+.market-chart-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--surface), var(--bg) 20%);
+  overflow: hidden;
+}
+
+.team-card {
+  max-width: 720px;
+}
+
+.team-result-card {
+  max-width: 100%;
+}
+
+.chart-turn {
+  width: 100%;
+}
+
+.market-chart-card {
+  max-width: 100%;
+}
+
+.chart-card-head {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px 11px;
+  border-bottom: var(--hairline);
+}
+
+.chart-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.chart-subtitle {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.chart-last {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chart-last span {
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 600;
+}
+
+.chart-last strong {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.chart-last.is-up {
+  color: var(--success-text);
+}
+
+.chart-last.is-down {
+  color: var(--danger);
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 8px 10px 0;
+  overflow: visible;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.chart-grid-line {
+  stroke: color-mix(in oklab, var(--fg), transparent 90%);
+  stroke-width: 1;
+}
+
+.chart-axis-label {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.chart-candle line {
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.chart-candle rect:not(.chart-volume) {
+  fill: currentColor;
+}
+
+.chart-candle.is-up {
+  color: var(--success);
+}
+
+.chart-candle.is-down {
+  color: var(--danger);
+}
+
+.chart-volume {
+  fill: currentColor;
+  opacity: 0.18;
+}
+
+.chart-volume-baseline {
+  stroke: color-mix(in oklab, var(--fg), transparent 88%);
+  stroke-width: 1;
+}
+
+.chart-hover {
+  pointer-events: none;
+}
+
+.chart-hover .chart-crosshair {
+  stroke: color-mix(in oklab, var(--fg), transparent 52%);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.chart-hover circle {
+  fill: var(--surface);
+  stroke: var(--fg);
+  stroke-width: 1.4;
+}
+
+.chart-hover rect {
+  fill: color-mix(in oklab, var(--surface), var(--bg) 10%);
+  stroke: var(--border);
+  stroke-width: 1;
+  filter: drop-shadow(0 8px 18px color-mix(in oklab, var(--fg), transparent 88%));
+}
+
+.chart-tooltip-date,
+.chart-tooltip-label,
+.chart-tooltip-value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  dominant-baseline: middle;
+}
+
+.chart-tooltip-date {
+  fill: var(--fg);
+  font-weight: 600;
+}
+
+.chart-tooltip-label {
+  fill: var(--muted);
+}
+
+.chart-tooltip-value {
+  fill: var(--fg);
+}
+
+.chart-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: var(--hairline);
+}
+
+.chart-metric {
+  min-width: 0;
+  padding: 9px 14px;
+  border-right: var(--hairline);
+}
+
+.chart-metric:last-child {
+  border-right: 0;
+}
+
+.chart-metric span,
+.chart-metric strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-metric span {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chart-metric strong {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  font-weight: 500;
+}

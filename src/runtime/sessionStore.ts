@@ -156,6 +156,10 @@ export function setActiveSession(active: ActiveSession, cwd = process.cwd()): vo
   writeJson(sessionPaths(cwd).active, active);
 }
 
+export function clearActiveSession(cwd = process.cwd()): void {
+  writeJson(sessionPaths(cwd).active, null);
+}
+
 export function touchSession(
   id: string,
   updates: Partial<Pick<SessionIndexEntry, "sdkSessionId" | "title" | "model" | "autonomy">> = {},
@@ -190,4 +194,23 @@ export function activateSession(id: string, cwd = process.cwd()): SessionIndexEn
   upsertSession(updated, cwd);
   setActiveSession({ id: updated.id, sdkSessionId: updated.sdkSessionId, cwd, updatedAt: updated.updatedAt }, cwd);
   return updated;
+}
+
+export function archiveSession(id: string, cwd = process.cwd()): SessionIndexEntry | undefined {
+  const sessions = listSessions(cwd);
+  const entry = sessions.find((s) => s.id === id);
+  if (!entry) return undefined;
+  const remaining = sessions.filter((s) => s.id !== id);
+  writeJson(sessionPaths(cwd).index, remaining);
+  const active = getActiveSession(cwd);
+  if (active?.id === id) {
+    clearActiveSession(cwd);
+  }
+  return entry;
+}
+
+export function restoreArchivedSession(entry: SessionIndexEntry, cwd = process.cwd()): SessionIndexEntry {
+  const restored = { ...entry, cwd };
+  upsertSession(restored, cwd);
+  return restored;
 }

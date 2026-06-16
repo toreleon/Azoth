@@ -45,7 +45,7 @@ vi.mock("../src/broker/index.js", () => ({
 
 let tmp: string;
 
-function writeConfig(autonomy: "advisory" | "confirm" | "auto", maxOrderNotionalVnd: number) {
+function writeConfig(autonomy: "manual" | "auto", maxOrderNotionalVnd: number) {
   const configPath = process.env.AZOTH_CONFIG;
   if (!configPath) throw new Error("AZOTH_CONFIG must be set for order confirmation tests");
   writeFileSync(configPath, [
@@ -66,7 +66,7 @@ function writeConfig(autonomy: "advisory" | "confirm" | "auto", maxOrderNotional
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "azoth-order-confirm-"));
   process.env.AZOTH_CONFIG = join(tmp, "config.yaml");
-  writeConfig("confirm", 1);
+  writeConfig("manual", 1);
   mocks.placeOrder.mockReset();
   mocks.cancelOrder.mockReset();
   mocks.listOrders.mockReset();
@@ -126,7 +126,7 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-describe("confirm order flow", () => {
+describe("manual order flow", () => {
   it("asks for broker consent before guardrails or submitting", async () => {
     const { placeOrderTool } = await import("../src/tools/order.js");
     const result = await (placeOrderTool as unknown as {
@@ -143,12 +143,12 @@ describe("confirm order flow", () => {
     expect(body.error).toBe("guardrail_blocked");
     expect(body.reasons.join(" ")).toContain("exceeds max");
     expect(mocks.question).toHaveBeenCalledTimes(1);
-    expect(mocks.question.mock.calls[0]![0]).toContain("Allow broker action: place_order");
+    expect(mocks.question.mock.calls[0]![0]).toContain("Allow tool call: place_order");
     expect(mocks.placeOrder).not.toHaveBeenCalled();
   });
 
   it("does not contact the broker when the user declines a place_order", async () => {
-    writeConfig("auto", 1_000_000_000);
+    writeConfig("manual", 1_000_000_000);
     mocks.question.mockResolvedValue("n");
     const { placeOrderTool } = await import("../src/tools/order.js");
 
@@ -168,7 +168,7 @@ describe("confirm order flow", () => {
     expect(mocks.placeOrder).not.toHaveBeenCalled();
   });
 
-  it("prompts in auto mode before placing an approved order", async () => {
+  it("does not prompt in auto mode before placing an approved order", async () => {
     writeConfig("auto", 1_000_000_000);
     const { placeOrderTool } = await import("../src/tools/order.js");
 
@@ -184,7 +184,7 @@ describe("confirm order flow", () => {
     const body = JSON.parse(result.content[0]!.text) as { ok: boolean; order: { id: string } };
     expect(body.ok).toBe(true);
     expect(body.order.id).toBe("order-1");
-    expect(mocks.question).toHaveBeenCalledTimes(1);
+    expect(mocks.question).not.toHaveBeenCalled();
     expect(mocks.snapshot).toHaveBeenCalled();
     expect(mocks.placeOrder).toHaveBeenCalled();
   });
@@ -198,7 +198,7 @@ describe("confirm order flow", () => {
     const body = JSON.parse(result.content[0]!.text) as { ok: boolean; order: { status: string } };
     expect(body.ok).toBe(true);
     expect(body.order.status).toBe("CANCELLED");
-    expect(mocks.question.mock.calls[0]![0]).toContain("Allow broker action: cancel_order");
+    expect(mocks.question.mock.calls[0]![0]).toContain("Allow tool call: cancel_order");
     expect(mocks.cancelOrder).toHaveBeenCalledWith("order-1");
   });
 
@@ -217,9 +217,9 @@ describe("confirm order flow", () => {
     }).handler({ kind: "all", from_date: "2026-01-01", to_date: "2026-05-14", limit: 5 });
 
     expect(mocks.question).toHaveBeenCalledTimes(3);
-    expect(mocks.question.mock.calls[0]![0]).toContain("Allow broker action: list_orders");
-    expect(mocks.question.mock.calls[1]![0]).toContain("Allow broker action: broker_state");
-    expect(mocks.question.mock.calls[2]![0]).toContain("Allow broker action: account_history");
+    expect(mocks.question.mock.calls[0]![0]).toContain("Allow tool call: list_orders");
+    expect(mocks.question.mock.calls[1]![0]).toContain("Allow tool call: broker_state");
+    expect(mocks.question.mock.calls[2]![0]).toContain("Allow tool call: account_history");
     expect(mocks.listOrders).toHaveBeenCalled();
     expect(mocks.snapshot).toHaveBeenCalled();
     expect(mocks.accountHistory).toHaveBeenCalledWith({

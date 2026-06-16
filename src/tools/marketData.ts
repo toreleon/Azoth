@@ -58,7 +58,7 @@ export const ohlcvTool = tool(
 
 export const quoteTool = tool(
   "market_quote",
-  "Fetch latest quote info (ref, ceiling, floor, exchange, company name) for a Vietnamese stock from SSI iBoard. For the latest traded price, use market_ohlcv with resolution='1' and bars=1.",
+  "Fetch the latest live quote from SSI iBoard, including matched price, change, volume, bid/ask, ref, ceiling, floor, exchange, and company info. Use this for realtime/current price before answering any 'now', 'live', or 'latest' price question.",
   {
     symbol: z.string().describe("Ticker, e.g. HPG, VCB"),
   },
@@ -74,6 +74,24 @@ export const quoteTool = tool(
       ref: q.ref,
       ceiling: q.ceiling,
       floor: q.floor,
+      matchedPrice: q.matchedPrice,
+      matchedVolume: q.matchedVolume,
+      priceChange: q.priceChange,
+      priceChangePercent: q.priceChangePercent,
+      openPrice: q.openPrice,
+      highest: q.highest,
+      lowest: q.lowest,
+      avgPrice: q.avgPrice,
+      totalTradedQty: q.totalTradedQty,
+      totalTradedValue: q.totalTradedValue,
+      bestBid: q.bestBid,
+      bestBidVol: q.bestBidVol,
+      bestOffer: q.bestOffer,
+      bestOfferVol: q.bestOfferVol,
+      tradingDate: q.tradingDate,
+      session: q.session,
+      tradingStatus: q.tradingStatus,
+      expectedLastUpdate: q.expectedLastUpdate,
       companyNameVi: q.companyNameVi,
       companyNameEn: q.companyNameEn,
     });

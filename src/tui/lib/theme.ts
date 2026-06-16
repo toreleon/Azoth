@@ -15,7 +15,7 @@ export const theme = {
 } as const;
 
 export const autonomyColor = (a: string): string =>
-  a === "auto" ? theme.down : a === "confirm" ? theme.flat : theme.up;
+  a === "auto" ? theme.down : theme.up;
 
 export const sessionColor = (label: string): string =>
   label === "morning" || label === "afternoon"

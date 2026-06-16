@@ -7,14 +7,28 @@ export interface BrokerConsentRequest {
   detail: string;
   broker: string;
   autonomy: string;
+  toolName?: string;
 }
 
 type BrokerConsentHandler = (request: BrokerConsentRequest) => Promise<boolean>;
 
 let brokerConsentHandler: BrokerConsentHandler | null = null;
+const approvedToolConsents = new Map<string, number>();
 
 export function setBrokerConsentHandler(handler: BrokerConsentHandler | null): void {
   brokerConsentHandler = handler;
+}
+
+export function rememberApprovedToolConsent(action: string): void {
+  approvedToolConsents.set(action, (approvedToolConsents.get(action) ?? 0) + 1);
+}
+
+function consumeApprovedToolConsent(action: string): boolean {
+  const count = approvedToolConsents.get(action) ?? 0;
+  if (count <= 0) return false;
+  if (count === 1) approvedToolConsents.delete(action);
+  else approvedToolConsents.set(action, count - 1);
+  return true;
 }
 
 async function confirmOnCli(prompt: string): Promise<boolean> {
@@ -30,21 +44,28 @@ async function confirmOnCli(prompt: string): Promise<boolean> {
   }
 }
 
-export async function requireBrokerConsent(action: string, detail: string): Promise<boolean> {
-  if (currentBrokerName() != null) return true;
+export async function requireToolConsent(action: string, detail: string, toolName = action): Promise<boolean> {
   const cfg = loadConfig();
+  if (cfg.autonomy === "auto") return true;
+  if (consumeApprovedToolConsent(action)) return true;
   if (brokerConsentHandler) {
     return brokerConsentHandler({
       action,
       detail,
       broker: cfg.broker,
       autonomy: cfg.autonomy,
+      toolName,
     });
   }
   return confirmOnCli(
-    `\n  >> Allow broker action: ${action}` +
+    `\n  >> Allow tool call: ${action}` +
       `\n  broker=${cfg.broker} autonomy=${cfg.autonomy}` +
       (detail ? `\n  ${detail}` : "") +
       `\n  proceed? [y/N]: `,
   );
+}
+
+export async function requireBrokerConsent(action: string, detail: string): Promise<boolean> {
+  if (currentBrokerName() != null) return true;
+  return requireToolConsent(action, detail);
 }

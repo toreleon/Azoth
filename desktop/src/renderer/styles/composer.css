@@ -1,0 +1,311 @@
+.composer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: var(--space-3) max(48px, calc(50% - 420px)) calc(var(--space-4) + env(safe-area-inset-bottom));
+  border-top: 0;
+  background: linear-gradient(
+    to top,
+    var(--bg) 0%,
+    color-mix(in oklab, var(--bg), transparent 5%) 68%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.composer-shell {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow:
+    0 18px 42px color-mix(in oklab, var(--fg), transparent 90%),
+    0 1px 0 color-mix(in oklab, var(--fg), transparent 95%);
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+  position: relative;
+  pointer-events: auto;
+}
+
+.composer-shell:focus-within {
+  border-color: color-mix(in oklab, var(--accent), var(--border) 40%);
+  box-shadow: var(--focus-ring);
+}
+
+.composer-error {
+  margin: 8px 10px 0;
+}
+
+.composer textarea {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: var(--text-base);
+  line-height: 1.5;
+  padding: 14px 18px 6px;
+  resize: none;
+  min-height: 48px;
+  max-height: 200px;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 10px 10px;
+}
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  transition: all var(--motion-fast) var(--ease-standard);
+}
+
+.icon-btn:hover {
+  color: var(--fg);
+  border-color: color-mix(in oklab, var(--border), var(--fg) 20%);
+}
+
+.icon-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: all var(--motion-fast) var(--ease-standard);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  min-height: 30px;
+}
+
+.picker:hover {
+  border-color: color-mix(in oklab, var(--border), var(--fg) 20%);
+}
+
+.picker svg {
+  width: 11px;
+  height: 11px;
+}
+
+.picker .grip {
+  color: color-mix(in oklab, var(--muted), transparent 30%);
+}
+
+.picker.autonomy {
+  min-width: 94px;
+}
+
+.picker.autonomy.manual {
+  color: var(--success-text);
+  border-color: color-mix(in oklab, var(--success), transparent 72%);
+}
+
+.picker.autonomy.auto {
+  color: var(--danger);
+  border-color: color-mix(in oklab, var(--danger), transparent 75%);
+}
+
+.picker .mode-icon {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+}
+
+.picker-select {
+  appearance: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  padding: 0;
+  max-width: 180px;
+}
+
+.picker-select-control {
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  min-width: 72px;
+  padding-right: 24px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'><path d='M1.5 3l2.5 2.5L6.5 3' fill='none' stroke='%236b6b6b' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 8px;
+}
+
+.composer-row .grow {
+  flex: 1;
+}
+
+.send-btn,
+.stop-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background var(--motion-fast), transform var(--motion-fast);
+}
+
+.send-btn {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.send-btn:hover {
+  background: color-mix(in oklab, var(--fg), white 15%);
+}
+
+.send-btn:active,
+.stop-btn:active {
+  transform: translateY(0.5px);
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+}
+
+.send-btn svg,
+.stop-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.stop-btn {
+  border: 1px solid color-mix(in oklab, var(--danger), transparent 75%);
+  color: var(--danger);
+  background: var(--surface);
+}
+
+.stop-btn:hover {
+  background: var(--danger-soft);
+  border-color: color-mix(in oklab, var(--danger), transparent 55%);
+}
+
+.slash-pop {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  width: auto;
+  max-height: min(520px, calc(100vh - 220px));
+  padding: 6px;
+  background: color-mix(in oklab, var(--surface), var(--bg) 16%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-raised);
+  overflow-y: auto;
+  z-index: 45;
+  display: none;
+}
+
+.slash-pop.show {
+  display: block;
+}
+
+.slash-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 42px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  width: 100%;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  text-align: left;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.slash-item:hover,
+.slash-item.active {
+  background: color-mix(in oklab, var(--fg), transparent 92%);
+  color: var(--fg);
+}
+
+.slash-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.slash-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.slash-item.active .slash-icon,
+.slash-item:hover .slash-icon {
+  color: var(--fg);
+}
+
+.slash-item .cmd {
+  color: currentColor;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.slash-item .desc {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slash-item.active .desc,
+.slash-item:hover .desc {
+  color: var(--muted);
+}
+
+.empty-thread {
+  justify-content: center;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.project-indicator {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.project-indicator strong {
+  color: var(--fg);
+  font-weight: 500;
+}

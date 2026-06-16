@@ -45,7 +45,7 @@ beforeEach(() => {
   runnerMocks.runBacktestSession.mockReset();
   resetConfigCacheForTests();
   updateConfig({
-    autonomy: "advisory",
+    autonomy: "manual",
     broker: "paper",
     llm: { provider: "anthropic", api_key: "test-key", base_url: "" },
   });
@@ -79,7 +79,7 @@ describe("Azoth TUI", () => {
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("Azoth copilot");
     expect(out).toContain("Tips for getting started");
-    expect(out).toContain("advisory");
+    expect(out).toContain("manual");
     unmount();
   });
 
@@ -276,10 +276,10 @@ describe("Azoth TUI", () => {
   it("/autonomy persists mode and updates the UI", async () => {
     const { lastFrame, stdin, unmount } = render(<App />);
     await tick();
-    await type(stdin, "/autonomy confirm");
+    await type(stdin, "/autonomy auto");
     const out = strip(lastFrame() ?? "");
-    expect(out).toContain("Autonomy set to confirm");
-    expect(out).toContain("confirm");
+    expect(out).toContain("Autonomy set to auto");
+    expect(out).toContain("auto");
     unmount();
   });
 
@@ -401,7 +401,7 @@ describe("Azoth TUI", () => {
     const decision = requireBrokerConsent("portfolio_list", "read cash, positions, and exposure");
     await tick();
     let out = strip(lastFrame() ?? "");
-    expect(out).toContain("Allow broker action?");
+    expect(out).toContain("Allow tool call?");
     expect(out).toContain("Yes, allow once");
     expect(out).toContain("No, deny");
     expect(out).toContain("↑/↓ select");
@@ -856,7 +856,7 @@ describe("Azoth TUI", () => {
     expect(out).toContain("Runtime:");
     expect(out).toContain("Database:");
     expect(out).toContain("Broker: paper");
-    expect(out).toContain("Autonomy: advisory");
+    expect(out).toContain("Autonomy: manual");
     expect(out).toContain("Roadmap: ROADMAP.md");
     unmount();
   });
@@ -866,7 +866,7 @@ describe("Azoth TUI", () => {
     await tick();
     const out = strip(lastFrame() ?? "");
     expect(out).toContain("team");
-    expect(out).toContain("advisory");
+    expect(out).toContain("manual");
     expect(out).toMatch(/Ctrl\+A|Ctrl\+C|\/backtest/);
     unmount();
   });

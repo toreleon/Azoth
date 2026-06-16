@@ -107,7 +107,7 @@ describe("Azoth config and DB defaults", () => {
   it("honors AZOTH_CONFIG override", () => {
     const custom = join(tmp, "custom.yaml");
     writeFileSync(custom, [
-      "autonomy: confirm",
+      "autonomy: manual",
       "model: test-model",
       "broker: paper",
       "risk:",
@@ -125,11 +125,11 @@ describe("Azoth config and DB defaults", () => {
 
   it("persists config updates", () => {
     initializeAzothRuntime();
-    const updated = updateConfig({ autonomy: "confirm" });
+    const updated = updateConfig({ autonomy: "auto" });
     resetConfigCacheForTests();
-    expect(updated.autonomy).toBe("confirm");
-    expect(loadConfig().autonomy).toBe("confirm");
-    expect(readFileSync(azothPaths().config, "utf8")).toContain("autonomy: confirm");
+    expect(updated.autonomy).toBe("auto");
+    expect(loadConfig().autonomy).toBe("auto");
+    expect(readFileSync(azothPaths().config, "utf8")).toContain("autonomy: auto");
   });
 
   it("uses AZOTH_HOME database by default and AZOTH_DB when provided", () => {

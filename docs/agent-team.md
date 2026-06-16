@@ -312,9 +312,8 @@ The default runtime path is `~/.azoth`, unless `AZOTH_HOME`, `AZOTH_CONFIG`, or
 Azoth is designed for decision support first. Live trading remains explicitly
 gated:
 
-- `advisory` mode: research and recommendations only.
-- `confirm` mode: user confirmation is required before order submission.
-- `auto` mode: orders still pass risk guardrails.
+- `manual` mode: user confirmation is required before every tool call.
+- `auto` mode: tool calls run without approval prompts; orders still pass risk guardrails.
 - DNSE live trading requires explicit broker configuration and live-trading
   arming.
 - Release validation and normal tests do not place live orders.

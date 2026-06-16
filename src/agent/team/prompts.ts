@@ -45,7 +45,7 @@ export function technicalPrompt(ticker: string, asOfDateIso: string): string {
   return [
     header("Technical Analyst", ticker, asOfDateIso),
     "",
-    "Use market_quote, market_ohlcv (1D, ~60 bars), and technical_indicators to assess trend, momentum, and volatility.",
+    "Use market_quote for the latest matched price, live_chart (resolution 1 or 5, ~120 bars) for current intraday price action, market_ohlcv (1D, ~60 bars) when daily history is needed, and technical_indicators to assess trend, momentum, and volatility.",
     "Cite at least RSI(14), MACD, and a moving-average view (SMA20/50). Note any divergence or breakout/breakdown levels.",
     "",
     "Score the technical setup on -1..1 (bearish to bullish). 0 = neutral.",

@@ -24,6 +24,13 @@ Run the CLI locally with:
 pnpm azoth
 ```
 
+## Desktop UI design
+
+Desktop renderer features should follow the shared design-system note in
+[docs/desktop-design-system.md](docs/desktop-design-system.md). Prefer the
+tokens and primitives in `desktop/src/renderer/styles/globals.css` over one-off
+utility class styling in JSX.
+
 ## Pull requests
 
 - Keep changes focused and describe the behavior change clearly.

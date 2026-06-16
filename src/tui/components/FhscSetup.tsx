@@ -38,7 +38,10 @@ export interface FhscSetupProps {
 export function FhscSetup({ onComplete }: FhscSetupProps) {
   const cfg = loadConfig();
   const paths = azothPaths();
-  const initialMode: AuthMode = cfg.fhsc.access_token.trim() && cfg.fhsc.access_key.trim() ? "session" : "openapi";
+  const initialMode: AuthMode =
+    (cfg.fhsc.access_token.trim() || cfg.fhsc.refresh_token.trim()) && cfg.fhsc.access_key.trim()
+      ? "session"
+      : "openapi";
   const [step, setStep] = useState<Step>("authMode");
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [authModeIdx, setAuthModeIdx] = useState(initialMode === "openapi" ? 1 : 0);
@@ -87,6 +90,7 @@ export function FhscSetup({ onComplete }: FhscSetupProps) {
         base_url: baseUrl,
         access_token: authMode === "session" ? accessToken : "",
         access_key: authMode === "session" ? accessKey : "",
+        refresh_token: authMode === "session" ? cfg.fhsc.refresh_token : "",
         device_id: authMode === "session" ? deviceId : "",
         user_id: cfg.fhsc.user_id,
         cust_id: cfg.fhsc.cust_id,

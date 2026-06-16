@@ -1,0 +1,34 @@
+.settings-saved {
+  position: fixed;
+  left: 50vw;
+  top: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in oklab, var(--fg), transparent 20%);
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 13px;
+  line-height: 1;
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--fg), transparent 80%);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
+  z-index: 90;
+}
+
+.settings-saved.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+:root[data-theme="dark"] select option {
+  background: var(--surface);
+  color: var(--fg);
+}

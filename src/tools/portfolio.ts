@@ -55,7 +55,7 @@ export async function shapeBrokerPortfolio(
     },
     { cost_basis_vnd: 0, market_value_vnd: 0, unrealized_pnl_vnd: 0 },
   );
-  const total_equity_vnd = snap.cashVnd + totals.market_value_vnd;
+  const total_equity_vnd = snap.totalEquityVnd ?? snap.cashVnd + totals.market_value_vnd;
 
   return {
     broker: snap.broker,
@@ -70,7 +70,7 @@ export async function shapeBrokerPortfolio(
 
 export const listPositionsTool = tool(
   "portfolio_list",
-  "List broker positions with current price, cash, and unrealized P&L. Outside backtests, the user is always prompted in the CLI before any broker call. Prices and avg_cost are in thousand VND (e.g. 28.5 = 28,500 VND). Monetary totals are returned in VND.",
+  "List broker positions with current price, cash, and unrealized P&L. In manual mode, the user is prompted before the tool runs. Prices and avg_cost are in thousand VND (e.g. 28.5 = 28,500 VND). Monetary totals are returned in VND.",
   {},
   async () => {
     const ok = await requireBrokerConsent("portfolio_list", "read cash, positions, and exposure");

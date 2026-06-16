@@ -1,0 +1,64 @@
+.about-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-6) 0 var(--space-5);
+}
+
+.about-mark {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  color: var(--fg);
+  margin-bottom: var(--space-3);
+}
+
+.about-mark svg {
+  width: 56px;
+  height: 56px;
+  display: block;
+}
+
+.about-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.about-version,
+.about-tagline {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.about-version {
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-tagline {
+  margin-top: var(--space-3);
+  max-width: 360px;
+}
+
+.about-links {
+  display: flex;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.about-links span,
+.about-risk {
+  color: var(--meta);
+}
+
+.about-risk {
+  margin-top: var(--space-6);
+  font-size: var(--text-xs);
+  max-width: 380px;
+  line-height: 1.55;
+}
