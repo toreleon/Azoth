@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
-import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
+import { getStockOhlcv, getIndexOhlcv, type Bar, findLastBarIndex } from "../data/sources/dnsePublic.js";
 import { DISCOVERY_UNIVERSE, discoverTickers } from "../tools/discover.js";
 import { setActiveAsOf } from "./clock.js";
 import { runTeamAnalysis } from "./team/index.js";
@@ -101,8 +101,10 @@ function parseBacktestInterval(value: string | undefined): { label: string; minu
 }
 
 function intervalCloses(vnindexBars: Bar[], startSec: number, endSec: number, intervalMinutes: number): number[] {
+  const startIdx = findLastBarIndex(vnindexBars, startSec - 1) + 1;
+  const endIdx = findLastBarIndex(vnindexBars, endSec);
   const base = vnindexBars
-    .filter((b) => b.time >= startSec && b.time <= endSec)
+    .slice(startIdx, endIdx + 1)
     .map((b) => b.time)
     .sort((a, b) => a - b);
   const step = Math.max(1, Math.round(intervalMinutes / 30));
@@ -298,8 +300,8 @@ export async function runBacktestSession(
   );
 
   const vnindexAt = (asOf: number): number | null => {
-    const series = vnindex.filter((b) => b.time <= asOf);
-    return series.length ? series[series.length - 1]!.close : null;
+    const lastIdx = findLastBarIndex(vnindex, asOf);
+    return lastIdx >= 0 ? vnindex[lastIdx]!.close : null;
   };
   const vnindexBaseline = vnindexAt(intervalTurns[0]!);
   if (vnindexBaseline == null) throw new Error(`no VNINDEX data at first ${interval.label} turn`);
@@ -312,8 +314,9 @@ export async function runBacktestSession(
       throwIfAborted(cb.signal);
       const dateIso = ictLabel(asOf);
       const priceOverride = (sym: string): number | null => {
-        const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
-        return series.length ? series[series.length - 1]!.close : null;
+        const symBars = bars[sym] ?? [];
+        const lastIdx = findLastBarIndex(symBars, asOf);
+        return lastIdx >= 0 ? symBars[lastIdx]!.close : null;
       };
       broker.setPriceOverride(priceOverride);
       cb.onTurnStart?.({ asOf, dateIso });
