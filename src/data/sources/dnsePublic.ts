@@ -61,6 +61,13 @@ export function seriesToBars(s: OhlcvSeries): Bar[] {
   return out;
 }
 
+/**
+ * ⚡ Bolt: O(log N) binary search for chronological time-series lookups.
+ *
+ * Replaces O(N) Array.prototype.filter() allocations. Since Ohlcv time-series
+ * arrays are strictly chronologically sorted, we can locate the target time bound
+ * in milliseconds rather than iterating through the entire historical dataset.
+ */
 export function findLastBarIndex(bars: Bar[], targetTime: number): number {
   let low = 0;
   let high = bars.length - 1;
