@@ -1,0 +1,3 @@
+## 2026-06-20 - O(log N) Time-Series Market Data Lookups
+**Learning:** During historical simulation in `backtestRunner`, filtering arrays of chronologically sorted market data bars via `Array.prototype.filter` to clip bars against an advancing 'as-of' time results in O(N) iterations and memory allocations inside internal backtest loops.
+**Action:** Exploit the strictly chronological (sorted) invariant of time-series market data arrays. Use binary search (via a shared `findLastBarIndex` utility) to slice or access O(1) matching elements, achieving O(log N) lookup time without intermediate array allocations for price and index retrievals in the inner loop of the backtesting engine.

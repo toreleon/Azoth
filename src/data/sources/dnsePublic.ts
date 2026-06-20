@@ -24,6 +24,29 @@ export interface Bar {
   volume: number;
 }
 
+/**
+ * Perform a binary search to find the index of the last bar whose time is <= timeSec.
+ * Returns -1 if all bars are after timeSec or array is empty.
+ * Assumes the bars array is chronologically sorted by time.
+ */
+export function findLastBarIndex(bars: Bar[], timeSec: number): number {
+  let left = 0;
+  let right = bars.length - 1;
+  let ans = -1;
+
+  while (left <= right) {
+    const mid = (left + right) >> 1;
+    if (bars[mid]!.time <= timeSec) {
+      ans = mid;
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  return ans;
+}
+
 async function fetchOhlcs(
   kind: "stock" | "index",
   symbol: string,
@@ -66,9 +89,12 @@ function clipBars(bars: Bar[]): Bar[] {
   // is set, fall through unchanged — DNSE only returns historical data anyway.
   const hasOverride =
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
-  if (!hasOverride) return bars;
+  if (!hasOverride || bars.length === 0) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const idx = findLastBarIndex(bars, asOf);
+  if (idx === -1) return [];
+  if (idx === bars.length - 1) return bars;
+  return bars.slice(0, idx + 1);
 }
 
 export async function getStockOhlcv(
