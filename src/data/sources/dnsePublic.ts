@@ -61,6 +61,28 @@ export function seriesToBars(s: OhlcvSeries): Bar[] {
   return out;
 }
 
+/**
+ * Efficiently finds the index of the last bar that occurred at or before the given target time.
+ * Uses O(log n) binary search since time series bars are chronologically sorted.
+ */
+export function findLastBarIndex(bars: Bar[], targetTime: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let best = -1;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (bars[mid]!.time <= targetTime) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return best;
+}
+
 function clipBars(bars: Bar[]): Bar[] {
   // Clip when an as-of clock is active (ALS or module override). When neither
   // is set, fall through unchanged — DNSE only returns historical data anyway.
@@ -68,7 +90,8 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const index = findLastBarIndex(bars, asOf);
+  return index === -1 ? [] : bars.slice(0, index + 1);
 }
 
 export async function getStockOhlcv(
