@@ -1,0 +1,3 @@
+## 2023-10-24 - [O(N) to O(log N) for Chronological Lookups]
+**Learning:** Found a major bottleneck in `src/agent/backtestRunner.ts` where large OHLCV market data arrays were being filtered iteratively with `array.filter((b) => b.time <= asOf)` to find the latest available bar. Given these arrays are natively sorted chronologically, doing an O(N) filter on thousands of bars in the inner loop (e.g. interval turns for all backtest symbols) scales poorly.
+**Action:** Created and used `findLastBarIndex`, a reusable O(log N) binary search utility, when extracting subset views or current elements of OHLCV bars. Applied this specifically to `clipBars`, `vnindexAt`, and `priceOverride` to improve backtesting engine performance.
