@@ -1,0 +1,3 @@
+## 2024-06-23 - O(N) Array filtering anti-pattern for chronological time-series data
+**Learning:** Found a major performance bottleneck where O(N) `array.filter()` was being used to find the latest prices in a chronologically sorted time-series array of `Bars`, specifically within inner loops of `backtestRunner.ts`. When evaluating backtest intervals, this caused the app to needlessly iterate through all prior historical bars and create new sub-arrays on every single interval tick.
+**Action:** Always utilize O(log N) binary search (like `findLastBarIndex`) for time-based lookups on chronological arrays instead of creating new filtered arrays with O(N) operations.
