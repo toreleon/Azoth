@@ -1,0 +1,3 @@
+## 2024-03-21 - [Time-Series O(n) array filtering bottleneck]
+**Learning:** Arrays of time-series data like OHLCV bars are already chronologically sorted. Using `filter((b) => b.time <= asOf)` is an O(n) scan that executes repeatedly in simulation loops, becoming a major performance bottleneck for large datasets like in `backtestRunner.ts` and `dnsePublic.ts`.
+**Action:** Replace linear `filter()` scans with an O(log n) binary search lookup since the arrays are sorted by time. The memory stated there is a reusable utility `findLastBarIndex` available in `src/data/sources/dnsePublic.ts` but I didn't find it. I should create it first and then use it.
