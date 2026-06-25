@@ -1,0 +1,3 @@
+## 2024-06-25 - [Binary Search for Chronological Time Series Arrays]
+**Learning:** Time-series market data arrays (like OHLCV bars) are chronologically sorted in this codebase. O(n) array filtering operations (e.g. `bars.filter(b => b.time <= asOf)`) on these arrays within hot paths like backtesting loops cause significant performance overhead.
+**Action:** Replace `Array.prototype.filter` with an O(log n) binary search lookup (e.g., a `findLastBarIndex` utility) when truncating or querying the latest available bar up to a specific time. Use `.slice(0, lastIndex + 1)` if the truncated array is needed, or just access the index directly if only the latest bar is required.
