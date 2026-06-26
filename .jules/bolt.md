@@ -1,0 +1,3 @@
+## 2024-06-26 - O(n) array filtering on chronological time-series data
+**Learning:** Found significant performance overhead in backtest loops (`vnindexAt`, `priceOverride`) and array clipping (`clipBars`) caused by repeatedly using `.filter()` on large chronological time-series arrays. These data arrays (OHLCV bars) are already sorted chronologically by time.
+**Action:** Always prefer O(log n) binary search lookups (like the newly added `findLastBarIndex` in `dnsePublic.ts`) over O(n) `.filter()` when searching for the most recent data point up to a specific timestamp in time-series data. This completely avoids creating massive intermediate arrays and drastically speeds up nested loop lookups during backtesting and data retrieval.
