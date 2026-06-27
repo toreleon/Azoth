@@ -24,6 +24,27 @@ export interface Bar {
   volume: number;
 }
 
+/**
+ * Finds the index of the last bar that occurred on or before a given timestamp.
+ * Assumes the bars array is sorted chronologically by time.
+ * Time complexity: O(log n)
+ */
+export function findLastBarIndex(bars: Bar[], time: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (bars[mid]!.time <= time) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
 async function fetchOhlcs(
   kind: "stock" | "index",
   symbol: string,
@@ -66,9 +87,12 @@ function clipBars(bars: Bar[]): Bar[] {
   // is set, fall through unchanged — DNSE only returns historical data anyway.
   const hasOverride =
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
-  if (!hasOverride) return bars;
+  if (!hasOverride || bars.length === 0) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const lastIdx = findLastBarIndex(bars, asOf);
+  if (lastIdx === -1) return [];
+  // slice is O(1) conceptually and much faster than O(n) filter
+  return bars.slice(0, lastIdx + 1);
 }
 
 export async function getStockOhlcv(

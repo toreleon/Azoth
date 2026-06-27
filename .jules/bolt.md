@@ -1,0 +1,3 @@
+## 2025-02-28 - Replace O(n) Array Filtering with Binary Search on Timeseries Data
+**Learning:** During backtesting, `priceOverride` and `vnindexAt` functions were evaluating closures at every turn in a loop. Both were using O(n) `Array.prototype.filter()` over long chronologically-sorted price arrays simply to find the last item prior to `asOf`, constantly allocating arrays.
+**Action:** Always prefer binary search O(log n) lookups over array filtering on chronologically sorted timeseries datasets (like OHLCV arrays), especially when fetching historical state repeatedly. Added `findLastBarIndex` to abstract this logic out.
