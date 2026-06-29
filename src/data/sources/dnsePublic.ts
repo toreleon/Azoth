@@ -45,6 +45,30 @@ async function fetchOhlcs(
   return (await body.json()) as OhlcvSeries;
 }
 
+/**
+ * ⚡ Bolt: Finds the index of the last bar that occurs at or before `timeSec`.
+ * O(log n) performance on chronologically sorted bar arrays.
+ */
+export function findLastBarIndex(bars: Bar[], timeSec: number): number {
+  let left = 0;
+  let right = bars.length - 1;
+  let ans = -1;
+
+  while (left <= right) {
+    const mid = (left + right) >> 1;
+    const b = bars[mid];
+    // if the bar exists, its time might be a number
+    if (b && b.time <= timeSec) {
+      ans = mid;
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  return ans;
+}
+
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
   for (let i = 0; i < s.t.length; i++) {
@@ -68,7 +92,11 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+
+  // ⚡ Bolt: Replace O(n) array filter with O(log n) binary search
+  const idx = findLastBarIndex(bars, asOf);
+  if (idx === -1) return [];
+  return bars.slice(0, idx + 1);
 }
 
 export async function getStockOhlcv(
