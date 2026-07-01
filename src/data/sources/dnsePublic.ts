@@ -45,6 +45,28 @@ async function fetchOhlcs(
   return (await body.json()) as OhlcvSeries;
 }
 
+/**
+ * O(log n) binary search to find the index of the last bar with time <= targetTime.
+ * Assumes the bars array is chronologically sorted.
+ */
+export function findLastBarIndex(bars: Bar[], targetTime: number): number {
+  let left = 0;
+  let right = bars.length - 1;
+  let result = -1;
+
+  while (left <= right) {
+    const mid = left + Math.floor((right - left) / 2);
+    if (bars[mid]!.time <= targetTime) {
+      result = mid;
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  return result;
+}
+
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
   for (let i = 0; i < s.t.length; i++) {
@@ -66,9 +88,15 @@ function clipBars(bars: Bar[]): Bar[] {
   // is set, fall through unchanged — DNSE only returns historical data anyway.
   const hasOverride =
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
-  if (!hasOverride) return bars;
+  if (!hasOverride || bars.length === 0) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+
+  // Performance optimization: use O(log N) binary search instead of O(N) filter
+  // since DNSE market data bars are already chronologically sorted.
+  const lastIdx = findLastBarIndex(bars, asOf);
+  if (lastIdx === -1) return []; // all bars are in the future
+  if (lastIdx === bars.length - 1) return bars; // all bars are in the past/present
+  return bars.slice(0, lastIdx + 1);
 }
 
 export async function getStockOhlcv(
