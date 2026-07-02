@@ -1,0 +1,3 @@
+## 2024-07-02 - Binary Search for Time-Series Optimization
+**Learning:** Chronologically sorted time-series market data (like `Bar[]` arrays) in the application hot-paths (e.g., within `backtestRunner.ts`) were being queried using `O(n)` `.filter()` methods. This not only scaled linearly in runtime but crucially forced new array allocations inside nested loops during backtesting simulations.
+**Action:** Always prefer `O(log n)` binary searches when retrieving state from chronologically sorted financial data structures. Use the `findLastBarIndex` utility added to `dnsePublic.ts` for index lookups instead of allocating new arrays via `.filter()`.
