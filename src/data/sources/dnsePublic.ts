@@ -45,6 +45,22 @@ async function fetchOhlcs(
   return (await body.json()) as OhlcvSeries;
 }
 
+export function findLastBarIndex(bars: Pick<Bar, "time">[], time: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (bars[mid]!.time <= time) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
   for (let i = 0; i < s.t.length; i++) {
