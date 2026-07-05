@@ -1,0 +1,3 @@
+## 2024-05-19 - Backtest array filtering bottleneck
+**Learning:** During backtests, chronologically sorted market data arrays were dynamically filtered using O(N) `.filter()` repeatedly to find the `asOf` price for every interval tick. This created unnecessary overhead during backtest replay execution.
+**Action:** Exploit the chronological sorting of the OHLCV arrays by adding and using a custom O(log N) binary search utility `findLastBarIndex` in `src/data/sources/dnsePublic.ts`. Use this to query indices instead of allocating new sliced arrays dynamically, directly yielding specific OHLCV prices, which eliminates the overhead memory footprint and traversal costs for the hot path during `runBacktestSession`.

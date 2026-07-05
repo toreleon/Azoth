@@ -45,6 +45,29 @@ async function fetchOhlcs(
   return (await body.json()) as OhlcvSeries;
 }
 
+/**
+ * Binary search to find the index of the last bar with a time <= targetSec.
+ * Assumes the bars array is chronologically sorted.
+ * @returns the index of the matching bar, or -1 if no such bar exists.
+ */
+export function findLastBarIndex(bars: Bar[], targetSec: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let result = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    if (bars[mid]!.time <= targetSec) {
+      result = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return result;
+}
+
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
   for (let i = 0; i < s.t.length; i++) {
@@ -68,7 +91,9 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const index = findLastBarIndex(bars, asOf);
+  if (index === -1) return [];
+  return bars.slice(0, index + 1);
 }
 
 export async function getStockOhlcv(
