@@ -45,6 +45,27 @@ async function fetchOhlcs(
   return (await body.json()) as OhlcvSeries;
 }
 
+/**
+ * Binary search to find the index of the last bar that occurs on or before the given time.
+ * Assumes the bars array is chronologically sorted.
+ * O(log n) time complexity.
+ */
+export function findLastBarIndex(bars: Bar[], time: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (bars[mid]!.time <= time) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
   for (let i = 0; i < s.t.length; i++) {
@@ -68,7 +89,11 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  // Optimization: use O(log n) binary search rather than O(n) filtering
+  // to avoid allocating arrays inside tight loops
+  const idx = findLastBarIndex(bars, asOf);
+  if (idx < 0) return [];
+  return idx === bars.length - 1 ? bars : bars.slice(0, idx + 1);
 }
 
 export async function getStockOhlcv(
