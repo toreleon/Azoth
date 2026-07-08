@@ -61,6 +61,22 @@ export function seriesToBars(s: OhlcvSeries): Bar[] {
   return out;
 }
 
+export function findLastBarIndex(bars: Bar[], time: number): number {
+  let l = 0;
+  let r = bars.length - 1;
+  let ans = -1;
+  while (l <= r) {
+    const m = (l + r) >> 1;
+    if (bars[m]!.time <= time) {
+      ans = m;
+      l = m + 1;
+    } else {
+      r = m - 1;
+    }
+  }
+  return ans;
+}
+
 function clipBars(bars: Bar[]): Bar[] {
   // Clip when an as-of clock is active (ALS or module override). When neither
   // is set, fall through unchanged — DNSE only returns historical data anyway.
@@ -68,7 +84,9 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const idx = findLastBarIndex(bars, asOf);
+  if (idx < 0) return [];
+  return bars.slice(0, idx + 1);
 }
 
 export async function getStockOhlcv(
