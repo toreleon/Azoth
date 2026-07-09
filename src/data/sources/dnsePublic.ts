@@ -45,6 +45,28 @@ async function fetchOhlcs(
   return (await body.json()) as OhlcvSeries;
 }
 
+/**
+ * Binary search to find the index of the last bar chronologically on or before a given timestamp.
+ * Returns -1 if no such bar exists.
+ */
+export function findLastBarIndex(bars: Bar[], asOfSec: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let result = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    if (bars[mid]!.time <= asOfSec) {
+      result = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return result;
+}
+
 export function seriesToBars(s: OhlcvSeries): Bar[] {
   const out: Bar[] = [];
   for (let i = 0; i < s.t.length; i++) {
@@ -66,9 +88,14 @@ function clipBars(bars: Bar[]): Bar[] {
   // is set, fall through unchanged — DNSE only returns historical data anyway.
   const hasOverride =
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
-  if (!hasOverride) return bars;
+  if (!hasOverride || bars.length === 0) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+
+  // ⚡ Bolt: Use O(log n) binary search + O(1) slice instead of O(n) filter
+  const idx = findLastBarIndex(bars, asOf);
+  if (idx === -1) return [];
+  if (idx === bars.length - 1) return bars;
+  return bars.slice(0, idx + 1);
 }
 
 export async function getStockOhlcv(
