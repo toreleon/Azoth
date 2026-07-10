@@ -1,0 +1,3 @@
+## 2024-07-10 - O(log n) lookups over O(n) filtering for time-series backtesting
+**Learning:** Backtest loops repeatedly performed `Array.filter` on chronologically sorted time-series market arrays (like `vnindex` and `bars`), turning internal lookup mechanics inside high-cadence loops into an O(n) scan. By implementing and utilizing `findLastBarIndex` using a binary search (O(log n)), we massively cut down repeated iterations and eliminated redundant memory allocations from producing transient arrays across each simulated trading turn.
+**Action:** Default to binary search patterns when pulling point-in-time state from chronologically sorted datasets, especially in tight loops or data clipping logic where the index naturally dictates array slicing bounds.
