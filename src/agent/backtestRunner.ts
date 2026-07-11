@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
-import { getStockOhlcv, getIndexOhlcv, type Bar } from "../data/sources/dnsePublic.js";
+import { getStockOhlcv, getIndexOhlcv, findLastBarIndex, type Bar } from "../data/sources/dnsePublic.js";
 import { DISCOVERY_UNIVERSE, discoverTickers } from "../tools/discover.js";
 import { setActiveAsOf } from "./clock.js";
 import { runTeamAnalysis } from "./team/index.js";
@@ -101,10 +101,17 @@ function parseBacktestInterval(value: string | undefined): { label: string; minu
 }
 
 function intervalCloses(vnindexBars: Bar[], startSec: number, endSec: number, intervalMinutes: number): number[] {
-  const base = vnindexBars
-    .filter((b) => b.time >= startSec && b.time <= endSec)
-    .map((b) => b.time)
-    .sort((a, b) => a - b);
+  const startIdx = vnindexBars.findIndex((b) => b.time >= startSec);
+  const endIdx = findLastBarIndex(vnindexBars, endSec);
+
+  const base: number[] = [];
+  if (startIdx >= 0 && endIdx >= startIdx) {
+    for (let i = startIdx; i <= endIdx; i++) {
+      base.push(vnindexBars[i]!.time);
+    }
+  }
+  base.sort((a, b) => a - b);
+
   const step = Math.max(1, Math.round(intervalMinutes / 30));
   if (step === 1) return base;
 
@@ -298,8 +305,8 @@ export async function runBacktestSession(
   );
 
   const vnindexAt = (asOf: number): number | null => {
-    const series = vnindex.filter((b) => b.time <= asOf);
-    return series.length ? series[series.length - 1]!.close : null;
+    const idx = findLastBarIndex(vnindex, asOf);
+    return idx >= 0 ? vnindex[idx]!.close : null;
   };
   const vnindexBaseline = vnindexAt(intervalTurns[0]!);
   if (vnindexBaseline == null) throw new Error(`no VNINDEX data at first ${interval.label} turn`);
@@ -312,8 +319,10 @@ export async function runBacktestSession(
       throwIfAborted(cb.signal);
       const dateIso = ictLabel(asOf);
       const priceOverride = (sym: string): number | null => {
-        const series = bars[sym]?.filter((b) => b.time <= asOf) ?? [];
-        return series.length ? series[series.length - 1]!.close : null;
+        const symBars = bars[sym];
+        if (!symBars) return null;
+        const idx = findLastBarIndex(symBars, asOf);
+        return idx >= 0 ? symBars[idx]!.close : null;
       };
       broker.setPriceOverride(priceOverride);
       cb.onTurnStart?.({ asOf, dateIso });
