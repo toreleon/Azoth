@@ -90,3 +90,19 @@ export async function getIndexOhlcv(
   const series = await fetchOhlcs("index", symbol.toUpperCase(), resolution, from, to);
   return clipBars(seriesToBars(series));
 }
+
+export function findLastBarIndex(bars: Bar[], timeSec: number): number {
+  let l = 0;
+  let r = bars.length - 1;
+  let ans = -1;
+  while (l <= r) {
+    const mid = (l + r) >> 1;
+    if (bars[mid]!.time <= timeSec) {
+      ans = mid;
+      l = mid + 1;
+    } else {
+      r = mid - 1;
+    }
+  }
+  return ans;
+}
