@@ -1,0 +1,3 @@
+## 2024-07-14 - Replace O(n) array filter with O(log n) binary search in backtest runner
+**Learning:** Backtesting frequently requires lookups for recent bars given a timestamp across multiple instruments. Using array `.filter((b) => b.time <= asOf)` is extremely inefficient for this task, as it creates a new array in O(n) time for every lookup.
+**Action:** Implemented and reused a `findLastBarIndex` binary search utility to find the most recent chronological bar in O(log n) time without allocations. Always use binary search instead of `filter()` for time-based bounds checks on sorted historical market data arrays.
