@@ -58,8 +58,8 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0(@types/react@18.3.28)
       pnpm:
-        specifier: ^11.13.0
-        version: 11.13.0
+        specifier: ^10.34.5
+        version: 10.34.5
       tsx:
         specifier: ^4.19.1
         version: 4.21.0
@@ -1301,9 +1301,9 @@ packages:
     resolution: {integrity: sha512-uB80kBFb/tfd68bVleG9T5GGsGPjJrLAUpR5PZIrhBnIaRTQRjqdJSsIKkOP6OAIFbj7GOrcudc5pNjZ+geV2g==}
     engines: {node: '>=6'}
 
-  pnpm@11.13.0:
-    resolution: {integrity: sha512-iNlHJNjy5sGGdEpVhMblnsrIaex7oV6ctM1ijo3HBmggskgdjuO1HqjaMjpzeAaKpYxVajcg0yt8IKBR0Ig2Og==}
-    engines: {node: '>=22.13'}
+  pnpm@10.34.5:
+    resolution: {integrity: sha512-pO4F8vc2WCVb1qiYWcBlpFwopX2u+uLIk6Fo7itzFow3uR6D5X6mdlStA/AwMXRkMOi84442LgQmBfuKvIAZLg==}
+    engines: {node: '>=18.12'}
     hasBin: true
 
   postcss@8.5.12:
@@ -2753,7 +2753,7 @@ snapshots:
 
   pify@4.0.1: {}
 
-  pnpm@11.13.0: {}
+  pnpm@10.34.5: {}
 
   postcss@8.5.12:
     dependencies:
