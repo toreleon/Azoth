@@ -54,14 +54,14 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
-    "better-sqlite3": "^11.5.0",
-    "cheerio": "^1.0.0",
+    "better-sqlite3": "^12.11.1",
+    "cheerio": "^1.2.0",
     "ink": "^5.0.1",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
+    "ink-spinner": "5.0.0",
+    "ink-text-input": "6.0.0",
     "react": "^18.3.1",
     "technicalindicators": "^3.1.0",
-    "undici": "^6.20.0",
+    "undici": "^8.7.0",
     "yaml": "^2.6.0",
     "zod": "^3.23.8"
   },
@@ -80,5 +80,5 @@
       "better-sqlite3"
     ]
   },
-  "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8"
+  "packageManager": "pnpm@11.13.1+sha512.b2fc7683b8a6525414e7d13e1ba28caaddde96bf66ec540bfaeb7e702b81f3e0be4d1f295edf7f9fe0396740a8dce4509c582ddf79891f4543fea32d37645f25"
 }
