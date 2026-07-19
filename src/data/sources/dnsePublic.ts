@@ -24,6 +24,27 @@ export interface Bar {
   volume: number;
 }
 
+/**
+ * Finds the index of the last bar with time <= targetTime.
+ * Requires the bars array to be sorted chronologically by time.
+ * Returns -1 if no such bar exists.
+ */
+export function findLastBarIndex(bars: Bar[], targetTime: number): number {
+  let left = 0;
+  let right = bars.length - 1;
+  let ans = -1;
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (bars[mid]!.time <= targetTime) {
+      ans = mid;
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+  return ans;
+}
+
 async function fetchOhlcs(
   kind: "stock" | "index",
   symbol: string,
@@ -68,7 +89,9 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const idx = findLastBarIndex(bars, asOf);
+  if (idx === -1) return [];
+  return bars.slice(0, idx + 1);
 }
 
 export async function getStockOhlcv(

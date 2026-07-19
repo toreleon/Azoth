@@ -1,0 +1,3 @@
+## 2024-07-19 - Fast Time-Series Lookups via Binary Search
+**Learning:** The `backtestRunner` loops repeatedly over historical time-series data. Previous logic used `.filter((b) => b.time <= asOf)` to get the price of a stock at a specific turn. This caused an $O(N)$ operation inside an already heavy simulation loop, leading to $O(T \times N)$ time complexity for $T$ turns.
+**Action:** Since time-series bar data (like `OHLCV`) is naturally sorted chronologically, use `findLastBarIndex` (binary search) to retrieve the required index in $O(\log N)$ time. I have added this reusable utility to `src/data/sources/dnsePublic.ts`. Prefer this utility over full array slicing/filtering for performance-critical lookups on time-sorted arrays.
