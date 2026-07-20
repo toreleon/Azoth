@@ -1,0 +1,3 @@
+## 2024-07-20 - [O(n) Array Filtering Bottleneck in Backtest Simulator]
+**Learning:** In the backtest simulator (`backtestRunner.ts`), time-series data like prices and indexes are repeatedly queried using `array.filter(b => b.time <= asOf)` within the inner loop (e.g. for every tick/interval turn, for every candidate ticker). Since time-series bar arrays are chronologically sorted and queried thousands of times, O(n) array filtering causes a massive CPU bottleneck.
+**Action:** When repeatedly querying chronologically sorted time-series arrays for a timestamp threshold, always use O(log n) binary search (like `findLastBarIndex`) rather than O(n) `Array.prototype.filter` or `findLast`.
