@@ -1,0 +1,3 @@
+## 2025-02-09 - Time-Series O(log n) Clipping Optimization
+**Learning:** The codebase fetches historical OHLCV time-series data which is strictly ordered by time (chronological). The `clipBars` function used `Array.prototype.filter` to restrict future bars in backtesting mode, which is an O(n) operation that inspects every element in a potentially long array.
+**Action:** Created and used `findLastBarIndex(bars, targetTime)`, a binary search algorithm, to reduce the clipping complexity from O(n) to O(log n) followed by an array slice. This pattern should be considered whenever dealing with chronologically sorted arrays in the codebase.
