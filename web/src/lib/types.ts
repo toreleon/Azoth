@@ -271,3 +271,75 @@ export interface FinancialsResponse {
 export interface MarketNewsResponse {
   items: NewsItem[];
 }
+
+// ---------------------------------------------------------------------------
+// Watchlists (user-managed, SQLite-backed)
+// ---------------------------------------------------------------------------
+
+export interface WatchlistMeta {
+  id: number;
+  name: string;
+  tickers: string[];
+}
+
+export interface WatchlistsResponse {
+  watchlists: WatchlistMeta[];
+}
+
+export interface WatchlistDetail {
+  id: number;
+  name: string;
+  rows: WatchRow[]; // WatchRow (above) with live quote + sparkline
+}
+
+// ---------------------------------------------------------------------------
+// Portfolios (manual holdings, Google-Finance style — NOT broker-linked)
+// ---------------------------------------------------------------------------
+
+export interface PortfolioMeta {
+  id: number;
+  name: string;
+}
+
+export interface PortfoliosResponse {
+  portfolios: PortfolioMeta[];
+}
+
+export interface HoldingInput {
+  ticker: string;
+  quantity: number;
+  avgCostVnd: number; // plain VND / share
+}
+
+export interface HoldingRow {
+  id: number;
+  ticker: string;
+  name?: string;
+  quantity: number;
+  avgCostVnd: number; // plain VND / share
+  last: number | null; // board units (thousand VND)
+  change_pct: number | null; // day %
+  marketValueVnd: number | null; // plain VND
+  costBasisVnd: number; // plain VND
+  gainVnd: number | null; // plain VND
+  gainPct: number | null;
+  dayChangeVnd: number | null; // plain VND
+  weightPct: number | null;
+  spark: number[];
+}
+
+export interface PortfolioTotals {
+  marketValueVnd: number | null; // plain VND
+  costBasisVnd: number; // plain VND
+  gainVnd: number | null; // plain VND
+  gainPct: number | null;
+  dayChangeVnd: number | null; // plain VND
+  dayChangePct: number | null;
+}
+
+export interface PortfolioResponse {
+  id: number;
+  name: string;
+  holdings: HoldingRow[];
+  totals: PortfolioTotals;
+}

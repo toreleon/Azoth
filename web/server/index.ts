@@ -33,6 +33,25 @@ import {
   getFinancialRatios,
 } from "../../src/data/sources/cafef.js";
 import { TICKER_UNIVERSES } from "../../src/tools/discover.js";
+import {
+  ensureWebSchema,
+  listWatchlists,
+  getWatchlistMeta,
+  createWatchlist,
+  renameWatchlist,
+  deleteWatchlist,
+  addWatchlistItem,
+  removeWatchlistItem,
+  listPortfolios,
+  getPortfolio,
+  createPortfolio,
+  renamePortfolio,
+  deletePortfolio,
+  getHoldings,
+  addHolding,
+  updateHolding,
+  deleteHolding,
+} from "./store.js";
 
 const PORT = Number(process.env.AZOTH_WEB_PORT ?? 8787);
 const DAY = 86400;
@@ -374,6 +393,108 @@ async function handleWatchlist() {
   return { title: "Watchlist", rows };
 }
 
+// ---------------------------------------------------------------------------
+// User watchlists (persistent) & portfolios
+// ---------------------------------------------------------------------------
+
+/** Build WatchRow-shaped rows ({ticker,name,last,change_abs,change_pct,spark}). */
+async function watchRowsFor(tickers: string[]) {
+  const digests = await mapLimit(tickers, 8, miniDigest);
+  const names = await nameIndex().catch(() => [] as NameEntry[]);
+  const nameMap = new Map(names.map((n) => [n.ticker, n.name]));
+  return digests.map((d) => ({
+    ticker: d.ticker,
+    name: nameMap.get(d.ticker),
+    last: d.last,
+    change_abs: d.changeAbs,
+    change_pct: d.changePct,
+    spark: d.spark,
+  }));
+}
+
+async function handleWatchlistDetail(id: number) {
+  const meta = getWatchlistMeta(id);
+  if (!meta) throw new HttpError(404, `watchlist ${id} not found`);
+  const rows = meta.tickers.length ? await watchRowsFor(meta.tickers) : [];
+  return { id: meta.id, name: meta.name, rows };
+}
+
+async function handlePortfolioResponse(id: number) {
+  const meta = getPortfolio(id);
+  if (!meta) throw new HttpError(404, `portfolio ${id} not found`);
+  const holdings = getHoldings(id);
+  if (!holdings.length) {
+    return {
+      id: meta.id,
+      name: meta.name,
+      holdings: [] as unknown[],
+      totals: {
+        marketValueVnd: 0,
+        costBasisVnd: 0,
+        gainVnd: 0,
+        gainPct: null,
+        dayChangeVnd: 0,
+        dayChangePct: null,
+      },
+    };
+  }
+
+  const distinct = [...new Set(holdings.map((h) => h.ticker))];
+  const digests = await mapLimit(distinct, 8, miniDigest);
+  const digestMap = new Map(digests.map((d) => [d.ticker, d]));
+  const names = await nameIndex().catch(() => [] as NameEntry[]);
+  const nameMap = new Map(names.map((n) => [n.ticker, n.name]));
+
+  // First pass: per-holding raw values (market value drives the weight denominator).
+  const computed = holdings.map((h) => {
+    const d = digestMap.get(h.ticker);
+    const last = d?.last ?? null;
+    const changeAbs = d?.changeAbs ?? null;
+    const marketValueVnd = last != null ? h.quantity * last * 1000 : null;
+    const costBasisVnd = h.quantity * h.avgCostVnd;
+    const gainVnd = marketValueVnd != null ? marketValueVnd - costBasisVnd : null;
+    const gainPct = gainVnd != null && costBasisVnd > 0 ? (gainVnd / costBasisVnd) * 100 : null;
+    const dayChangeVnd = changeAbs != null ? h.quantity * changeAbs * 1000 : null;
+    return { h, d, last, marketValueVnd, costBasisVnd, gainVnd, gainPct, dayChangeVnd };
+  });
+
+  const totalMV = computed.reduce((s, c) => s + (c.marketValueVnd ?? 0), 0);
+
+  const holdingRows = computed.map((c) => ({
+    id: c.h.id,
+    ticker: c.h.ticker,
+    name: nameMap.get(c.h.ticker),
+    quantity: c.h.quantity,
+    avgCostVnd: c.h.avgCostVnd,
+    last: c.last == null ? null : round(c.last, 2),
+    change_pct: c.d?.changePct ?? null,
+    marketValueVnd: c.marketValueVnd == null ? null : round(c.marketValueVnd, 0),
+    costBasisVnd: round(c.costBasisVnd, 0)!,
+    gainVnd: c.gainVnd == null ? null : round(c.gainVnd, 0),
+    gainPct: round(c.gainPct, 2),
+    dayChangeVnd: c.dayChangeVnd == null ? null : round(c.dayChangeVnd, 0),
+    weightPct:
+      c.marketValueVnd != null && totalMV > 0 ? round((c.marketValueVnd / totalMV) * 100, 2) : null,
+    spark: c.d?.spark ?? [],
+  }));
+
+  const totalCost = computed.reduce((s, c) => s + c.costBasisVnd, 0);
+  const totalGain = computed.reduce((s, c) => s + (c.gainVnd ?? 0), 0);
+  const totalDayChange = computed.reduce((s, c) => s + (c.dayChangeVnd ?? 0), 0);
+  const prevMV = totalMV - totalDayChange;
+
+  const totals = {
+    marketValueVnd: round(totalMV, 0),
+    costBasisVnd: round(totalCost, 0)!,
+    gainVnd: round(totalGain, 0),
+    gainPct: totalCost > 0 ? round((totalGain / totalCost) * 100, 2) : null,
+    dayChangeVnd: round(totalDayChange, 0),
+    dayChangePct: prevMV > 0 ? round((totalDayChange / prevMV) * 100, 2) : null,
+  };
+
+  return { id: meta.id, name: meta.name, holdings: holdingRows, totals };
+}
+
 async function latestRatio(ticker: string, code: string): Promise<number | null> {
   const arr = await getRatio(ticker, code, 1).catch(() => []);
   return arr[0]?.value ?? null;
@@ -703,9 +824,147 @@ function upperTicker(raw: string): string {
   return decodeURIComponent(raw).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
 }
 
-async function route(url: URL): Promise<unknown> {
+/** Parse a numeric path id, throwing a 400 if it isn't a finite number. */
+function numId(raw: string | undefined, label = "id"): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) throw new HttpError(400, `invalid ${label}`);
+  return n;
+}
+
+function reqName(body: BodyObj): string {
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) throw new HttpError(400, "name required");
+  return name;
+}
+
+/** Run a store call, mapping its input-validation Errors to HTTP 400. */
+function validate<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    throw new HttpError(400, err instanceof Error ? err.message : "invalid input");
+  }
+}
+
+type BodyObj = Record<string, unknown>;
+
+async function routeWatchlists(
+  arg: string | undefined,
+  sub: string | undefined,
+  subArg: string | undefined,
+  method: string,
+  body: BodyObj,
+): Promise<unknown> {
+  // Collection: /api/watchlists
+  if (!arg) {
+    if (method === "GET") return { watchlists: listWatchlists() };
+    if (method === "POST") return createWatchlist(reqName(body));
+    throw new HttpError(405, `method not allowed: ${method}`);
+  }
+
+  const id = numId(arg, "watchlist id");
+
+  // Items sub-resource: /api/watchlists/:id/items[/:ticker]
+  if (sub === "items") {
+    if (!subArg) {
+      if (method === "POST") {
+        const meta = validate(() => addWatchlistItem(id, String(body.ticker ?? "")));
+        if (!meta) throw new HttpError(404, `watchlist ${id} not found`);
+        return meta;
+      }
+      throw new HttpError(405, `method not allowed: ${method}`);
+    }
+    if (method === "DELETE") {
+      const meta = validate(() => removeWatchlistItem(id, upperTicker(subArg)));
+      if (!meta) throw new HttpError(404, `watchlist ${id} not found`);
+      return meta;
+    }
+    throw new HttpError(405, `method not allowed: ${method}`);
+  }
+
+  // Single list: /api/watchlists/:id
+  if (method === "GET") return handleWatchlistDetail(id);
+  if (method === "PATCH") {
+    const meta = renameWatchlist(id, reqName(body));
+    if (!meta) throw new HttpError(404, `watchlist ${id} not found`);
+    return meta;
+  }
+  if (method === "DELETE") {
+    deleteWatchlist(id);
+    return { ok: true };
+  }
+  throw new HttpError(405, `method not allowed: ${method}`);
+}
+
+async function routePortfolios(
+  arg: string | undefined,
+  sub: string | undefined,
+  method: string,
+  body: BodyObj,
+): Promise<unknown> {
+  // Collection: /api/portfolios
+  if (!arg) {
+    if (method === "GET") return { portfolios: listPortfolios() };
+    if (method === "POST") return createPortfolio(reqName(body));
+    throw new HttpError(405, `method not allowed: ${method}`);
+  }
+
+  const id = numId(arg, "portfolio id");
+
+  // Holdings sub-resource: /api/portfolios/:id/holdings
+  if (sub === "holdings") {
+    if (method === "POST") {
+      if (!getPortfolio(id)) throw new HttpError(404, `portfolio ${id} not found`);
+      validate(() =>
+        addHolding(id, {
+          ticker: String(body.ticker ?? ""),
+          quantity: Number(body.quantity),
+          avgCostVnd: Number(body.avgCostVnd),
+        }),
+      );
+      return { ok: true };
+    }
+    throw new HttpError(405, `method not allowed: ${method}`);
+  }
+
+  // Single portfolio: /api/portfolios/:id
+  if (method === "GET") return handlePortfolioResponse(id);
+  if (method === "PATCH") {
+    const meta = renamePortfolio(id, reqName(body));
+    if (!meta) throw new HttpError(404, `portfolio ${id} not found`);
+    return meta;
+  }
+  if (method === "DELETE") {
+    deletePortfolio(id);
+    return { ok: true };
+  }
+  throw new HttpError(405, `method not allowed: ${method}`);
+}
+
+async function routeHoldings(
+  arg: string | undefined,
+  method: string,
+  body: BodyObj,
+): Promise<unknown> {
+  const id = numId(arg, "holding id");
+  if (method === "PATCH") {
+    const patch: { quantity?: number; avgCostVnd?: number } = {};
+    if (body.quantity !== undefined) patch.quantity = Number(body.quantity);
+    if (body.avgCostVnd !== undefined) patch.avgCostVnd = Number(body.avgCostVnd);
+    validate(() => updateHolding(id, patch));
+    return { ok: true };
+  }
+  if (method === "DELETE") {
+    deleteHolding(id);
+    return { ok: true };
+  }
+  throw new HttpError(405, `method not allowed: ${method}`);
+}
+
+async function route(url: URL, method: string, body: BodyObj): Promise<unknown> {
   const parts = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
-  const [head, arg] = parts;
+  const [head, arg, sub, subArg] = parts;
 
   switch (head) {
     case undefined:
@@ -717,6 +976,12 @@ async function route(url: URL): Promise<unknown> {
       return handleMovers(url.searchParams.get("kind") ?? "gainers", url.searchParams.get("universe") ?? "vn30");
     case "watchlist":
       return handleWatchlist();
+    case "watchlists":
+      return routeWatchlists(arg, sub, subArg, method, body);
+    case "portfolios":
+      return routePortfolios(arg, sub, method, body);
+    case "holdings":
+      return routeHoldings(arg, method, body);
     case "market-news":
       return handleMarketNews();
     case "search":
@@ -752,11 +1017,21 @@ class HttpError extends Error {
   }
 }
 
+/** Read and JSON-parse a request body; tolerate an empty body (→ {}). */
+async function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (!raw) return {};
+  const parsed = JSON.parse(raw);
+  return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,OPTIONS",
+      "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
       "access-control-allow-headers": "content-type,accept",
     });
     res.end();
@@ -767,24 +1042,35 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 404, { error: "not found" });
     return;
   }
+  const method = (req.method ?? "GET").toUpperCase();
   const started = Date.now();
   try {
-    const body = await route(url);
-    sendJson(res, 200, body);
-    console.log(`${req.method} ${url.pathname}${url.search} → 200 (${Date.now() - started}ms)`);
+    let body: Record<string, unknown> = {};
+    if (method === "POST" || method === "PATCH" || method === "PUT" || method === "DELETE") {
+      try {
+        body = await readBody(req);
+      } catch {
+        throw new HttpError(400, "invalid JSON body");
+      }
+    }
+    const result = await route(url, method, body);
+    sendJson(res, 200, result);
+    console.log(`${method} ${url.pathname}${url.search} → 200 (${Date.now() - started}ms)`);
   } catch (err) {
     const status = err instanceof HttpError ? err.status : 500;
     const message = err instanceof Error ? err.message : "internal error";
     sendJson(res, status, { error: message });
-    console.error(`${req.method} ${url.pathname}${url.search} → ${status}: ${message}`);
+    console.error(`${method} ${url.pathname}${url.search} → ${status}: ${message}`);
   }
 });
 
-// Open the cache DB eagerly so disk errors surface at startup.
+// Open the cache DB eagerly so disk errors surface at startup, then ensure the
+// web persistence tables (watchlists / portfolios) exist and are seeded.
 try {
   getDb();
+  ensureWebSchema();
 } catch (err) {
-  console.error("Failed to open cache DB:", err);
+  console.error("Failed to open cache DB / init web schema:", err);
 }
 
 server.listen(PORT, () => {

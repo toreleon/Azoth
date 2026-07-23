@@ -41,6 +41,120 @@
   flex-shrink: 0;
 }
 
+/* ---- Add-to-list popover ---------------------------------------------- */
+.qh__addwrap {
+  position: relative;
+}
+.qh__add {
+  cursor: pointer;
+}
+.qh__add > span:first-child {
+  display: inline-flex;
+  align-items: center;
+}
+.qh__add--saved {
+  color: var(--accent);
+}
+
+.qh__addpop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 260px;
+  max-width: min(260px, 80vw);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-2);
+}
+
+.qh__addpop-head {
+  padding: 2px 4px 4px;
+}
+
+.qh__addpop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.qh__addpop-empty {
+  padding: 8px 6px;
+  font-size: 13px;
+}
+
+.qh__addpop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.qh__addpop-item:hover {
+  background: var(--surface-hover);
+}
+
+.qh__addpop-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  border: 1.5px solid var(--border);
+  color: var(--on-accent);
+  background: var(--surface);
+}
+.qh__addpop-item.is-checked .qh__addpop-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.qh__addpop-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.qh__addpop-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 2px 0;
+}
+
+.qh__addpop-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.qh__addpop-new:hover {
+  background: var(--accent-subtle);
+}
+
 /* ---- Price row --------------------------------------------------------- */
 .qh__price-row {
   display: flex;

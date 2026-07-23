@@ -16,3 +16,27 @@
   letter-spacing: -0.3px;
   color: var(--text);
 }
+
+.home__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home__more {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.12s ease;
+}
+
+.home__more:hover {
+  color: var(--text);
+}
+
+.home__subtitle {
+  font-size: 18px;
+  margin: 0;
+}
