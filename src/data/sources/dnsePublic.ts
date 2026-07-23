@@ -61,6 +61,26 @@ export function seriesToBars(s: OhlcvSeries): Bar[] {
   return out;
 }
 
+/**
+ * O(log n) binary search to find the last bar index with time <= timeSec.
+ * Returns -1 if no such bar exists.
+ */
+export function findLastBarIndex(bars: Bar[], timeSec: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    if (bars[mid]!.time <= timeSec) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
 function clipBars(bars: Bar[]): Bar[] {
   // Clip when an as-of clock is active (ALS or module override). When neither
   // is set, fall through unchanged — DNSE only returns historical data anyway.
