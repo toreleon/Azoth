@@ -1,0 +1,138 @@
+/* NewsList — Google-Finance-style news feed (presentational) */
+
+.newslist {
+  display: block;
+}
+
+.newslist__title {
+  margin-bottom: 12px;
+}
+
+.newslist__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Each row: logo + body */
+.newslist__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 8px;
+  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--border-subtle);
+  color: inherit;
+  transition: background 0.12s ease;
+}
+
+.newslist__row:last-child {
+  border-bottom: none;
+}
+
+a.newslist__row:hover {
+  background: var(--surface-hover);
+}
+
+.newslist__row--skeleton {
+  pointer-events: none;
+}
+
+/* Source monogram avatar */
+.newslist__logo {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+.newslist__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Meta line */
+.newslist__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.newslist__source {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.newslist__dot {
+  color: var(--text-muted);
+  white-space: pre;
+}
+
+.newslist__time {
+  color: var(--text-muted);
+}
+
+/* Headline — clamp to 2 lines */
+.newslist__headline {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Snippet — clamp to 2 lines */
+.newslist__snippet {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.newslist__empty {
+  padding: 16px 8px;
+  font-size: 13px;
+}
+
+/* Skeleton lines */
+.newslist__sk-line {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.newslist__sk-line--meta {
+  width: 40%;
+  height: 10px;
+}
+
+.newslist__sk-line--title {
+  width: 92%;
+  height: 15px;
+}
+
+.newslist__sk-line--snippet {
+  width: 78%;
+  height: 12px;
+}

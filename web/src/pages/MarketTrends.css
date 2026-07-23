@@ -1,0 +1,259 @@
+.markets {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.markets__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.markets__title {
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.markets__caption {
+  font-size: 14px;
+}
+
+/* GF-style underline tab bar */
+.markets__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.markets__tab {
+  position: relative;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 8px 8px 0 0;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.markets__tab:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.markets__tab--active {
+  color: var(--accent);
+}
+
+.markets__tab--active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+}
+
+/* Toolbar (universe toggle) */
+.markets__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.markets__universe {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.markets__uni-pill {
+  font-size: 12px;
+}
+
+/* Movers table */
+.markets__table {
+  padding: 8px;
+}
+
+.markets__thead,
+.markets__row,
+.markets__skel-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+}
+
+.markets__thead {
+  padding-top: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.markets__th {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.markets__th-sym,
+.markets__sym {
+  flex: 1;
+  min-width: 0;
+}
+
+.markets__th-spark,
+.markets__spark {
+  flex: none;
+  width: 96px;
+}
+
+.markets__th-price,
+.markets__price {
+  flex: none;
+  width: 132px;
+  text-align: right;
+}
+
+.markets__th-change,
+.markets__change {
+  flex: none;
+  width: 120px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.markets__list {
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+/* Row */
+.markets__row {
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s ease;
+}
+
+.markets__row:hover {
+  background: var(--surface-hover);
+}
+
+.markets__sym {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.markets__ticker {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.markets__name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.markets__spark {
+  display: inline-flex;
+  align-items: center;
+}
+
+.markets__price {
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Skeleton rows */
+.markets__skel-sym {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.markets__skel-ticker {
+  width: 52px;
+  height: 13px;
+  border-radius: var(--radius-sm);
+}
+
+.markets__skel-name {
+  width: 120px;
+  height: 11px;
+  border-radius: var(--radius-sm);
+}
+
+.markets__skel-spark {
+  flex: none;
+  width: 96px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+}
+
+.markets__skel-price {
+  flex: none;
+  width: 132px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+}
+
+.markets__skel-badge {
+  flex: none;
+  width: 120px;
+  height: 18px;
+  border-radius: var(--pill);
+}
+
+.markets__msg {
+  padding: 40px 12px;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Indexes grid */
+.markets__index-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.markets__index-skel {
+  height: 148px;
+  border-radius: var(--radius);
+}
+
+/* Responsive: drop the sparkline column on narrow viewports */
+@media (max-width: 640px) {
+  .markets__th-spark,
+  .markets__spark,
+  .markets__skel-spark {
+    display: none;
+  }
+
+  .markets__th-price,
+  .markets__price,
+  .markets__skel-price {
+    width: 108px;
+  }
+
+  .markets__th-change,
+  .markets__change,
+  .markets__skel-badge {
+    width: 104px;
+  }
+}

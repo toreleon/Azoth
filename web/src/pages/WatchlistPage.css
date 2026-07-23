@@ -1,0 +1,335 @@
+.wl {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Header ------------------------------------------------------------- */
+.wl__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.wl__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wl__title {
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wl__count {
+  font-size: 13px;
+}
+
+.wl__actions {
+  display: inline-flex;
+  gap: 8px;
+  flex: none;
+}
+
+.wl__delete:hover:not(:disabled) {
+  color: var(--down);
+  border-color: var(--down);
+}
+
+.wl .gf-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Add-symbol form ---------------------------------------------------- */
+.wl__add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.wl__input {
+  height: 40px;
+  width: 220px;
+  max-width: 100%;
+  padding: 0 14px;
+  border-radius: var(--pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.wl__input::placeholder {
+  color: var(--text-muted);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.wl__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.wl__add-btn {
+  height: 40px;
+}
+
+.wl__msg {
+  margin: -4px 0 0;
+  font-size: 13px;
+}
+
+/* ---- Table -------------------------------------------------------------- */
+.wl__card {
+  padding: 4px 8px;
+  overflow: hidden;
+}
+
+.wl__scroll {
+  overflow-x: auto;
+}
+
+.wl__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.wl__colhead {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.wl__th {
+  padding: 12px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.wl__th--sym {
+  text-align: left;
+}
+
+.wl__th--spark,
+.wl__th--act {
+  width: 1%;
+}
+
+.wl__th--num {
+  width: 128px;
+}
+
+/* Rows */
+.wl__row {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.12s ease;
+}
+
+.wl__row:last-child {
+  border-bottom: none;
+}
+
+.wl__row:hover {
+  background: var(--surface-hover);
+}
+
+.wl__td {
+  padding: 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.wl__td--num {
+  text-align: right;
+  color: var(--text);
+}
+
+.wl__td--num.up {
+  color: var(--up);
+}
+.wl__td--num.down {
+  color: var(--down);
+}
+.wl__td--num.flat {
+  color: var(--flat);
+}
+
+.wl__td--spark {
+  width: 1%;
+}
+
+.wl__symlink {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wl__ticker {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.wl__symlink:hover .wl__ticker {
+  color: var(--accent);
+}
+
+.wl__name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl__badge-wrap {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.wl__td--act {
+  width: 1%;
+  text-align: right;
+}
+
+.wl__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.wl__remove:hover:not(:disabled) {
+  background: var(--down-bg);
+  color: var(--down-strong);
+}
+
+.wl__remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---- Empty state -------------------------------------------------------- */
+.wl__empty {
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.wl__empty-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.wl__empty .text-secondary {
+  max-width: 420px;
+  margin: 0 auto;
+  font-size: 13px;
+}
+
+/* ---- Error card --------------------------------------------------------- */
+.wl__error {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.wl__error-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.wl__back {
+  margin-top: 8px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.wl__retry {
+  margin-top: 8px;
+}
+
+/* ---- Skeletons ---------------------------------------------------------- */
+.wl__skel-title {
+  width: 200px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+}
+
+.wl__skel-sub {
+  width: 80px;
+  height: 13px;
+  border-radius: var(--radius-sm);
+}
+
+.wl__skel-ticker {
+  display: block;
+  width: 52px;
+  height: 13px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.wl__skel-name {
+  display: block;
+  width: 120px;
+  height: 11px;
+  border-radius: var(--radius-sm);
+}
+
+.wl__skel-spark {
+  display: block;
+  width: 112px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.wl__skel-num {
+  display: inline-block;
+  width: 72px;
+  height: 14px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Narrow screens ----------------------------------------------------- */
+@media (max-width: 640px) {
+  .wl__th--spark,
+  .wl__td--spark {
+    display: none;
+  }
+  .wl__name {
+    max-width: 160px;
+  }
+}
