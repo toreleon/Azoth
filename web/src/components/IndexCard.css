@@ -1,0 +1,46 @@
+.indexcard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 190px;
+  padding: 14px;
+}
+
+.indexcard__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.indexcard__name {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.indexcard__value {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.indexcard__change {
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+
+.indexcard__spark {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.indexcard__spark svg {
+  display: block;
+  width: 100%;
+  height: 44px;
+}

@@ -1,0 +1,108 @@
+.qh {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---- Breadcrumb -------------------------------------------------------- */
+.qh__crumb {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.qh__crumb-link {
+  color: var(--text-secondary);
+}
+.qh__crumb-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.qh__crumb-sep {
+  color: var(--text-muted);
+}
+
+/* ---- Title row --------------------------------------------------------- */
+.qh__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.qh__name {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text);
+  margin: 0;
+}
+.qh__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---- Price row --------------------------------------------------------- */
+.qh__price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.qh__price {
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--text);
+}
+.qh__change {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.qh__today {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* ---- Sub-line ---------------------------------------------------------- */
+.qh__subline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12.5px;
+}
+.qh__session {
+  font-size: 12.5px;
+}
+.qh__session-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.qh__meta {
+  font-size: 12.5px;
+}
+
+/* Ceiling = purple, Floor = cyan (VN board convention). */
+.qh__ceiling {
+  color: #a142f4;
+}
+.qh__floor {
+  color: #00acc1;
+}
+:root[data-theme="dark"] .qh__ceiling {
+  color: #c58af9;
+}
+:root[data-theme="dark"] .qh__floor {
+  color: #4dd0e1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .qh__ceiling {
+    color: #c58af9;
+  }
+  :root:not([data-theme="light"]) .qh__floor {
+    color: #4dd0e1;
+  }
+}

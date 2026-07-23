@@ -1,0 +1,63 @@
+.marketstrip {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.marketstrip__tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketstrip__tab--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: default;
+}
+
+.marketstrip__row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.marketstrip__row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.marketstrip__row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.marketstrip__row::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--pill);
+}
+
+.marketstrip__row::-webkit-scrollbar-thumb:hover {
+  background: var(--border-subtle);
+}
+
+.marketstrip__item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.marketstrip__skeleton {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  width: 190px;
+  height: 116px;
+  border-radius: var(--radius);
+}
+
+.marketstrip__error {
+  font-size: 13px;
+  padding: 8px 0;
+}

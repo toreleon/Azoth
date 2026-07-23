@@ -1,0 +1,165 @@
+.movers {
+  padding: 16px;
+}
+
+.movers__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.movers__title {
+  font-size: 18px;
+  margin: 0;
+}
+
+.movers__tabs {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.movers__pill {
+  font-size: 12px;
+}
+
+/* Column header */
+.movers__colhead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.movers__col-symbol {
+  flex: 1;
+  min-width: 0;
+}
+
+.movers__col-price,
+.movers__col-change {
+  text-align: right;
+}
+
+.movers__col-price {
+  width: 64px;
+}
+
+.movers__col-change {
+  width: 92px;
+}
+
+.movers__list {
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+/* Row */
+.movers__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s ease;
+}
+
+.movers__row:hover {
+  background: var(--surface-hover);
+}
+
+.movers__left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.movers__ticker {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.movers__name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.movers__spark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.movers__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 92px;
+  text-align: right;
+}
+
+.movers__price {
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Skeleton rows */
+.movers__skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+}
+
+.movers__skel-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.movers__skel-ticker {
+  width: 48px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.movers__skel-name {
+  width: 96px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+}
+
+.movers__skel-spark {
+  width: 64px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+}
+
+.movers__skel-price {
+  width: 72px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+}
+
+.movers__msg {
+  padding: 24px 8px;
+  font-size: 13px;
+  text-align: center;
+}

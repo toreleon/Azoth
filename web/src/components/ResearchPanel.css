@@ -1,0 +1,149 @@
+/* ResearchPanel — static visual clone of Google Finance "Research" right rail */
+
+.research {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Header row */
+.research__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.research__title {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.research__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Prompt intro line */
+.research__lead {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Suggested prompts */
+.research__prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.research__prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13.5px;
+  line-height: 1.35;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.research__prompt:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+.research__prompt-icon {
+  flex: none;
+  color: var(--accent);
+  display: inline-flex;
+}
+
+/* Explore section */
+.research__explore-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.research__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.research__chip {
+  border: none;
+  cursor: pointer;
+  padding: 6px 12px;
+  font-family: var(--sans);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.research__chip:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.research__chip-glyph {
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Composer */
+.research__composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.research__composer-add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 50%;
+  transition: background 0.12s ease;
+}
+.research__composer-add:hover {
+  background: var(--surface-hover);
+}
+.research__composer-placeholder {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.research__send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.research__send:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Footnote */
+.research__footnote {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
