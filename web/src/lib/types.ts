@@ -116,6 +116,9 @@ export interface QuoteStats {
   foreign_ownership_pct: number | null;
   week52_high: number | null; // thousand VND
   week52_low: number | null; // thousand VND
+  change_pct_1m: number | null; // performance over ~1 month
+  change_pct_3m: number | null; // performance over ~3 months
+  change_pct_ytd: number | null; // performance year-to-date
 }
 
 export interface QuoteResponse {
@@ -270,6 +273,23 @@ export interface FinancialsResponse {
 
 export interface MarketNewsResponse {
   items: NewsItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Stock sectors (home sidebar — mini index list)
+// ---------------------------------------------------------------------------
+
+export interface SectorRow {
+  key: string;
+  name: string;
+  change_pct: number | null; // avg daily % change of constituents
+  spark: number[]; // synthetic normalized index (rebased to 100, averaged)
+  leaders: string[]; // up to 3 constituent tickers by |change|
+}
+
+export interface SectorsResponse {
+  sectors: SectorRow[];
+  asOf: string; // ISO
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import {
   fmtPriceVnd,
   fmtChangeVnd,
   fmtPct,
+  fmtPctPlain,
   fmtBoard,
   dirOf,
   sessionLabel,
@@ -35,6 +36,16 @@ export default function QuoteHeader({ quote }: Props) {
   const name = quote.nameEn || quote.nameVi || quote.ticker;
   const dir = dirOf(quote.change_pct);
   const ticker = quote.ticker.toUpperCase();
+
+  // Performance summary + mini perf row (1M / 3M / YTD) from daily bars.
+  const perf1m = quote.stats.change_pct_1m;
+  const perf1mDir = dirOf(perf1m);
+  const perfItems: { label: string; value: number | null }[] = [
+    { label: "1M", value: quote.stats.change_pct_1m },
+    { label: "3M", value: quote.stats.change_pct_3m },
+    { label: "YTD", value: quote.stats.change_pct_ytd },
+  ];
+  const hasPerf = perfItems.some((p) => p.value != null);
 
   const { watchlists, loading, create, addItem, removeItem, isSaved } = useWatchlists();
   const saved = isSaved(ticker);
@@ -176,6 +187,35 @@ export default function QuoteHeader({ quote }: Props) {
           <span className="qh__today">Today</span>
         </span>
       </div>
+
+      {perf1m != null && (
+        <p className="qh__perf text-secondary">
+          {perf1mDir === "flat" ? (
+            <>{name} is roughly flat over the past month.</>
+          ) : (
+            <>
+              {name} is {perf1mDir === "up" ? "up" : "down"}{" "}
+              <span className={`qh__perf-pct qh__perf-pct--${perf1mDir}`}>
+                {fmtPctPlain(Math.abs(perf1m))}
+              </span>{" "}
+              over the past month.
+            </>
+          )}
+        </p>
+      )}
+
+      {hasPerf && (
+        <div className="qh__perf-row">
+          {perfItems.map((p) => (
+            <span className="qh__perf-item" key={p.label}>
+              <span className="qh__perf-label">{p.label}</span>
+              <span className={`qh__perf-val mono qh__perf-val--${dirOf(p.value)}`}>
+                {fmtPct(p.value)}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="qh__subline">
         <span className="gf-chip qh__session">

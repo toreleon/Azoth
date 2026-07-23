@@ -12,9 +12,7 @@ function currentTheme(): Theme {
   if (attr === "light" || attr === "dark") return attr;
   const stored = localStorage.getItem(THEME_KEY);
   if (stored === "light" || stored === "dark") return stored;
-  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    return "dark";
-  }
+  // Default to light (like Google Finance), ignoring the OS dark-mode setting.
   return "light";
 }
 

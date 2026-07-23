@@ -24,14 +24,7 @@ export default function MarketStrip() {
 
   return (
     <section className="marketstrip" aria-label="Market indices">
-      <div className="marketstrip__tabs" role="presentation">
-        <button type="button" className="gf-pill gf-pill--active">
-          Vietnam
-        </button>
-        <span className="gf-pill marketstrip__tab--disabled" aria-hidden="true">
-          Global
-        </span>
-      </div>
+      <span className="marketstrip__label text-muted">Vietnam</span>
 
       {error ? (
         <p className="marketstrip__error text-muted">Couldn't load market indices.</p>

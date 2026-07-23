@@ -519,6 +519,12 @@ async function handleQuote(ticker: string) {
   const lows = bars.map((b) => b.low);
   const vols = bars.slice(-60).map((b) => b.volume);
 
+  // Performance baselines (from daily bars). 1m ≈ 22 trading days, 3m ≈ 66.
+  const close1m = bars[bars.length - 1 - 22]?.close;
+  const close3m = bars[bars.length - 1 - 66]?.close;
+  const yearStartSec = Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000;
+  const closeYtd = (bars.find((b) => b.time >= yearStartSec) ?? bars[0])?.close;
+
   const { session, isOpen } = marketSession();
 
   return {
@@ -555,6 +561,9 @@ async function handleQuote(ticker: string) {
       foreign_ownership_pct: fund.foreignOwn,
       week52_high: highs.length ? round(Math.max(...highs), 2) : null,
       week52_low: lows.length ? round(Math.min(...lows), 2) : null,
+      change_pct_1m: last != null ? round(pct(last, close1m), 2) : null,
+      change_pct_3m: last != null ? round(pct(last, close3m), 2) : null,
+      change_pct_ytd: last != null ? round(pct(last, closeYtd), 2) : null,
     },
   };
 }
@@ -702,6 +711,67 @@ async function handleMarketNews() {
     return out.slice(0, 14);
   });
   return { items };
+}
+
+// ---------------------------------------------------------------------------
+// Stock sectors (home sidebar — mini index list)
+// ---------------------------------------------------------------------------
+
+const SECTOR_MAP: { key: string; name: string; tickers: string[] }[] = [
+  { key: "banks", name: "Banks", tickers: ["VCB", "BID", "CTG", "TCB", "MBB", "ACB", "VPB", "STB", "HDB"] },
+  { key: "real-estate", name: "Real estate", tickers: ["VHM", "VIC", "NVL", "DXG", "KDH", "PDR"] },
+  { key: "materials", name: "Materials", tickers: ["HPG", "HSG", "NKG", "GVR", "DGC"] },
+  { key: "energy", name: "Energy", tickers: ["GAS", "PLX", "POW", "PVD", "PVS"] },
+  { key: "consumer", name: "Consumer", tickers: ["VNM", "MSN", "SAB", "MWG", "PNJ"] },
+  { key: "financials", name: "Financials", tickers: ["SSI", "VND", "VCI", "HCM"] },
+  { key: "industrials", name: "Industrials", tickers: ["REE", "GMD", "VCG", "CTD"] },
+  { key: "technology", name: "Technology", tickers: ["FPT", "CMG", "ELC"] },
+];
+
+async function handleSectors() {
+  return cached(`web:sectors:${Math.floor(nowSec() / 600)}`, 600, async () => {
+    // Compute each unique ticker's digest once, then reuse across sectors.
+    const universe = [...new Set(SECTOR_MAP.flatMap((s) => s.tickers))];
+    const digests = await mapLimit(universe, 8, miniDigest);
+    const byTicker = new Map(digests.map((d) => [d.ticker, d]));
+
+    const sectors = SECTOR_MAP.flatMap((sector) => {
+      const members = sector.tickers
+        .map((t) => byTicker.get(t))
+        .filter((d): d is MiniDigest => d != null && d.last != null);
+      if (!members.length) return [];
+
+      const changePcts = members.map((d) => d.changePct).filter((v): v is number => v != null);
+      if (!changePcts.length) return [];
+      const change_pct = round(changePcts.reduce((a, b) => a + b, 0) / changePcts.length, 2);
+
+      // Synthetic sector index: rebase each constituent spark to 100, then average
+      // across constituents at each point (truncated to the shortest series).
+      const rebased = members
+        .map((d) => d.spark)
+        .filter((s) => s.length > 0 && s[0]! > 0)
+        .map((s) => s.map((v) => (v / s[0]!) * 100));
+      const spark: number[] = [];
+      if (rebased.length) {
+        const minLen = Math.min(...rebased.map((s) => s.length));
+        for (let i = 0; i < minLen; i++) {
+          const avg = rebased.reduce((a, s) => a + s[i]!, 0) / rebased.length;
+          spark.push(round(avg, 2)!);
+        }
+      }
+
+      const leaders = [...members]
+        .filter((d) => d.changePct != null)
+        .sort((a, b) => Math.abs(b.changePct!) - Math.abs(a.changePct!))
+        .slice(0, 3)
+        .map((d) => d.ticker);
+
+      return [{ key: sector.key, name: sector.name, change_pct, spark, leaders }];
+    });
+
+    sectors.sort((a, b) => (b.change_pct ?? -Infinity) - (a.change_pct ?? -Infinity));
+    return { sectors, asOf: new Date().toISOString() };
+  });
 }
 
 const SECTOR_PEERS: Record<string, string[]> = {
@@ -984,6 +1054,8 @@ async function route(url: URL, method: string, body: BodyObj): Promise<unknown> 
       return routeHoldings(arg, method, body);
     case "market-news":
       return handleMarketNews();
+    case "sectors":
+      return handleSectors();
     case "search":
       return handleSearch(url.searchParams.get("q") ?? "");
     case "quote":

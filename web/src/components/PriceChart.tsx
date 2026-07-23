@@ -67,6 +67,46 @@ function readColors(): ThemeColors {
 
 type TimedPoint = { time: UTCTimestamp; value: number };
 
+/** Which toolbar dropdown is currently open (mutually exclusive). */
+type MenuKey = "type" | "indicators" | "compare" | null;
+
+/** Small downward chevron for dropdown triggers. */
+function Caret() {
+  return (
+    <svg
+      className="pchart__caret"
+      width="10"
+      height="10"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="m6 9 6 6 6-6"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Checkmark used by menu items that reflect on/off or selected state. */
+function MenuCheck() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Sort ascending by time, drop non-finite values, and collapse duplicate timestamps. */
 function cleanLine<T extends { time: number }>(
   points: T[] | undefined,
@@ -103,8 +143,11 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
   // Compare (multi-ticker normalized % overlay).
   const [compareTickers, setCompareTickers] = useState<string[]>([]);
   const [compareBars, setCompareBars] = useState<Record<string, OhlcvResponse>>({});
-  const [compareOpen, setCompareOpen] = useState(false);
   const [compareInput, setCompareInput] = useState("");
+
+  // Toolbar dropdowns — only one open at a time (chart type / indicators / compare).
+  const [openMenu, setOpenMenu] = useState<MenuKey>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -127,9 +170,28 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
   // Reset comparisons when navigating to a different ticker.
   useEffect(() => {
     setCompareTickers([]);
-    setCompareOpen(false);
+    setOpenMenu(null);
     setCompareInput("");
   }, [ticker]);
+
+  // Close whichever toolbar dropdown is open on outside click or Escape.
+  useEffect(() => {
+    if (!openMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenu(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openMenu]);
 
   // Apply theme-derived layout/axis options to the chart. Reads colors live.
   const applyTheme = useCallback(() => {
@@ -460,64 +522,121 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
   return (
     <div className="gf-card pchart">
       <div className="pchart__toolbar">
-        <div className="pchart__group">
-          <button
-            type="button"
-            className={`gf-pill pchart__pill${chartType === "area" ? " gf-pill--active" : ""}`}
-            aria-pressed={chartType === "area"}
-            disabled={compareMode}
-            title={compareMode ? "Unavailable while comparing" : undefined}
-            onClick={() => setChartType("area")}
-          >
-            Area
-          </button>
-          <button
-            type="button"
-            className={`gf-pill pchart__pill${chartType === "candlestick" ? " gf-pill--active" : ""}`}
-            aria-pressed={chartType === "candlestick"}
-            disabled={compareMode}
-            title={compareMode ? "Unavailable while comparing" : undefined}
-            onClick={() => setChartType("candlestick")}
-          >
-            Candles
-          </button>
-
-          <span className="pchart__sep" aria-hidden="true" />
-
-          <button
-            type="button"
-            className={`gf-pill pchart__pill${showSMA ? " gf-pill--active" : ""}`}
-            aria-pressed={showSMA}
-            disabled={overlaysDisabled || compareMode}
-            title={overlaysDisabled ? "Available on longer ranges" : compareMode ? "Unavailable while comparing" : undefined}
-            onClick={() => setShowSMA((v) => !v)}
-          >
-            SMA
-          </button>
-          <button
-            type="button"
-            className={`gf-pill pchart__pill${showBoll ? " gf-pill--active" : ""}`}
-            aria-pressed={showBoll}
-            disabled={overlaysDisabled || compareMode}
-            title={overlaysDisabled ? "Available on longer ranges" : compareMode ? "Unavailable while comparing" : undefined}
-            onClick={() => setShowBoll((v) => !v)}
-          >
-            Bollinger
-          </button>
-
-          <span className="pchart__sep" aria-hidden="true" />
-
-          <div className="pchart__compare">
+        <div className="pchart__group" ref={toolbarRef}>
+          {/* Chart type ▾ — Area vs Candlestick (drives the same chartType state). */}
+          <div className="pchart__menu">
             <button
               type="button"
-              className={`gf-pill pchart__pill${compareMode ? " gf-pill--active" : ""}`}
-              aria-expanded={compareOpen}
-              onClick={() => setCompareOpen((o) => !o)}
+              className="gf-pill pchart__trigger"
+              aria-haspopup="menu"
+              aria-expanded={openMenu === "type"}
+              disabled={compareMode}
+              title={compareMode ? "Unavailable while comparing" : undefined}
+              onClick={() => setOpenMenu((m) => (m === "type" ? null : "type"))}
             >
-              + Compare
+              <span>Chart type</span>
+              <Caret />
             </button>
-            {compareOpen && (
-              <div className="gf-card pchart__compare-pop">
+            {openMenu === "type" && (
+              <div className="gf-card pchart__menu-pop" role="menu" aria-label="Chart type">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={chartType === "area"}
+                  className={`pchart__menu-item${chartType === "area" ? " is-checked" : ""}`}
+                  onClick={() => {
+                    setChartType("area");
+                    setOpenMenu(null);
+                  }}
+                >
+                  <span className="pchart__menu-mark" aria-hidden="true">
+                    {chartType === "area" && <MenuCheck />}
+                  </span>
+                  <span>Area</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={chartType === "candlestick"}
+                  className={`pchart__menu-item${chartType === "candlestick" ? " is-checked" : ""}`}
+                  onClick={() => {
+                    setChartType("candlestick");
+                    setOpenMenu(null);
+                  }}
+                >
+                  <span className="pchart__menu-mark" aria-hidden="true">
+                    {chartType === "candlestick" && <MenuCheck />}
+                  </span>
+                  <span>Candlestick</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Indicators ▾ — SMA / Bollinger toggles (same showSMA / showBoll state). */}
+          <div className="pchart__menu">
+            <button
+              type="button"
+              className={`gf-pill pchart__trigger${!compareMode && (showSMA || showBoll) ? " gf-pill--active" : ""}`}
+              aria-haspopup="menu"
+              aria-expanded={openMenu === "indicators"}
+              disabled={overlaysDisabled || compareMode}
+              title={
+                overlaysDisabled
+                  ? "Available on longer ranges"
+                  : compareMode
+                    ? "Unavailable while comparing"
+                    : undefined
+              }
+              onClick={() => setOpenMenu((m) => (m === "indicators" ? null : "indicators"))}
+            >
+              <span>Indicators</span>
+              <Caret />
+            </button>
+            {openMenu === "indicators" && (
+              <div className="gf-card pchart__menu-pop" role="menu" aria-label="Indicators">
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={showSMA}
+                  className={`pchart__menu-item${showSMA ? " is-checked" : ""}`}
+                  onClick={() => setShowSMA((v) => !v)}
+                >
+                  <span className="pchart__menu-box" aria-hidden="true">
+                    {showSMA && <MenuCheck />}
+                  </span>
+                  <span>SMA (20 / 50)</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={showBoll}
+                  className={`pchart__menu-item${showBoll ? " is-checked" : ""}`}
+                  onClick={() => setShowBoll((v) => !v)}
+                >
+                  <span className="pchart__menu-box" aria-hidden="true">
+                    {showBoll && <MenuCheck />}
+                  </span>
+                  <span>Bollinger Bands</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Compare ▾ — existing multi-ticker popover, trigger restyled to match. */}
+          <div className="pchart__menu">
+            <button
+              type="button"
+              className={`gf-pill pchart__trigger${compareMode ? " gf-pill--active" : ""}`}
+              aria-haspopup="menu"
+              aria-expanded={openMenu === "compare"}
+              onClick={() => setOpenMenu((m) => (m === "compare" ? null : "compare"))}
+            >
+              <span>Compare</span>
+              <Caret />
+            </button>
+            {openMenu === "compare" && (
+              <div className="gf-card pchart__menu-pop pchart__compare-pop" role="menu" aria-label="Compare tickers">
                 <input
                   className="pchart__compare-input"
                   placeholder="Add ticker…"
@@ -526,7 +645,7 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
                   onChange={(e) => setCompareInput(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") addCompare(compareInput);
-                    else if (e.key === "Escape") setCompareOpen(false);
+                    else if (e.key === "Escape") setOpenMenu(null);
                   }}
                   maxLength={12}
                   aria-label="Add a ticker to compare"

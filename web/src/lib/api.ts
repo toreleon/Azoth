@@ -17,6 +17,7 @@ import type {
   QuoteResponse,
   RangeKey,
   SearchResponse,
+  SectorsResponse,
   WatchlistDetail,
   WatchlistMeta,
   WatchlistResponse,
@@ -84,6 +85,8 @@ export const api = {
   watchlist: (signal?: AbortSignal) => getJson<WatchlistResponse>("/api/watchlist", signal),
 
   marketNews: (signal?: AbortSignal) => getJson<MarketNewsResponse>("/api/market-news", signal),
+
+  sectors: (signal?: AbortSignal) => getJson<SectorsResponse>("/api/sectors", signal),
 
   search: (q: string, signal?: AbortSignal) =>
     getJson<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`, signal),

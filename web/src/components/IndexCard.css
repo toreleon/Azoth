@@ -1,22 +1,18 @@
 .indexcard {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 190px;
-  padding: 14px;
-}
-
-.indexcard__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 5px;
+  min-width: 160px;
+  padding: 12px 14px;
+  /* Flatter than a default gf-card: keep the thin border, drop the shadow. */
+  box-shadow: none;
 }
 
 .indexcard__name {
-  color: var(--text);
+  color: var(--text-secondary);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 12.5px;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -24,23 +20,39 @@
 
 .indexcard__value {
   color: var(--text);
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 500;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .indexcard__change {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
   line-height: 1.2;
 }
 
+.indexcard__abs {
+  font-variant-numeric: tabular-nums;
+}
+.indexcard__change.up .indexcard__abs {
+  color: var(--up);
+}
+.indexcard__change.down .indexcard__abs {
+  color: var(--down);
+}
+.indexcard__change.flat .indexcard__abs {
+  color: var(--text-muted);
+}
+
 .indexcard__spark {
   width: 100%;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .indexcard__spark svg {
   display: block;
   width: 100%;
-  height: 44px;
+  height: 30px;
 }

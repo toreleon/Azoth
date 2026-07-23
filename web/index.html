@@ -14,6 +14,17 @@
       rel="stylesheet"
     />
     <title>Azoth Finance</title>
+    <script>
+      // Set theme synchronously to avoid a dark flash on load.
+      // Light is the default unless the user explicitly chose a theme.
+      (function () {
+        var stored = localStorage.getItem("azoth-theme");
+        document.documentElement.setAttribute(
+          "data-theme",
+          stored === "dark" || stored === "light" ? stored : "light",
+        );
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

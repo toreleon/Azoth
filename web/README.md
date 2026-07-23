@@ -3,7 +3,8 @@
 A Google-Finance-style web dashboard for Azoth's Vietnam-market data (HOSE/HNX/UPCOM).
 It reuses Azoth's existing data layer (`src/data/sources/**`, DNSE/SSI/VNDirect/CafeF)
 through a thin Node API server, and renders a React frontend that clones Google
-Finance's information architecture and visual language (light + dark).
+Finance's information architecture and visual language. The UI defaults to the
+**light** theme (dark is available via the theme toggle; tokens flip on `[data-theme]`).
 
 ## What's here
 
@@ -14,8 +15,9 @@ Finance's information architecture and visual language (light + dark).
   portfolios. Tables are prefixed `web_*` and share the same better-sqlite3 handle as the rest
   of Azoth; `ensureWebSchema()` creates them (and seeds a default watchlist) at server startup.
 - **`src/`** — Vite + React + TypeScript frontend.
-  - `pages/Home.tsx` — market-indices strip, VN30 movers (gainers/losers/active), a **Discover**
-    strip (bluechip/sector shortcuts), and market news.
+  - `pages/Home.tsx` — a row of **compact index cards** (small name, medium value, % badge,
+    sparkline), a **Discover** strip (bluechip/sector shortcuts), and a **market summary**
+    news block. Movers no longer live here — they moved to the **`/markets`** trends page.
   - `pages/Quote.tsx` — price header (with **add-to-list**), interactive chart, then
     **Overview / Financials / News tabs**.
   - `pages/WatchlistPage.tsx` — a single user watchlist: live quote rows with add/remove a
@@ -26,15 +28,19 @@ Finance's information architecture and visual language (light + dark).
   - `pages/MarketTrends.tsx` — market-trends tabs (Active / Gainers / Losers / Indexes) with a
     Liquid/VN30 universe toggle.
   - `components/` — TopNav (search + theme toggle), Sidebar (persistent watchlists + portfolios
-    with inline add/remove), ResearchPanel, MarketStrip/IndexCard, MoversTable, NewsList,
-    QuoteHeader (add-to-list popover), DiscoverStrip, PriceChart (lightweight-charts, with
-    **Compare** multi-ticker % overlay), StatsGrid, RelatedStocks, AboutCompany,
+    with inline add/remove, plus a **SectorRail** mini index-list of stock sectors),
+    ResearchPanel, MarketStrip (compact IndexCards), MarketSummary (home news block),
+    NewsList, QuoteHeader (perf summary line +
+    add-to-list popover), DiscoverStrip, PriceChart (lightweight-charts, with **dropdown**
+    chart-type / indicators / compare menus above a range-button row, and a **Compare**
+    multi-ticker % overlay), StatsGrid (dense label→value grid), RelatedStocks, AboutCompany,
     FinancialsTab (annual key metrics + chart), PortfolioSummary / HoldingsTable / AddHoldingForm,
     plus Sparkline + ChangeBadge primitives.
   - `lib/` — the shared API contract (`types.ts`), formatters (`format.ts`), fetch client (`api.ts`),
     and `userData.tsx` (a `UserDataProvider` + `useWatchlists()` / `usePortfolios()` hooks that
     hold watchlist/portfolio state for the sidebar and pages).
-  - `index.css` — the design system (Google-Finance-style tokens; light + dark themes).
+  - `index.css` — the design system (Google-Finance-style tokens; **light theme by default**,
+    dark via `[data-theme="dark"]`).
 
 ## Features
 
@@ -95,11 +101,12 @@ pnpm typecheck # type-check the frontend
 | Endpoint | Description |
 | --- | --- |
 | `GET /api/indices` | VN-Index, VN30, HNX-Index, HNX30, UPCOM with sparklines |
-| `GET /api/movers?kind=gainers\|losers\|active&universe=vn30` | Top movers |
+| `GET /api/movers?kind=gainers\|losers\|active&universe=vn30` | Top movers (used by `/markets`) |
+| `GET /api/sectors` | Stock sectors for the sidebar rail: per-sector avg daily % change, a synthetic rebased-index sparkline, and top leaders, sorted by % change |
 | `GET /api/watchlist` | Sidebar watchlist rows |
-| `GET /api/market-news` | Aggregated market news feed |
+| `GET /api/market-news` | Aggregated market news feed (home market summary) |
 | `GET /api/search?q=` | Ticker/name search |
-| `GET /api/quote/:ticker` | Quote header + stats |
+| `GET /api/quote/:ticker` | Quote header + stats (incl. `change_pct_1m` / `_3m` / `_ytd` perf fields) |
 | `GET /api/ohlcv/:ticker?range=1D..MAX` | Candles/area chart data |
 | `GET /api/indicators/:ticker?range=` | SMA/EMA/Bollinger/RSI/MACD |
 | `GET /api/news/:ticker` | Ticker news |

@@ -1,19 +1,13 @@
 .marketstrip {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.marketstrip__tabs {
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
-.marketstrip__tab--disabled {
-  opacity: 0.5;
-  pointer-events: none;
-  cursor: default;
+.marketstrip__label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .marketstrip__row {
@@ -52,7 +46,7 @@
 .marketstrip__skeleton {
   flex: 0 0 auto;
   scroll-snap-align: start;
-  width: 190px;
+  width: 160px;
   height: 116px;
   border-radius: var(--radius);
 }

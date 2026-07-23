@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { usePortfolios, useWatchlists } from "../lib/userData";
+import SectorRail from "./SectorRail";
 import "./Sidebar.css";
 
 // Inline nav icons (kept tiny + optional per the design language).
@@ -248,6 +249,9 @@ export default function Sidebar() {
         </span>
         Create watchlist
       </button>
+
+      {/* Stock sectors (read-only performance rail) */}
+      <SectorRail />
     </aside>
   );
 }

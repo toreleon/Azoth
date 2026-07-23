@@ -178,6 +178,54 @@
   color: var(--text-secondary);
 }
 
+/* ---- Performance summary ---------------------------------------------- */
+.qh__perf {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.qh__perf-pct {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.qh__perf-pct--up {
+  color: var(--up);
+}
+.qh__perf-pct--down {
+  color: var(--down);
+}
+.qh__perf-pct--flat {
+  color: var(--flat);
+}
+
+.qh__perf-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 12.5px;
+}
+.qh__perf-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.qh__perf-label {
+  color: var(--text-muted);
+}
+.qh__perf-val {
+  font-variant-numeric: tabular-nums;
+}
+.qh__perf-val--up {
+  color: var(--up);
+}
+.qh__perf-val--down {
+  color: var(--down);
+}
+.qh__perf-val--flat {
+  color: var(--flat);
+}
+
 /* ---- Sub-line ---------------------------------------------------------- */
 .qh__subline {
   display: flex;
