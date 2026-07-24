@@ -106,6 +106,8 @@ export interface SearchResult {
   ticker: string;
   name?: string;
   exchange?: string;
+  last?: number | null; // thousand VND — only on the leading matches
+  change_pct?: number | null;
 }
 
 export interface SearchResponse {

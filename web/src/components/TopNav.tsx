@@ -1,11 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
+import { fmtPriceVnd } from "../lib/format";
+import ChangeBadge from "./ChangeBadge";
 import type { SearchResult } from "../lib/types";
 import "./TopNav.css";
 
 const THEME_KEY = "azoth-theme";
+const RECENT_KEY = "azoth-recent";
+const MAX_RECENT = 5;
 type Theme = "light" | "dark";
+
+/** Recently opened tickers, most recent first (Google Finance shows these too). */
+function readRecent(): SearchResult[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((r): r is SearchResult => Boolean(r) && typeof (r as SearchResult).ticker === "string")
+      .slice(0, MAX_RECENT);
+  } catch {
+    return [];
+  }
+}
+
+function pushRecent(entry: SearchResult): SearchResult[] {
+  const next = [
+    { ticker: entry.ticker, name: entry.name, exchange: entry.exchange },
+    ...readRecent().filter((r) => r.ticker !== entry.ticker),
+  ].slice(0, MAX_RECENT);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* storage unavailable — recents are best-effort */
+  }
+  return next;
+}
 
 function currentTheme(): Theme {
   const attr = document.documentElement.getAttribute("data-theme");
@@ -95,8 +126,13 @@ export default function TopNav() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [recent, setRecent] = useState<SearchResult[]>(() => readRecent());
 
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // With an empty box we show recents instead of results (Google Finance does this).
+  const showingRecent = query.trim().length === 0;
+  const visible = showingRecent ? recent : results;
 
   // Apply + persist theme.
   useEffect(() => {
@@ -151,36 +187,37 @@ export default function TopNav() {
   }, []);
 
   const goTo = useCallback(
-    (ticker: string) => {
+    (entry: SearchResult) => {
+      setRecent(pushRecent(entry));
       setQuery("");
       setResults([]);
       setOpen(false);
-      navigate(`/quote/${ticker}`);
+      navigate(`/quote/${entry.ticker}`);
     },
     [navigate],
   );
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!open || results.length === 0) {
+    if (!open || visible.length === 0) {
       if (e.key === "Escape") setOpen(false);
       return;
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlight((h) => (h + 1) % results.length);
+      setHighlight((h) => (h + 1) % visible.length);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlight((h) => (h - 1 + results.length) % results.length);
+      setHighlight((h) => (h - 1 + visible.length) % visible.length);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const pick = results[highlight] ?? results[0];
-      if (pick) goTo(pick.ticker);
+      const pick = visible[highlight] ?? visible[0];
+      if (pick) goTo(pick);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
   };
 
-  const showDropdown = open && query.trim().length > 0 && results.length > 0;
+  const showDropdown = open && visible.length > 0;
 
   return (
     <header className="topnav">
@@ -208,7 +245,8 @@ export default function TopNav() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
               onFocus={() => {
-                if (results.length > 0) setOpen(true);
+                setHighlight(0);
+                if (visible.length > 0) setOpen(true);
               }}
               placeholder="Search stocks, tickers, companies"
               aria-label="Search stocks, tickers, companies"
@@ -221,22 +259,35 @@ export default function TopNav() {
           </div>
 
           {showDropdown && (
-            <ul className="gf-card topnav__results" id="topnav-search-results" role="listbox">
-              {results.map((r, i) => (
-                <li key={r.ticker} role="option" aria-selected={i === highlight}>
-                  <button
-                    type="button"
-                    className={`topnav__result${i === highlight ? " topnav__result--active" : ""}`}
-                    onMouseEnter={() => setHighlight(i)}
-                    onClick={() => goTo(r.ticker)}
-                  >
-                    <span className="topnav__result-ticker mono">{r.ticker}</span>
-                    <span className="topnav__result-name">{r.name ?? ""}</span>
-                    {r.exchange && <span className="gf-chip topnav__result-exch">{r.exchange}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="gf-card topnav__results" id="topnav-search-results">
+              {showingRecent && <div className="topnav__results-label">Recent searches</div>}
+              <ul className="topnav__results-list" role="listbox">
+                {visible.map((r, i) => (
+                  <li key={r.ticker} role="option" aria-selected={i === highlight}>
+                    <button
+                      type="button"
+                      className={`topnav__result${i === highlight ? " topnav__result--active" : ""}`}
+                      onMouseEnter={() => setHighlight(i)}
+                      onClick={() => goTo(r)}
+                    >
+                      <span className="topnav__result-id">
+                        <span className="topnav__result-ticker mono">{r.ticker}</span>
+                        <span className="topnav__result-name">{r.name ?? ""}</span>
+                      </span>
+                      {r.exchange && (
+                        <span className="gf-chip topnav__result-exch">{r.exchange}</span>
+                      )}
+                      {r.last != null && (
+                        <span className="topnav__result-quote">
+                          <span className="topnav__result-price mono">{fmtPriceVnd(r.last)}</span>
+                          <ChangeBadge pct={r.change_pct ?? null} size="sm" dot={false} />
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 

@@ -933,11 +933,24 @@ async function handleSearch(q: string) {
   const nameHits = idx.filter(
     (e) => !e.ticker.startsWith(query) && e.name.toUpperCase().includes(query),
   );
-  const results = [...starts, ...nameHits].slice(0, 12).map((e) => ({
-    ticker: e.ticker,
-    name: e.name,
-    exchange: e.exchange,
-  }));
+  const picked = [...starts, ...nameHits].slice(0, 10);
+
+  // Enrich the leading matches with a live price + daily change (Google Finance
+  // shows these inline). Only the top few, so type-ahead stays responsive; the
+  // digests are TTL-cached so repeat queries are effectively free.
+  const digests = await mapLimit(picked.slice(0, 6), 6, (e) => miniDigest(e.ticker));
+  const byTicker = new Map(digests.map((d) => [d.ticker, d]));
+
+  const results = picked.map((e) => {
+    const d = byTicker.get(e.ticker);
+    return {
+      ticker: e.ticker,
+      name: e.name,
+      exchange: e.exchange,
+      last: d?.last ?? null,
+      change_pct: d?.changePct ?? null,
+    };
+  });
   return { query: q, results };
 }
 

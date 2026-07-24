@@ -116,7 +116,7 @@ pnpm typecheck # type-check the frontend
 | `GET /api/sector/:key` | Sector detail: avg daily % change, synthetic index sparkline, and members ranked by daily move |
 | `GET /api/watchlist` | Sidebar watchlist rows |
 | `GET /api/market-news` | Aggregated market news feed (home market summary) |
-| `GET /api/search?q=` | Ticker/name search |
+| `GET /api/search?q=` | Ticker/name search; the leading matches are enriched with a live price + daily change |
 | `GET /api/quote/:ticker` | Quote header + stats (incl. `change_pct_1m` / `_3m` / `_ytd` perf fields) |
 | `GET /api/ohlcv/:ticker?range=1D..MAX` | Candles/area chart data |
 | `GET /api/indicators/:ticker?range=` | SMA/EMA/Bollinger/RSI/MACD |
