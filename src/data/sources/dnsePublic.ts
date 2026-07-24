@@ -88,7 +88,12 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+
+  // Performance: In tight backtest loops, filtering an O(N) array creates massive overhead.
+  // We use binary search since bars are chronologically sorted to make lookups O(log N).
+  const lastIdx = findLastBarIndex(bars, asOf);
+  if (lastIdx === -1) return [];
+  return bars.slice(0, lastIdx + 1);
 }
 
 export async function getStockOhlcv(
