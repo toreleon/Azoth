@@ -265,6 +265,10 @@ export interface CompanyInfo {
   summary?: string;
   intro?: string;
   sector?: string;
+  founded?: string; // ISO-ish date string from the company profile
+  address?: string; // headquarters
+  phone?: string;
+  employees?: number;
 }
 
 export interface RelatedStock {
