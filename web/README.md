@@ -20,6 +20,9 @@ Finance's information architecture and visual language. The UI defaults to the
     news block. Movers no longer live here — they moved to the **`/markets`** trends page.
   - `pages/Quote.tsx` — price header (with **add-to-list**), interactive chart, then
     **Overview / Financials / News tabs**.
+  - `pages/SectorPage.tsx` — sector detail (`/sector/:key`), reached from the sidebar sector
+    rail: average daily move, the synthetic sector-index trend, and the sector's members
+    ranked by daily move.
   - `pages/IndexPage.tsx` — index detail (`/index/:symbol`), reached by clicking any index
     card: value + 1D/1W/1M performance, a range-tabbed area chart (`IndexChart`), and the
     index's **constituents** ranked by daily move. VN-Index and VN30 have constituent
@@ -110,6 +113,7 @@ pnpm typecheck # type-check the frontend
 | `GET /api/index/:symbol/ohlcv?range=1D..MAX` | Index chart bars; `prevClose` is the prior session close for intraday ranges |
 | `GET /api/movers?kind=gainers\|losers\|active&universe=vn30` | Top movers (used by `/markets`) |
 | `GET /api/sectors` | Stock sectors for the sidebar rail: per-sector avg daily % change, a synthetic rebased-index sparkline, and top leaders, sorted by % change |
+| `GET /api/sector/:key` | Sector detail: avg daily % change, synthetic index sparkline, and members ranked by daily move |
 | `GET /api/watchlist` | Sidebar watchlist rows |
 | `GET /api/market-news` | Aggregated market news feed (home market summary) |
 | `GET /api/search?q=` | Ticker/name search |

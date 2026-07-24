@@ -58,6 +58,15 @@ export interface IndexDetailResponse extends IndexSnapshot {
   constituents: IndexConstituent[];
 }
 
+/** Sector detail (/sector/:key) — the sector digest plus its ranked members. */
+export interface SectorDetailResponse {
+  key: string;
+  name: string;
+  change_pct: number | null;
+  spark: number[];
+  constituents: IndexConstituent[];
+}
+
 /** Index chart bars — mirrors OhlcvResponse but keyed by index symbol. */
 export interface IndexOhlcvResponse {
   symbol: string;

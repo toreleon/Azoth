@@ -19,6 +19,7 @@ import type {
   QuoteResponse,
   RangeKey,
   SearchResponse,
+  SectorDetailResponse,
   SectorsResponse,
   WatchlistDetail,
   WatchlistMeta,
@@ -80,6 +81,9 @@ async function mutate<T>(
 
 export const api = {
   indices: (signal?: AbortSignal) => getJson<IndicesResponse>("/api/indices", signal),
+
+  sector: (key: string, signal?: AbortSignal) =>
+    getJson<SectorDetailResponse>(`/api/sector/${encodeURIComponent(key)}`, signal),
 
   index: (symbol: string, signal?: AbortSignal) =>
     getJson<IndexDetailResponse>(`/api/index/${encodeURIComponent(symbol)}`, signal),

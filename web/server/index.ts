@@ -802,6 +802,60 @@ const SECTOR_MAP: { key: string; name: string; tickers: string[] }[] = [
   { key: "technology", name: "Technology", tickers: ["FPT", "CMG", "ELC"] },
 ];
 
+/**
+ * Synthetic sector index: rebase each constituent spark to 100, then average
+ * across constituents at each point (truncated to the shortest series).
+ */
+function sectorSpark(members: MiniDigest[]): number[] {
+  const rebased = members
+    .map((d) => d.spark)
+    .filter((s) => s.length > 0 && s[0]! > 0)
+    .map((s) => s.map((v) => (v / s[0]!) * 100));
+  if (!rebased.length) return [];
+  const minLen = Math.min(...rebased.map((s) => s.length));
+  const spark: number[] = [];
+  for (let i = 0; i < minLen; i++) {
+    const avg = rebased.reduce((a, s) => a + s[i]!, 0) / rebased.length;
+    spark.push(round(avg, 2)!);
+  }
+  return spark;
+}
+
+/** Average daily % change across the members that report one. */
+function averageChange(members: MiniDigest[]): number | null {
+  const changePcts = members.map((d) => d.changePct).filter((v): v is number => v != null);
+  if (!changePcts.length) return null;
+  return round(changePcts.reduce((a, b) => a + b, 0) / changePcts.length, 2);
+}
+
+/** Sector detail: the sector digest plus its members ranked by daily move. */
+async function handleSectorDetail(key: string) {
+  const sector = SECTOR_MAP.find((s) => s.key === key);
+  if (!sector) throw new HttpError(404, `unknown sector: ${key}`);
+
+  const digests = (await mapLimit(sector.tickers, 8, miniDigest)).filter(
+    (d): d is MiniDigest => d.last != null,
+  );
+  digests.sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0));
+
+  const names = await nameIndex().catch(() => [] as NameEntry[]);
+  const nameMap = new Map(names.map((n) => [n.ticker, n.name]));
+
+  return {
+    key: sector.key,
+    name: sector.name,
+    change_pct: averageChange(digests),
+    spark: sectorSpark(digests),
+    constituents: digests.map((d) => ({
+      ticker: d.ticker,
+      name: nameMap.get(d.ticker),
+      last: d.last,
+      change_pct: d.changePct,
+      spark: d.spark,
+    })),
+  };
+}
+
 async function handleSectors() {
   return cached(`web:sectors:${Math.floor(nowSec() / 600)}`, 600, async () => {
     // Compute each unique ticker's digest once, then reuse across sectors.
@@ -815,24 +869,9 @@ async function handleSectors() {
         .filter((d): d is MiniDigest => d != null && d.last != null);
       if (!members.length) return [];
 
-      const changePcts = members.map((d) => d.changePct).filter((v): v is number => v != null);
-      if (!changePcts.length) return [];
-      const change_pct = round(changePcts.reduce((a, b) => a + b, 0) / changePcts.length, 2);
-
-      // Synthetic sector index: rebase each constituent spark to 100, then average
-      // across constituents at each point (truncated to the shortest series).
-      const rebased = members
-        .map((d) => d.spark)
-        .filter((s) => s.length > 0 && s[0]! > 0)
-        .map((s) => s.map((v) => (v / s[0]!) * 100));
-      const spark: number[] = [];
-      if (rebased.length) {
-        const minLen = Math.min(...rebased.map((s) => s.length));
-        for (let i = 0; i < minLen; i++) {
-          const avg = rebased.reduce((a, s) => a + s[i]!, 0) / rebased.length;
-          spark.push(round(avg, 2)!);
-        }
-      }
+      const change_pct = averageChange(members);
+      if (change_pct == null) return [];
+      const spark = sectorSpark(members);
 
       const leaders = [...members]
         .filter((d) => d.changePct != null)
@@ -962,6 +1001,11 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
     "cache-control": "no-store",
   });
   res.end(text);
+}
+
+/** Normalize a sector key (lowercase, hyphenated) from the URL. */
+function sectorKey(raw: string): string {
+  return decodeURIComponent(raw).toLowerCase().replace(/[^a-z-]/g, "").slice(0, 24);
 }
 
 /** Validate + normalize an index symbol against the ones we actually serve. */
@@ -1145,6 +1189,9 @@ async function route(url: URL, method: string, body: BodyObj): Promise<unknown> 
       return handleMarketNews();
     case "sectors":
       return handleSectors();
+    case "sector":
+      if (!arg) throw new HttpError(400, "sector key required");
+      return handleSectorDetail(sectorKey(arg));
     case "search":
       return handleSearch(url.searchParams.get("q") ?? "");
     case "quote":

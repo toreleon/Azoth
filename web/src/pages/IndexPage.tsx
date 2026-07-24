@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import IndexChart from "../components/IndexChart";
-import Sparkline from "../components/Sparkline";
 import ChangeBadge from "../components/ChangeBadge";
+import ConstituentTable from "../components/ConstituentTable";
 import { api } from "../lib/api";
 import type { IndexDetailResponse } from "../lib/types";
-import { dirOf, fmtChangeAbs, fmtIndex, fmtPct, fmtPriceVnd } from "../lib/format";
+import { dirOf, fmtChangeAbs, fmtIndex, fmtPct } from "../lib/format";
 import "./IndexPage.css";
 
 /** Google-Finance-style detail page for a market index. */
@@ -102,13 +102,7 @@ export default function IndexPage() {
       <section className="idx__members">
         <h2 className="gf-section-title idx__members-title">Constituents</h2>
 
-        {loading && (
-          <div className="gf-card idx__rows">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="gf-skeleton idx__row-skel" />
-            ))}
-          </div>
-        )}
+        {loading && <ConstituentTable rows={[]} loading />}
 
         {!loading && data && !data.hasConstituents && (
           <p className="idx__note text-muted">
@@ -116,50 +110,8 @@ export default function IndexPage() {
           </p>
         )}
 
-        {!loading && data && data.hasConstituents && data.constituents.length > 0 && (
-          <div className="gf-card idx__table-wrap">
-            <table className="idx__table">
-              <thead>
-                <tr>
-                  <th scope="col">Symbol</th>
-                  <th scope="col" className="idx__th-spark">
-                    Trend
-                  </th>
-                  <th scope="col" className="idx__num">
-                    Price
-                  </th>
-                  <th scope="col" className="idx__num">
-                    Change
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.constituents.map((c) => (
-                  <tr key={c.ticker}>
-                    <td>
-                      <Link to={`/quote/${c.ticker}`} className="idx__sym">
-                        <span className="idx__sym-ticker">{c.ticker}</span>
-                        {c.name && <span className="idx__sym-name text-secondary">{c.name}</span>}
-                      </Link>
-                    </td>
-                    <td className="idx__td-spark">
-                      <Sparkline
-                        data={c.spark}
-                        width={72}
-                        height={26}
-                        fill
-                        direction={dirOf(c.change_pct)}
-                      />
-                    </td>
-                    <td className="idx__num mono">{fmtPriceVnd(c.last)}</td>
-                    <td className="idx__num">
-                      <ChangeBadge pct={c.change_pct} size="sm" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {!loading && data && data.hasConstituents && (
+          <ConstituentTable rows={data.constituents} />
         )}
       </section>
     </div>
