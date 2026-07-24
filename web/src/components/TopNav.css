@@ -62,6 +62,9 @@
 .topnav__search {
   position: relative;
   flex: 1;
+  /* Without this the input's placeholder sets an intrinsic min-width and the
+     whole bar overflows the viewport on narrow screens. */
+  min-width: 0;
   max-width: 720px;
   margin: 0 auto;
 }
@@ -242,11 +245,31 @@
     padding: 0 12px;
     gap: 10px;
   }
-  .topnav__wordmark-sub,
-  .topnav__beta {
+  .topnav__wordmark-sub {
+    display: none;
+  }
+  /* Needs the extra class: .gf-chip also sets display and would otherwise win. */
+  .topnav__brand .topnav__beta {
     display: none;
   }
   .topnav__signin {
     padding: 0 14px;
+  }
+  /* Shorten the placeholder's footprint so the field can go really narrow. */
+  .topnav__search-field {
+    padding: 0 12px;
+  }
+}
+
+/* Phone widths: drop Settings and the wordmark so search keeps usable room. */
+@media (max-width: 480px) {
+  .topnav__settings {
+    display: none;
+  }
+  .topnav__wordmark {
+    display: none;
+  }
+  .topnav__search {
+    min-width: 120px;
   }
 }
