@@ -301,7 +301,7 @@ export default function TopNav() {
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
-          <button type="button" className="gf-icon-btn" aria-label="Settings">
+          <button type="button" className="gf-icon-btn topnav__settings" aria-label="Settings">
             <GearIcon />
           </button>
           <button type="button" className="topnav__signin">
