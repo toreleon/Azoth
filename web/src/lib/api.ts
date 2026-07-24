@@ -85,6 +85,9 @@ export const api = {
   sector: (key: string, signal?: AbortSignal) =>
     getJson<SectorDetailResponse>(`/api/sector/${encodeURIComponent(key)}`, signal),
 
+  sectorNews: (key: string, signal?: AbortSignal) =>
+    getJson<MarketNewsResponse>(`/api/sector/${encodeURIComponent(key)}/news`, signal),
+
   index: (symbol: string, signal?: AbortSignal) =>
     getJson<IndexDetailResponse>(`/api/index/${encodeURIComponent(symbol)}`, signal),
 
