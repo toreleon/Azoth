@@ -8,6 +8,7 @@ import Quote from "./pages/Quote";
 import WatchlistPage from "./pages/WatchlistPage";
 import Portfolio from "./pages/Portfolio";
 import MarketTrends from "./pages/MarketTrends";
+import IndexPage from "./pages/IndexPage";
 import "./App.css";
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/quote/:ticker" element={<Quote />} />
+                <Route path="/index/:symbol" element={<IndexPage />} />
                 <Route path="/watchlist/:id" element={<WatchlistPage />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/portfolio/:id" element={<Portfolio />} />

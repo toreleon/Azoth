@@ -40,6 +40,35 @@ export interface IndicesResponse {
   asOf: string; // ISO
 }
 
+/** A member of an index, ranked by daily move on the index detail page. */
+export interface IndexConstituent {
+  ticker: string;
+  name?: string;
+  last: number | null; // thousand VND
+  change_pct: number | null;
+  spark: number[];
+}
+
+/**
+ * Index detail (/index/:symbol). `hasConstituents` is false for HNX/HNX30/UPCOM,
+ * where no constituent list is available from our sources.
+ */
+export interface IndexDetailResponse extends IndexSnapshot {
+  hasConstituents: boolean;
+  constituents: IndexConstituent[];
+}
+
+/** Index chart bars — mirrors OhlcvResponse but keyed by index symbol. */
+export interface IndexOhlcvResponse {
+  symbol: string;
+  name: string;
+  range: RangeKey;
+  resolution: string;
+  intraday: boolean;
+  prevClose: number | null;
+  bars: Bar[];
+}
+
 // ---------------------------------------------------------------------------
 // Movers / discover
 // ---------------------------------------------------------------------------
