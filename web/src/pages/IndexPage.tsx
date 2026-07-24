@@ -3,8 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import IndexChart from "../components/IndexChart";
 import ChangeBadge from "../components/ChangeBadge";
 import ConstituentTable from "../components/ConstituentTable";
+import NewsList from "../components/NewsList";
 import { api } from "../lib/api";
-import type { IndexDetailResponse } from "../lib/types";
+import type { IndexDetailResponse, NewsItem } from "../lib/types";
 import { dirOf, fmtChangeAbs, fmtIndex, fmtPct } from "../lib/format";
 import "./IndexPage.css";
 
@@ -16,12 +17,17 @@ export default function IndexPage() {
   const [data, setData] = useState<IndexDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsLoading, setNewsLoading] = useState(true);
 
   useEffect(() => {
     const ac = new AbortController();
     setLoading(true);
+    setNewsLoading(true);
     setError(null);
     setData(null);
+    setNews([]);
+
     api
       .index(sym, ac.signal)
       .then((res) => {
@@ -33,6 +39,16 @@ export default function IndexPage() {
         setError(err?.message || "Failed to load");
         setLoading(false);
       });
+
+    // An index page carries market-wide news, which is what this feed is.
+    api
+      .marketNews(ac.signal)
+      .then((res) => setNews(res.items.slice(0, 8)))
+      .catch(() => {
+        /* news is secondary */
+      })
+      .finally(() => setNewsLoading(false));
+
     return () => ac.abort();
   }, [sym]);
 
@@ -114,6 +130,10 @@ export default function IndexPage() {
           <ConstituentTable rows={data.constituents} />
         )}
       </section>
+
+      {(newsLoading || news.length > 0) && (
+        <NewsList items={news} loading={newsLoading} title="Market news" />
+      )}
     </div>
   );
 }

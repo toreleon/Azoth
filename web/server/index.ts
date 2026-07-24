@@ -761,13 +761,13 @@ function parseDate(input?: string): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
-async function handleMarketNews() {
-  const seeds = ["VCB", "FPT", "VIC", "HPG", "VNM", "MWG"];
-  const items = await cached(`web:marketnews:${Math.floor(nowSec() / 900)}`, 900, async () => {
+/** Aggregate + de-duplicate recent news across a basket of tickers. */
+async function aggregateNews(cacheKey: string, seeds: string[], limit: number) {
+  return cached(`${cacheKey}:${Math.floor(nowSec() / 900)}`, 900, async () => {
     const all = await mapLimit(seeds, 4, (t) => getTickerNews(t, 0, 6, 1).catch(() => []));
-    const flat = all.flat();
     const seen = new Set<string>();
-    const out = flat
+    const out = all
+      .flat()
       .map((n) => ({
         title: n.Title,
         url: n.LinkDetail ? absUrl(n.LinkDetail) : n.Url,
@@ -782,9 +782,23 @@ async function handleMarketNews() {
         return true;
       });
     out.sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
-    return out.slice(0, 14);
+    return out.slice(0, limit);
   });
-  return { items };
+}
+
+async function handleMarketNews() {
+  const seeds = ["VCB", "FPT", "VIC", "HPG", "VNM", "MWG"];
+  return { items: await aggregateNews("web:marketnews", seeds, 14) };
+}
+
+/** News for a sector, seeded from its constituents. */
+async function handleSectorNews(key: string) {
+  const sector = SECTOR_MAP.find((s) => s.key === key);
+  if (!sector) throw new HttpError(404, `unknown sector: ${key}`);
+  return {
+    key: sector.key,
+    items: await aggregateNews(`web:sectornews:${sector.key}`, sector.tickers.slice(0, 6), 10),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1202,9 +1216,12 @@ async function route(url: URL, method: string, body: BodyObj): Promise<unknown> 
       return handleMarketNews();
     case "sectors":
       return handleSectors();
-    case "sector":
+    case "sector": {
       if (!arg) throw new HttpError(400, "sector key required");
-      return handleSectorDetail(sectorKey(arg));
+      const key = sectorKey(arg);
+      if (sub === "news") return handleSectorNews(key);
+      return handleSectorDetail(key);
+    }
     case "search":
       return handleSearch(url.searchParams.get("q") ?? "");
     case "quote":

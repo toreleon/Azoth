@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ChangeBadge from "../components/ChangeBadge";
 import ConstituentTable from "../components/ConstituentTable";
+import NewsList from "../components/NewsList";
 import Sparkline from "../components/Sparkline";
 import { api } from "../lib/api";
-import type { SectorDetailResponse } from "../lib/types";
+import type { NewsItem, SectorDetailResponse } from "../lib/types";
 import { dirOf, fmtPct } from "../lib/format";
 import "./SectorPage.css";
 
@@ -19,12 +20,17 @@ export default function SectorPage() {
   const [data, setData] = useState<SectorDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsLoading, setNewsLoading] = useState(true);
 
   useEffect(() => {
     const ac = new AbortController();
     setLoading(true);
+    setNewsLoading(true);
     setError(null);
     setData(null);
+    setNews([]);
+
     api
       .sector(key, ac.signal)
       .then((res) => {
@@ -36,6 +42,15 @@ export default function SectorPage() {
         setError(err?.message || "Failed to load");
         setLoading(false);
       });
+
+    api
+      .sectorNews(key, ac.signal)
+      .then((res) => setNews(res.items))
+      .catch(() => {
+        /* news is secondary */
+      })
+      .finally(() => setNewsLoading(false));
+
     return () => ac.abort();
   }, [key]);
 
@@ -93,6 +108,10 @@ export default function SectorPage() {
         <h2 className="gf-section-title sect__members-title">Constituents</h2>
         <ConstituentTable rows={data?.constituents ?? []} loading={loading} />
       </section>
+
+      {(newsLoading || news.length > 0) && (
+        <NewsList items={news} loading={newsLoading} title={`${data?.name ?? "Sector"} news`} />
+      )}
     </div>
   );
 }

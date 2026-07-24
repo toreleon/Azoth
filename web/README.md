@@ -114,6 +114,7 @@ pnpm typecheck # type-check the frontend
 | `GET /api/movers?kind=gainers\|losers\|active&universe=vn30` | Top movers (used by `/markets`) |
 | `GET /api/sectors` | Stock sectors for the sidebar rail: per-sector avg daily % change, a synthetic rebased-index sparkline, and top leaders, sorted by % change |
 | `GET /api/sector/:key` | Sector detail: avg daily % change, synthetic index sparkline, and members ranked by daily move |
+| `GET /api/sector/:key/news` | News for a sector, aggregated + de-duplicated across its constituents |
 | `GET /api/watchlist` | Sidebar watchlist rows |
 | `GET /api/market-news` | Aggregated market news feed (home market summary) |
 | `GET /api/search?q=` | Ticker/name search; the leading matches are enriched with a live price + daily change |
