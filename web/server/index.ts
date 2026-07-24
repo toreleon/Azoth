@@ -354,6 +354,80 @@ function resolveUniverse(universe: string): string[] {
   return [...(known.default ?? [])];
 }
 
+/**
+ * Constituent baskets we can actually resolve per index. HNX/HNX30/UPCOM have no
+ * published constituent list in our data sources, so their detail pages render
+ * without a members table rather than showing a wrong one.
+ */
+const INDEX_CONSTITUENTS: Record<string, string> = {
+  VNINDEX: "default",
+  VN30: "vn30",
+};
+
+/** Index detail: the digest plus its constituents ranked by daily move. */
+async function handleIndexDetail(symbol: string) {
+  const digest = await indexDigest(symbol);
+  if (!digest) throw new HttpError(404, `no data for index: ${symbol}`);
+
+  const universe = INDEX_CONSTITUENTS[symbol];
+  let constituents: {
+    ticker: string;
+    name?: string;
+    last: number | null;
+    change_pct: number | null;
+    spark: number[];
+  }[] = [];
+
+  if (universe) {
+    const digests = (await mapLimit(resolveUniverse(universe), 8, miniDigest)).filter(
+      (d) => d.changePct != null,
+    );
+    digests.sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0));
+    const names = await nameIndex().catch(() => [] as NameEntry[]);
+    const nameMap = new Map(names.map((n) => [n.ticker, n.name]));
+    constituents = digests.map((d) => ({
+      ticker: d.ticker,
+      name: nameMap.get(d.ticker),
+      last: d.last,
+      change_pct: d.changePct,
+      spark: d.spark,
+    }));
+  }
+
+  return { ...digest, hasConstituents: Boolean(universe), constituents };
+}
+
+/** Index chart bars for a range (mirrors handleOhlcv, but for an index symbol). */
+async function handleIndexOhlcv(symbol: string, range: RangeKey) {
+  const plan = rangeToPlan(range);
+  const to = nowSec();
+  const bucket = plan.intraday
+    ? Math.floor(to / 120)
+    : new Date(to * 1000).toISOString().slice(0, 10);
+  const key = `web:idxohlcv:${symbol}:${range}:${bucket}`;
+  let bars = await cached(key, plan.intraday ? 120 : 600, () =>
+    getIndexOhlcv(symbol, plan.resolution, plan.fromSec, to),
+  );
+  if (range === "1D") bars = lastSessionOnly(bars);
+
+  // For intraday ranges the baseline is the prior session's close, not the first bar.
+  let prevClose: number | null = bars[0]?.close ?? null;
+  if (range === "1D" || range === "5D") {
+    const daily = await dailyIndexBars(symbol, 30).catch(() => [] as Bar[]);
+    if (daily.length >= 2) prevClose = round(daily[daily.length - 2]!.close, 2);
+  }
+
+  return {
+    symbol,
+    name: INDEX_NAMES[symbol] ?? symbol,
+    range,
+    resolution: plan.resolution,
+    intraday: plan.intraday,
+    prevClose,
+    bars,
+  };
+}
+
 async function handleMovers(kind: string, universe: string) {
   const tickers = resolveUniverse(universe);
   const digests = (await mapLimit(tickers, 8, miniDigest)).filter((d) => d.changePct != null);
@@ -890,6 +964,13 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
   res.end(text);
 }
 
+/** Validate + normalize an index symbol against the ones we actually serve. */
+function indexSymbol(raw: string): string {
+  const s = decodeURIComponent(raw).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+  if (!INDEX_NAMES[s]) throw new HttpError(404, `unknown index: ${s}`);
+  return s;
+}
+
 function upperTicker(raw: string): string {
   return decodeURIComponent(raw).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
 }
@@ -1042,6 +1123,14 @@ async function route(url: URL, method: string, body: BodyObj): Promise<unknown> 
       return { ok: true, service: "azoth-web", time: new Date().toISOString() };
     case "indices":
       return handleIndices();
+    case "index": {
+      if (!arg) throw new HttpError(400, "index symbol required");
+      const symbol = indexSymbol(arg);
+      if (sub === "ohlcv") {
+        return handleIndexOhlcv(symbol, (url.searchParams.get("range") as RangeKey) ?? "6M");
+      }
+      return handleIndexDetail(symbol);
+    }
     case "movers":
       return handleMovers(url.searchParams.get("kind") ?? "gainers", url.searchParams.get("universe") ?? "vn30");
     case "watchlist":

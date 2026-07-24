@@ -20,6 +20,11 @@ Finance's information architecture and visual language. The UI defaults to the
     news block. Movers no longer live here — they moved to the **`/markets`** trends page.
   - `pages/Quote.tsx` — price header (with **add-to-list**), interactive chart, then
     **Overview / Financials / News tabs**.
+  - `pages/IndexPage.tsx` — index detail (`/index/:symbol`), reached by clicking any index
+    card: value + 1D/1W/1M performance, a range-tabbed area chart (`IndexChart`), and the
+    index's **constituents** ranked by daily move. VN-Index and VN30 have constituent
+    baskets; HNX/HNX30/UPCOM show a note instead, since no member list is published by our
+    sources.
   - `pages/WatchlistPage.tsx` — a single user watchlist: live quote rows with add/remove a
     symbol, rename, and delete the list.
   - `pages/Portfolio.tsx` — a manually-entered portfolio (Google-Finance style, **not**
@@ -101,6 +106,8 @@ pnpm typecheck # type-check the frontend
 | Endpoint | Description |
 | --- | --- |
 | `GET /api/indices` | VN-Index, VN30, HNX-Index, HNX30, UPCOM with sparklines |
+| `GET /api/index/:symbol` | Index detail: digest + constituents ranked by daily move (`hasConstituents` is false for HNX/HNX30/UPCOM) |
+| `GET /api/index/:symbol/ohlcv?range=1D..MAX` | Index chart bars; `prevClose` is the prior session close for intraday ranges |
 | `GET /api/movers?kind=gainers\|losers\|active&universe=vn30` | Top movers (used by `/markets`) |
 | `GET /api/sectors` | Stock sectors for the sidebar rail: per-sector avg daily % change, a synthetic rebased-index sparkline, and top leaders, sorted by % change |
 | `GET /api/watchlist` | Sidebar watchlist rows |

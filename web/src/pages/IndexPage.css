@@ -1,0 +1,208 @@
+.idx {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.idx__crumb {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.idx__crumb-link {
+  color: var(--text-secondary);
+}
+.idx__crumb-link:hover {
+  color: var(--accent);
+}
+
+.idx__head-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.idx__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.idx__name {
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.idx__price-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.idx__value {
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.idx__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.idx__today {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* 1D / 1W / 1M performance row */
+.idx__perf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12.5px;
+}
+
+.idx__perf-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.idx__perf-label {
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+}
+
+.idx__perf-val {
+  font-weight: 500;
+}
+
+/* ---- Constituents ------------------------------------------------------- */
+.idx__members {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.idx__members-title {
+  margin: 0;
+}
+
+.idx__note {
+  font-size: 13px;
+}
+
+.idx__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+}
+
+.idx__row-skel {
+  height: 38px;
+  border-radius: 8px;
+}
+
+/* Wide table scrolls inside its own container, never the page body. */
+.idx__table-wrap {
+  overflow-x: auto;
+}
+
+.idx__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.idx__table thead th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.idx__table tbody td {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.idx__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.idx__table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.idx__num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.idx__table thead th.idx__num {
+  text-align: right;
+}
+
+.idx__sym {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.idx__sym-ticker {
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.idx__sym-name {
+  font-size: 11.5px;
+  line-height: 1.3;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.idx__td-spark,
+.idx__th-spark {
+  width: 84px;
+}
+
+.idx__error {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.idx__back {
+  margin-top: 8px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .idx__td-spark,
+  .idx__th-spark {
+    display: none;
+  }
+  .idx__sym-name {
+    max-width: 140px;
+  }
+}
