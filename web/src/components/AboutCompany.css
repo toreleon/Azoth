@@ -63,3 +63,36 @@
 .about__link-glyph {
   flex: none;
 }
+
+/* ---- Profile facts (Founded / Headquarters / Exchange / Phone) ---------- */
+.about__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0 32px;
+  margin: 4px 0 0;
+}
+
+.about__fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.about__fact-label {
+  flex: none;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.about__fact-value {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -106,6 +106,12 @@ export default function QuoteHeader({ quote }: Props) {
       </div>
 
       <div className="qh__title-row">
+        {/* Google Finance shows a company logo here. VNDirect publishes logo URLs
+            but its CDN is hotlink-protected (403 off-origin), so we draw a ticker
+            monogram instead of shipping broken images. */}
+        <span className="qh__mark" aria-hidden="true">
+          {quote.ticker.slice(0, 2)}
+        </span>
         <h1 className="qh__name">{name}</h1>
         <div className="qh__actions">
           <div className="qh__addwrap" ref={wrapRef}>

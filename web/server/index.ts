@@ -643,7 +643,19 @@ async function handleQuote(ticker: string) {
 }
 
 interface FundBundle {
-  company: { nameVi?: string; nameEn?: string; floor?: string; website?: string; summary?: string; intro?: string; sector?: string };
+  company: {
+    nameVi?: string;
+    nameEn?: string;
+    floor?: string;
+    website?: string;
+    summary?: string;
+    intro?: string;
+    sector?: string;
+    founded?: string;
+    address?: string;
+    phone?: string;
+    employees?: number;
+  };
   marketCap: number | null;
   pe: number | null;
   pb: number | null;
@@ -682,6 +694,14 @@ async function fundamentalsBundle(ticker: string): Promise<FundBundle> {
         summary: profile?.vnSummary?.slice(0, 800),
         intro: intro?.Intro?.slice(0, 800),
         sector: intro?.CategoryName as string | undefined,
+        // Google Finance's About block lists founded / HQ / employees.
+        // NB: the profile also carries a `logo` URL, but VNDirect's CDN is
+        // hotlink-protected (403 from any other origin), so we don't surface it —
+        // the UI draws a ticker monogram instead.
+        founded: profile?.foundDate,
+        address: profile?.vnAddress,
+        phone: profile?.phone,
+        employees: profile?.employees,
       },
       marketCap: round(marketCap, 0),
       pe: round(pe, 2),
@@ -934,6 +954,10 @@ async function handleAbout(ticker: string) {
       summary: fund.company.summary,
       intro: fund.company.intro,
       sector: fund.company.sector,
+      founded: fund.company.founded,
+      address: fund.company.address,
+      phone: fund.company.phone,
+      employees: fund.company.employees,
     },
     related,
   };
