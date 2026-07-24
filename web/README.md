@@ -169,3 +169,17 @@ This is a data/visualization surface. The "Research" (AI) panel is a visual prev
 Azoth's AI analyst, ordering, backtesting, and broker workflows live in the terminal CLI.
 The Portfolio page is **manual entry** (holdings you type in, priced with live market data);
 broker-linked positions and cash (which need broker auth) are intentionally not wired here.
+
+### Google Finance features we deliberately do not clone
+
+These have no Vietnam-market data source behind them, so they're omitted rather than
+faked. Each was checked against the wired sources before being ruled out:
+
+| Feature | Why not |
+| --- | --- |
+| Gemini research chat | No equivalent here; Azoth's analyst runs in the CLI. The right rail is a labelled preview. |
+| Earnings calendar / analyst estimates | No VN source. VNDirect Finfo exposes valuation ratios only; CafeF's ratio dataset is annual buckets. |
+| Full financial statements (income / balance sheet / cash flow) | Same — no statement-level endpoint is wired, only ratios. |
+| Currencies / crypto / futures | No VN feed wired; all sources here are equities + indices. |
+| Company logos | VNDirect publishes `logo` URLs, but its CDN answers **403** off-origin (hotlink-protected), so the UI draws a ticker monogram instead. |
+| HNX / HNX30 / UPCOM constituents | No published member list; those index pages say so rather than showing a partial basket. |
