@@ -101,10 +101,24 @@ function parseBacktestInterval(value: string | undefined): { label: string; minu
 }
 
 function intervalCloses(vnindexBars: Bar[], startSec: number, endSec: number, intervalMinutes: number): number[] {
-  const base = vnindexBars
-    .filter((b) => b.time >= startSec && b.time <= endSec)
-    .map((b) => b.time)
-    .sort((a, b) => a - b);
+  // Optimization: Use binary search instead of O(n) filtering to find interval bounds
+  let startIdx = vnindexBars.length;
+  let low = 0, high = vnindexBars.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    if (vnindexBars[mid]!.time >= startSec) {
+      startIdx = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  const endIdx = findLastBarIndex(vnindexBars, endSec);
+  const base = (endIdx < startIdx || startIdx >= vnindexBars.length || endIdx < 0)
+    ? []
+    : vnindexBars.slice(startIdx, endIdx + 1).map((b) => b.time);
+
   const step = Math.max(1, Math.round(intervalMinutes / 30));
   if (step === 1) return base;
 
