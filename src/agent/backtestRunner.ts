@@ -101,10 +101,16 @@ function parseBacktestInterval(value: string | undefined): { label: string; minu
 }
 
 function intervalCloses(vnindexBars: Bar[], startSec: number, endSec: number, intervalMinutes: number): number[] {
-  const base = vnindexBars
-    .filter((b) => b.time >= startSec && b.time <= endSec)
-    .map((b) => b.time)
-    .sort((a, b) => a - b);
+  // ⚡ Bolt: Optimize sub-interval extraction from O(n log n) filter+sort to O(log n) binary search
+  const startIdx = findLastBarIndex(vnindexBars, startSec - 1) + 1;
+  const endIdx = findLastBarIndex(vnindexBars, endSec);
+
+  if (startIdx > endIdx || startIdx >= vnindexBars.length || endIdx < 0) {
+    return [];
+  }
+
+  const base = vnindexBars.slice(startIdx, endIdx + 1).map((b) => b.time);
+
   const step = Math.max(1, Math.round(intervalMinutes / 30));
   if (step === 1) return base;
 
