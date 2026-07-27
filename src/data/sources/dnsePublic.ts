@@ -62,6 +62,26 @@ export function seriesToBars(s: OhlcvSeries): Bar[] {
 }
 
 /**
+ * O(log n) binary search to find the first bar index with time >= timeSec.
+ * Returns -1 if no such bar exists.
+ */
+export function findFirstBarIndex(bars: Bar[], timeSec: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    if (bars[mid]!.time >= timeSec) {
+      ans = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return ans;
+}
+
+/**
  * O(log n) binary search to find the last bar index with time <= timeSec.
  * Returns -1 if no such bar exists.
  */
@@ -88,7 +108,9 @@ function clipBars(bars: Bar[]): Bar[] {
     asOfClock.getStore()?.asOfSec != null || isAsOfOverridden();
   if (!hasOverride) return bars;
   const asOf = nowSec();
-  return bars.filter((b) => b.time <= asOf);
+  const lastIdx = findLastBarIndex(bars, asOf);
+  if (lastIdx === -1) return [];
+  return bars.slice(0, lastIdx + 1);
 }
 
 export async function getStockOhlcv(
