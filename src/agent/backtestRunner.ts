@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config/loader.js";
 import { getDb } from "../storage/db.js";
 import { getBacktestBroker } from "../broker/index.js";
-import { getStockOhlcv, getIndexOhlcv, findLastBarIndex, type Bar } from "../data/sources/dnsePublic.js";
+import { getStockOhlcv, getIndexOhlcv, findFirstBarIndex, findLastBarIndex, type Bar } from "../data/sources/dnsePublic.js";
 import { DISCOVERY_UNIVERSE, discoverTickers } from "../tools/discover.js";
 import { setActiveAsOf } from "./clock.js";
 import { runTeamAnalysis } from "./team/index.js";
@@ -101,10 +101,14 @@ function parseBacktestInterval(value: string | undefined): { label: string; minu
 }
 
 function intervalCloses(vnindexBars: Bar[], startSec: number, endSec: number, intervalMinutes: number): number[] {
-  const base = vnindexBars
-    .filter((b) => b.time >= startSec && b.time <= endSec)
-    .map((b) => b.time)
-    .sort((a, b) => a - b);
+  const firstIdx = findFirstBarIndex(vnindexBars, startSec);
+  const lastIdx = findLastBarIndex(vnindexBars, endSec);
+
+  if (firstIdx === -1 || lastIdx === -1 || firstIdx > lastIdx) return [];
+
+  // vnindexBars is chronologically sorted, so we can just slice and map
+  const base = vnindexBars.slice(firstIdx, lastIdx + 1).map((b) => b.time);
+
   const step = Math.max(1, Math.round(intervalMinutes / 30));
   if (step === 1) return base;
 
