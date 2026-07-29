@@ -1,3 +1,3 @@
-## 2024-05-14 - Time-Series O(log n) Search Pattern
-**Learning:** `src/agent/backtestRunner.ts` makes heavy use of `.filter((b) => b.time <= asOf)` to get the latest close price inside loop bounds, changing potentially O(1) loop lookups or O(log n) lookups into repetitive O(n) filtering over large arrays.
-**Action:** Expose `findLastBarIndex` in `src/data/sources/dnsePublic.ts` and use binary search or track indices explicitly in tight loops.
+## 2024-05-18 - Optimized interval extraction in backtest runner
+**Learning:** Using `Array.prototype.filter()` and `Array.prototype.map()` combined with `Array.prototype.sort()` to extract items from a chronologically sorted time-series market data array introduces a significant O(n) performance hit, scaling linearly with the size of the initial array. Backtest initialization was particularly affected.
+**Action:** Always prefer O(log n) boundary searches (`findFirstBarIndex`, `findLastBarIndex`) and array slices when filtering chronologically sorted datasets (such as time-series market data arrays).

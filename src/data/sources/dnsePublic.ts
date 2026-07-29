@@ -62,6 +62,26 @@ export function seriesToBars(s: OhlcvSeries): Bar[] {
 }
 
 /**
+ * O(log n) binary search to find the first bar index with time >= timeSec.
+ * Returns -1 if no such bar exists.
+ */
+export function findFirstBarIndex(bars: Bar[], timeSec: number): number {
+  let low = 0;
+  let high = bars.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    if (bars[mid]!.time >= timeSec) {
+      ans = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return ans;
+}
+
+/**
  * O(log n) binary search to find the last bar index with time <= timeSec.
  * Returns -1 if no such bar exists.
  */
