@@ -147,8 +147,17 @@ export function createSession(meta: {
 
 export function upsertSession(entry: SessionIndexEntry, cwd = process.cwd()): void {
   const paths = sessionPaths(cwd);
-  const rows = listSessions(cwd).filter((s) => s.id !== entry.id);
-  rows.push(entry);
+  const rows = listSessions(cwd);
+
+  // Bolt Optimization: Use findIndex instead of filter to avoid array reallocation
+  // This reduces memory overhead during frequent disk I/O operations
+  const idx = rows.findIndex((s) => s.id === entry.id);
+  if (idx !== -1) {
+    rows[idx] = entry;
+  } else {
+    rows.push(entry);
+  }
+
   writeJson(paths.index, rows.sort((a, b) => b.updatedAt - a.updatedAt));
 }
 
