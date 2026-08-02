@@ -1,0 +1,205 @@
+/* TopNav — sticky top navigation bar (Google Finance clone) */
+
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  height: var(--nav-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.topnav__inner {
+  height: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ---- Brand ------------------------------------------------------------- */
+.topnav__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  border-radius: var(--radius-sm);
+}
+
+.topnav__logo {
+  display: block;
+  flex: none;
+}
+
+.topnav__wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 20px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.topnav__wordmark-name {
+  color: var(--text);
+  font-weight: 500;
+}
+.topnav__wordmark-sub {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.topnav__beta {
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+/* ---- Search ------------------------------------------------------------ */
+.topnav__search {
+  position: relative;
+  flex: 1;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.topnav__search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: var(--pill);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.topnav__search-field:focus-within {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+.topnav__search-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex: none;
+}
+
+.topnav__search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+}
+.topnav__search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ---- Results dropdown -------------------------------------------------- */
+.topnav__results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+  margin: 0;
+  list-style: none;
+}
+
+.topnav__result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  color: var(--text);
+  transition: background 0.1s ease;
+}
+.topnav__result:hover,
+.topnav__result--active {
+  background: var(--surface-hover);
+}
+
+.topnav__result-ticker {
+  flex: none;
+  min-width: 48px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.topnav__result-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topnav__result-exch {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/* ---- Right actions ----------------------------------------------------- */
+.topnav__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.topnav__signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 18px;
+  margin-left: 6px;
+  border: none;
+  border-radius: var(--pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+.topnav__signin:hover {
+  background: var(--accent-hover);
+}
+
+/* ---- Responsive -------------------------------------------------------- */
+@media (max-width: 640px) {
+  .topnav__inner {
+    padding: 0 12px;
+    gap: 10px;
+  }
+  .topnav__wordmark-sub,
+  .topnav__beta {
+    display: none;
+  }
+  .topnav__signin {
+    padding: 0 14px;
+  }
+}

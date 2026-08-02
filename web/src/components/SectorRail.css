@@ -1,0 +1,66 @@
+/* Compact sector-performance rail (Google Finance "Stock sectors"). */
+
+.sector-rail {
+  display: flex;
+  flex-direction: column;
+}
+
+.sector-rail__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+
+.sector-rail__row:hover {
+  background: var(--surface-hover);
+}
+
+.sector-rail__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.sector-rail__spark {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 18px;
+}
+
+.sector-rail__pct {
+  flex: 0 0 auto;
+  min-width: 52px;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeleton rows -------------------------------------------------------------- */
+
+.sector-rail__row--skel {
+  justify-content: space-between;
+}
+
+.sector-rail__skel-name {
+  height: 12px;
+  width: 58%;
+  border-radius: 6px;
+}
+
+.sector-rail__skel-pct {
+  height: 12px;
+  width: 34px;
+  border-radius: 6px;
+}
