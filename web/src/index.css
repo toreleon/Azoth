@@ -1,0 +1,373 @@
+/* ==========================================================================
+   Azoth Finance — design system
+   A Google-Finance-inspired token set + global primitives.
+   Components own their own co-located *.css; this file holds tokens, resets,
+   and a few shared primitives (.gf-card, .gf-badge, .gf-pill, .gf-chip, skeleton).
+   ========================================================================== */
+
+/* ---- Light theme (default) --------------------------------------------- */
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f8f9fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f4;
+  --surface-hover: #f1f3f4;
+  --border: #dadce0;
+  --border-subtle: #e8eaed;
+
+  --text: #202124;
+  --text-secondary: #5f6368;
+  --text-muted: #80868b;
+
+  --accent: #1a73e8;
+  --accent-hover: #1765cc;
+  --accent-subtle: #e8f0fe;
+  --on-accent: #ffffff;
+
+  --up: #137333;
+  --up-strong: #1e8e3e;
+  --up-bg: #e6f4ea;
+  --down: #a50e0e;
+  --down-strong: #d93025;
+  --down-bg: #fce8e6;
+  --flat: #5f6368;
+  --flat-bg: #f1f3f4;
+
+  --shadow-1: 0 1px 2px rgba(60, 64, 67, 0.1), 0 1px 3px 1px rgba(60, 64, 67, 0.06);
+  --shadow-2: 0 1px 3px rgba(60, 64, 67, 0.12), 0 4px 8px 3px rgba(60, 64, 67, 0.08);
+  --focus-ring: rgba(26, 115, 232, 0.4);
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --pill: 999px;
+
+  --nav-h: 64px;
+  --content-max: 1600px;
+
+  --sans: "Google Sans", "Google Sans Text", "Roboto", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+/* ---- Dark theme -------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --bg: #202124;
+  --bg-subtle: #28292c;
+  --surface: #2a2b2e;
+  --surface-2: #35363a;
+  --surface-hover: #35363a;
+  --border: #3c4043;
+  --border-subtle: #303134;
+
+  --text: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --text-muted: #80868b;
+
+  --accent: #8ab4f8;
+  --accent-hover: #aecbfa;
+  --accent-subtle: #1f3047;
+  --on-accent: #202124;
+
+  --up: #81c995;
+  --up-strong: #81c995;
+  --up-bg: rgba(129, 201, 149, 0.16);
+  --down: #f28b82;
+  --down-strong: #f28b82;
+  --down-bg: rgba(242, 139, 130, 0.16);
+  --flat: #9aa0a6;
+  --flat-bg: #35363a;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 8px 3px rgba(0, 0, 0, 0.25);
+  --focus-ring: rgba(138, 180, 248, 0.5);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #202124;
+    --bg-subtle: #28292c;
+    --surface: #2a2b2e;
+    --surface-2: #35363a;
+    --surface-hover: #35363a;
+    --border: #3c4043;
+    --border-subtle: #303134;
+
+    --text: #e8eaed;
+    --text-secondary: #9aa0a6;
+    --text-muted: #80868b;
+
+    --accent: #8ab4f8;
+    --accent-hover: #aecbfa;
+    --accent-subtle: #1f3047;
+    --on-accent: #202124;
+
+    --up: #81c995;
+    --up-strong: #81c995;
+    --up-bg: rgba(129, 201, 149, 0.16);
+    --down: #f28b82;
+    --down-strong: #f28b82;
+    --down-bg: rgba(242, 139, 130, 0.16);
+    --flat: #9aa0a6;
+    --flat-bg: #35363a;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 8px 3px rgba(0, 0, 0, 0.25);
+    --focus-ring: rgba(138, 180, 248, 0.5);
+
+    color-scheme: dark;
+  }
+}
+
+/* ---- Reset ------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 500;
+  font-family: var(--sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---- Semantic color helpers -------------------------------------------- */
+.up {
+  color: var(--up);
+}
+.down {
+  color: var(--down);
+}
+.flat {
+  color: var(--flat);
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
+.text-muted {
+  color: var(--text-muted);
+}
+.mono {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.gf-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ---- Card -------------------------------------------------------------- */
+.gf-card {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+/* ---- Change badge (circular arrow + value), Google Finance style ------- */
+.gf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.gf-badge__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex: none;
+}
+.gf-badge--up .gf-badge__dot {
+  background: var(--up-bg);
+  color: var(--up-strong);
+}
+.gf-badge--down .gf-badge__dot {
+  background: var(--down-bg);
+  color: var(--down-strong);
+}
+.gf-badge--flat .gf-badge__dot {
+  background: var(--flat-bg);
+  color: var(--flat);
+}
+.gf-badge--up {
+  color: var(--up);
+}
+.gf-badge--down {
+  color: var(--down);
+}
+.gf-badge--flat {
+  color: var(--flat);
+}
+
+/* ---- Pill / segmented buttons ------------------------------------------ */
+.gf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.gf-pill:hover {
+  background: var(--surface-hover);
+}
+.gf-pill--active {
+  background: var(--accent-subtle);
+  border-color: transparent;
+  color: var(--accent);
+}
+
+/* ---- Chip -------------------------------------------------------------- */
+.gf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--pill);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ---- Icon button ------------------------------------------------------- */
+.gf-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background 0.12s ease;
+}
+.gf-icon-btn:hover {
+  background: var(--surface-hover);
+}
+
+/* ---- Skeleton loading -------------------------------------------------- */
+.gf-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+.gf-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text) 6%, transparent),
+    transparent
+  );
+  animation: gf-shimmer 1.3s infinite;
+}
+@keyframes gf-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ---- Section heading --------------------------------------------------- */
+.gf-section-title {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+/* ---- Divider ----------------------------------------------------------- */
+.gf-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  border: none;
+  margin: 0;
+}
+
+/* ---- Scrollbars -------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+  border: 3px solid var(--bg);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- App layout scaffold ----------------------------------------------- */
+.app-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.app-body {
+  flex: 1;
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
