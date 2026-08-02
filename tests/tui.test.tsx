@@ -7,9 +7,9 @@ import { render } from "ink-testing-library";
 import { App, previousWeekRange } from "../src/tui/App.js";
 import { LlmSetup } from "../src/tui/components/LlmSetup.js";
 import { sparkline } from "../src/tui/lib/sparkline.js";
-import { vnColor, pctColor } from "../src/tui/lib/colors.js";
+import { vnColor, pctColor, pnlColor } from "../src/tui/lib/colors.js";
 import { classifySession } from "../src/tui/lib/marketSession.js";
-import { formatBigVnd, formatPct, formatPrice } from "../src/tui/lib/format.js";
+import { formatBigVnd, formatPct, formatPrice, formatDate } from "../src/tui/lib/format.js";
 import { getDb } from "../src/storage/db.js";
 import { appendSessionRecord, createSession, latestSession, readSessionRecords } from "../src/runtime/sessionStore.js";
 import { loadConfig, resetConfigCacheForTests, updateConfig } from "../src/config/loader.js";
@@ -887,6 +887,16 @@ describe("TUI lib helpers", () => {
     expect(pctColor(-1)).toBe("red");
   });
 
+  it("pnlColor", () => {
+    expect(pnlColor(null)).toBe("white");
+    expect(pnlColor(undefined)).toBe("white");
+    expect(pnlColor(0)).toBe("white");
+    expect(pnlColor(1)).toBe("green");
+    expect(pnlColor(100)).toBe("green");
+    expect(pnlColor(-1)).toBe("red");
+    expect(pnlColor(-100)).toBe("red");
+  });
+
   it("sparkline", () => {
     expect(sparkline([1, 2, 3, 4, 5])).toHaveLength(5);
     expect(sparkline([])).toBe("");
@@ -900,6 +910,12 @@ describe("TUI lib helpers", () => {
     expect(formatPct(-1.2)).toBe("-1.20%");
     expect(formatPrice(28.5)).toBe("28.50");
     expect(formatPrice(null)).toBe("—");
+
+    // formatDate tests
+    expect(formatDate(null)).toBe("—");
+    expect(formatDate(undefined)).toBe("—");
+    expect(formatDate(1718076400)).toBe("2024-06-11");
+    expect(formatDate(0)).toBe("1970-01-01");
   });
 
   it("market session classifier", () => {

@@ -1,0 +1,39 @@
+/* 3-column Google-Finance layout: Lists sidebar · content · Research panel. */
+.gf-layout {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr) 360px;
+  gap: 28px;
+  align-items: start;
+  padding-top: 20px;
+}
+
+.gf-main {
+  min-width: 0;
+}
+
+.gf-sidebar,
+.gf-research {
+  position: sticky;
+  top: calc(var(--nav-h) + 16px);
+  max-height: calc(100vh - var(--nav-h) - 32px);
+  overflow-y: auto;
+}
+
+/* Hide the right Research rail first, then the left sidebar, as width shrinks. */
+@media (max-width: 1320px) {
+  .gf-layout {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+  .gf-research {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .gf-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gf-sidebar {
+    display: none;
+  }
+}
