@@ -147,8 +147,17 @@ export function createSession(meta: {
 
 export function upsertSession(entry: SessionIndexEntry, cwd = process.cwd()): void {
   const paths = sessionPaths(cwd);
-  const rows = listSessions(cwd).filter((s) => s.id !== entry.id);
-  rows.push(entry);
+  // Read raw array to avoid the extra slice and sort inside listSessions()
+  const rows = readJson<SessionIndexEntry[]>(paths.index, []);
+
+  // Update in-place instead of using .filter() to avoid unnecessary array allocation
+  const existingIndex = rows.findIndex((s) => s.id === entry.id);
+  if (existingIndex >= 0) {
+    rows[existingIndex] = entry;
+  } else {
+    rows.push(entry);
+  }
+
   writeJson(paths.index, rows.sort((a, b) => b.updatedAt - a.updatedAt));
 }
 
