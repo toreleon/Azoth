@@ -15,6 +15,10 @@ type Cell = {
 export default function StatsGrid({ quote }: StatsGridProps) {
   const s = quote.stats;
 
+  // CafeF's ratios lag for some issuers (banks especially), so name the year
+  // these four came from rather than implying they're current.
+  const fy = s.ratios_year ? ` ’${String(s.ratios_year).slice(-2)}` : "";
+
   const cells: Cell[] = [
     { label: "Open", value: fmtPriceVnd(s.open) },
     { label: "High", value: fmtPriceVnd(s.high) },
@@ -28,10 +32,10 @@ export default function StatsGrid({ quote }: StatsGridProps) {
     { label: "P/E ratio", value: fmtNum(s.pe) },
     { label: "P/B ratio", value: fmtNum(s.pb) },
     { label: "P/S ratio", value: fmtNum(s.ps) },
-    { label: "EPS", value: fmtPriceVnd(s.eps_thousand_vnd) },
-    { label: "BVPS", value: fmtPriceVnd(s.bvps_thousand_vnd) },
-    { label: "ROE", value: fmtPctPlain(s.roe_pct) },
-    { label: "ROA", value: fmtPctPlain(s.roa_pct) },
+    { label: `EPS${fy}`, value: fmtPriceVnd(s.eps_thousand_vnd) },
+    { label: `BVPS${fy}`, value: fmtPriceVnd(s.bvps_thousand_vnd) },
+    { label: `ROE${fy}`, value: fmtPctPlain(s.roe_pct) },
+    { label: `ROA${fy}`, value: fmtPctPlain(s.roa_pct) },
     { label: "Div yield", value: fmtPctPlain(s.dividend_yield_pct) },
     { label: "Foreign own", value: fmtPctPlain(s.foreign_ownership_pct) },
     { label: "Shares out", value: fmtBigNum(s.shares_outstanding) },
