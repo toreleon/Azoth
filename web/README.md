@@ -40,8 +40,9 @@ Finance's information architecture and visual language. The UI defaults to the
     ResearchPanel, MarketStrip (compact IndexCards), MarketSummary (home news block),
     NewsList, QuoteHeader (perf summary line +
     add-to-list popover), DiscoverStrip, PriceChart (lightweight-charts, with **dropdown**
-    chart-type / indicators / compare menus above a range-button row, and a **Compare**
-    multi-ticker % overlay), StatsGrid (dense label→value grid), RelatedStocks, AboutCompany,
+    chart-type / indicators / compare menus above a range-button row, a **Compare**
+    multi-ticker % overlay, and a **crosshair hover readout** + period-change line),
+    StatsGrid (dense label→value grid), RelatedStocks, AboutCompany,
     FinancialsTab (annual key metrics + chart), PortfolioSummary / HoldingsTable / AddHoldingForm,
     plus Sparkline + ChangeBadge primitives.
   - `lib/` — the shared API contract (`types.ts`), formatters (`format.ts`), fetch client (`api.ts`),
@@ -61,6 +62,12 @@ Finance's information architecture and visual language. The UI defaults to the
   market indices, with a liquid/VN30 universe toggle.
 - **Add-to-list from the stock header** and a **Discover** strip on the home page for quick
   navigation into sectors and bluechips.
+- **Chart hover readout** — moving the crosshair over a stock or index chart shows that point's
+  date (intraday points read in ICT), its price, and the move from the range baseline. Both charts
+  also print the change across the whole selected range ("−32,170 (−30.97%) past 6 months").
+  The baseline is the previous close on 1D/5D — so the intraday line matches the header's "Today"
+  figure exactly — and the range's first bar otherwise. While comparing, the readout lists every
+  overlaid ticker's % instead.
 
 Watchlists and portfolios are persisted in the shared Azoth SQLite database (`~/.azoth/azoth.db`)
 under `web_*` tables — no separate datastore, no broker credentials.
