@@ -38,7 +38,7 @@ Finance's information architecture and visual language. The UI defaults to the
   - `components/` — TopNav (search + theme toggle), Sidebar (persistent watchlists + portfolios
     with inline add/remove, plus a **SectorRail** mini index-list of stock sectors),
     ResearchPanel, MarketStrip (compact IndexCards), MarketSummary (home news block),
-    NewsList, QuoteHeader (perf summary line +
+    NewsList, NewsThumb (shared article thumbnail), QuoteHeader (perf summary line +
     add-to-list popover), DiscoverStrip, PriceChart (lightweight-charts, with **dropdown**
     chart-type / indicators / compare menus above a range-button row, a **Compare**
     multi-ticker % overlay, and a **crosshair hover readout** + period-change line),
@@ -68,6 +68,9 @@ Finance's information architecture and visual language. The UI defaults to the
   The baseline is the previous close on 1D/5D — so the intraday line matches the header's "Today"
   figure exactly — and the range's first bar otherwise. While comparing, the readout lists every
   overlaid ticker's % instead.
+- **News thumbnails** — article images from CafeF, lazily loaded and dropped silently if the CDN
+  fails. CafeF substitutes a generic house placeholder for imageless articles; the server filters
+  that out so those rows simply have no picture rather than a fake one.
 
 Watchlists and portfolios are persisted in the shared Azoth SQLite database (`~/.azoth/azoth.db`)
 under `web_*` tables — no separate datastore, no broker credentials.

@@ -760,6 +760,7 @@ async function handleNews(ticker: string) {
         publishedAt: parseDate(n.PublishDate ?? n.DeployDate),
         source: n.Source || "CafeF",
         snippet: n.SubTitle?.slice(0, 240),
+        image: newsImage(n.Image),
         type: "news",
       }))
       .filter((n) => n.title);
@@ -771,6 +772,16 @@ function absUrl(path?: string): string | undefined {
   if (!path) return undefined;
   if (/^https?:\/\//.test(path)) return path;
   return `https://cafef.vn${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+/**
+ * A CafeF article thumbnail, or undefined when there isn't a real one. CafeF
+ * substitutes a generic house placeholder (`News_image_default.png`) for articles
+ * with no image; showing it would read as a broken card rather than as "no image".
+ */
+function newsImage(src?: string): string | undefined {
+  if (!src || !/^https?:\/\//.test(src)) return undefined;
+  return /News_image_default/i.test(src) ? undefined : src;
 }
 
 function parseDate(input?: string): string | undefined {
@@ -794,6 +805,7 @@ async function aggregateNews(cacheKey: string, seeds: string[], limit: number) {
         publishedAt: parseDate(n.PublishDate ?? n.DeployDate),
         source: n.Source || "CafeF",
         snippet: n.SubTitle?.slice(0, 200),
+        image: newsImage(n.Image),
         type: "market",
       }))
       .filter((n) => {

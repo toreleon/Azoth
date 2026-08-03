@@ -13,7 +13,7 @@
   flex-direction: column;
 }
 
-/* Each row: logo + body */
+/* Each row: logo + body + optional thumbnail */
 .newslist__row {
   display: flex;
   align-items: flex-start;

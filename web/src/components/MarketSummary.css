@@ -18,8 +18,8 @@
 /* Each row: a stacked link (meta → headline → snippet) */
 .market-summary__row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 12px;
   padding: 12px;
   border-radius: var(--radius-sm);
   border-top: 1px solid var(--border-subtle);
@@ -38,6 +38,15 @@ a.market-summary__row:hover {
 
 .market-summary__row--skeleton {
   pointer-events: none;
+}
+
+/* Headline column, beside the optional thumbnail. */
+.market-summary__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* Meta line: source chip + relative time */
