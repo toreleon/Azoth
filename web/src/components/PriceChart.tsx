@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart,
   ColorType,
@@ -7,11 +7,20 @@ import {
   type IChartApi,
   type ISeriesApi,
   type IPriceLine,
+  type MouseEventParams,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { RANGE_KEYS } from "../lib/types";
 import type { RangeKey, OhlcvResponse, IndicatorsResponse } from "../lib/types";
 import { api } from "../lib/api";
+import {
+  dirOf,
+  fmtChangeVnd,
+  fmtChartTime,
+  fmtPct,
+  fmtPriceVnd,
+  rangeLabel,
+} from "../lib/format";
 import "./PriceChart.css";
 
 interface PriceChartProps {
@@ -69,6 +78,21 @@ type TimedPoint = { time: UTCTimestamp; value: number };
 
 /** Which toolbar dropdown is currently open (mutually exclusive). */
 type MenuKey = "type" | "indicators" | "compare" | null;
+
+/**
+ * What the crosshair is currently over, mirroring Google Finance's hover readout:
+ * the point's timestamp plus its price and move from the range baseline. While
+ * comparing, the price fields are null and `legend` carries each series' % instead.
+ */
+interface HoverPoint {
+  x: number;
+  y: number;
+  timeLabel: string;
+  value: number | null; // board price (thousand VND)
+  changeAbs: number | null;
+  changePct: number | null;
+  legend: { label: string; color: string; pct: number }[];
+}
 
 /** Small downward chevron for dropdown triggers. */
 function Caret() {
@@ -155,9 +179,46 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
   const overlayRefs = useRef<ISeriesApi<"Line">[]>([]);
   const priceLineRef = useRef<IPriceLine | null>(null);
   const compareSeriesRef = useRef<ISeriesApi<"Line">[]>([]);
+  /** Labels/colors for compareSeriesRef, pushed in the same order it is filled. */
+  const compareLabelsRef = useRef<{ label: string; color: string }[]>([]);
+
+  // Crosshair hover readout. The subscription is installed once, so it reads
+  // live values through a ref rather than closing over render-time state.
+  const [hover, setHover] = useState<HoverPoint | null>(null);
+  const hoverCtx = useRef<{ intraday: boolean; baseline: number | null }>({
+    intraday: false,
+    baseline: null,
+  });
 
   const intraday = bars?.intraday ?? false;
   const compareMode = compareTickers.length > 0;
+
+  /**
+   * Baseline the hover readout and period summary measure against: the previous
+   * close on intraday ranges (matching the dashed line and the header's "Today"),
+   * otherwise the first bar of the range.
+   */
+  const baseline = useMemo(() => {
+    const rows = bars?.bars ?? [];
+    if (rows.length === 0) return null;
+    const prev = range === "1D" || range === "5D" ? (bars?.prevClose ?? prevCloseHint) : null;
+    const base = prev ?? rows[0]!.close;
+    return Number.isFinite(base) && base !== 0 ? base : null;
+  }, [bars, range, prevCloseHint]);
+
+  /** Change over the whole selected range — Google Finance's "past 6 months" line. */
+  const periodChange = useMemo(() => {
+    const rows = bars?.bars ?? [];
+    if (rows.length < 2 || baseline == null) return null;
+    const last = rows[rows.length - 1]!.close;
+    if (!Number.isFinite(last)) return null;
+    return { abs: last - baseline, pct: (last / baseline - 1) * 100 };
+  }, [bars, baseline]);
+
+  // Keep the crosshair handler's view of the data current.
+  useEffect(() => {
+    hoverCtx.current = { intraday, baseline };
+  }, [intraday, baseline]);
 
   const addCompare = (raw: string) => {
     const t = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
@@ -232,9 +293,63 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
     const ro = new ResizeObserver(() => {
       if (chartRef.current && container) {
         chartRef.current.applyOptions({ width: container.clientWidth });
+        // Re-fit after a width change: the time scale otherwise keeps its old bar
+        // spacing and right-anchors, leaving the new width empty on the left.
+        chartRef.current.timeScale().fitContent();
       }
     });
     ro.observe(container);
+
+    // Hover readout: report the bar under the crosshair, priced against the
+    // range baseline. Series come from refs because this runs once.
+    const onCrosshair = (param: MouseEventParams) => {
+      const pt = param.point;
+      if (!pt || param.time == null || pt.x < 0 || pt.y < 0) {
+        setHover(null);
+        return;
+      }
+      const timeLabel = fmtChartTime(param.time as number, hoverCtx.current.intraday);
+      const read = (s: ISeriesApi<"Area" | "Candlestick" | "Line">): number | null => {
+        const d = param.seriesData.get(s) as unknown as
+          | { value?: number; close?: number }
+          | undefined;
+        const v = d?.value ?? d?.close;
+        return typeof v === "number" && Number.isFinite(v) ? v : null;
+      };
+
+      // While comparing, every series is a normalized % line — show them all.
+      if (compareSeriesRef.current.length > 0) {
+        const legend = compareSeriesRef.current.flatMap((s, i) => {
+          const pct = read(s);
+          const meta = compareLabelsRef.current[i];
+          return pct != null && meta ? [{ ...meta, pct }] : [];
+        });
+        setHover(
+          legend.length
+            ? { x: pt.x, y: pt.y, timeLabel, value: null, changeAbs: null, changePct: null, legend }
+            : null,
+        );
+        return;
+      }
+
+      const main = mainSeriesRef.current;
+      const value = main ? read(main) : null;
+      if (value == null) {
+        setHover(null);
+        return;
+      }
+      const base = hoverCtx.current.baseline;
+      setHover({
+        x: pt.x,
+        y: pt.y,
+        timeLabel,
+        value,
+        changeAbs: base == null ? null : value - base,
+        changePct: base == null ? null : (value / base - 1) * 100,
+        legend: [],
+      });
+    };
+    chart.subscribeCrosshairMove(onCrosshair);
 
     const mo = new MutationObserver(() => {
       setThemeVersion((v) => v + 1);
@@ -247,6 +362,7 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
     return () => {
       ro.disconnect();
       mo.disconnect();
+      chart.unsubscribeCrosshairMove(onCrosshair);
       overlayRefs.current = [];
       mainSeriesRef.current = null;
       priceLineRef.current = null;
@@ -267,6 +383,7 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
     const ctrl = new AbortController();
     setLoading(true);
     setError(false);
+    setHover(null); // the old readout refers to bars we're replacing
     Promise.all([
       api.ohlcv(ticker, range, ctrl.signal),
       api.indicators(ticker, range, ctrl.signal),
@@ -470,6 +587,7 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
       }
     }
     compareSeriesRef.current = [];
+    compareLabelsRef.current = [];
 
     if (!compareMode || !bars || bars.bars.length === 0) return;
     const c = readColors();
@@ -492,7 +610,7 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
       );
     };
 
-    const addNorm = (data: TimedPoint[], color: string) => {
+    const addNorm = (data: TimedPoint[], color: string, label: string) => {
       if (data.length === 0) return;
       const s = chart.addLineSeries({
         color,
@@ -504,20 +622,36 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
       });
       s.setData(data);
       compareSeriesRef.current.push(s);
+      // Kept index-aligned with compareSeriesRef so the hover readout can label rows.
+      compareLabelsRef.current.push({ label, color });
     };
 
     // Base ticker first (accent), then each compare from the palette.
-    addNorm(normalized(bars), c.accent);
+    addNorm(normalized(bars), c.accent, ticker);
     compareTickers.forEach((t, i) => {
       const ob = compareBars[t];
-      if (ob) addNorm(normalized(ob), COMPARE_PALETTE[i % COMPARE_PALETTE.length]!);
+      if (ob) addNorm(normalized(ob), COMPARE_PALETTE[i % COMPARE_PALETTE.length]!, t);
     });
 
     chart.timeScale().fitContent();
-  }, [compareMode, compareBars, bars, range, themeVersion, compareTickers]);
+  }, [compareMode, compareBars, bars, range, themeVersion, compareTickers, ticker]);
 
   const hasData = !!bars && bars.bars.length > 0;
   const overlaysDisabled = intraday;
+
+  // Place the readout beside the crosshair, kept inside the plot. It flips below
+  // the cursor near the top edge so it never clips out of the card.
+  const tipBelow = !!hover && hover.y < 72;
+  const tipStyle = hover
+    ? {
+        left: (() => {
+          const w = containerRef.current?.clientWidth ?? 0;
+          if (!w) return hover.x;
+          return Math.min(Math.max(hover.x, 84), Math.max(w - 84, 84));
+        })(),
+        top: tipBelow ? hover.y + 16 : hover.y - 14,
+      }
+    : undefined;
 
   return (
     <div className="gf-card pchart">
@@ -687,6 +821,15 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
         </div>
       </div>
 
+      {!compareMode && periodChange && (
+        <p className="pchart__period">
+          <span className={`pchart__period-val mono pchart__period-val--${dirOf(periodChange.pct)}`}>
+            {fmtChangeVnd(periodChange.abs)} ({fmtPct(periodChange.pct)})
+          </span>{" "}
+          <span className="text-muted">{rangeLabel(range)}</span>
+        </p>
+      )}
+
       {compareMode && (
         <div className="pchart__legend">
           <span className="pchart__legend-item">
@@ -714,8 +857,41 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
         </div>
       )}
 
-      <div className="pchart__chart-wrap">
+      <div className="pchart__chart-wrap" onMouseLeave={() => setHover(null)}>
         <div ref={containerRef} className="pchart__chart" />
+
+        {hover && (
+          <div
+            className={`pchart__tip${tipBelow ? " pchart__tip--below" : ""}`}
+            style={tipStyle}
+            role="status"
+            aria-live="off"
+          >
+            <div className="pchart__tip-time">{hover.timeLabel}</div>
+            {hover.legend.length > 0 ? (
+              <ul className="pchart__tip-list">
+                {hover.legend.map((l) => (
+                  <li className="pchart__tip-row" key={l.label}>
+                    <span className="pchart__tip-dot" style={{ background: l.color }} />
+                    <span className="pchart__tip-label">{l.label}</span>
+                    <span className={`pchart__tip-pct mono pchart__tip-pct--${dirOf(l.pct)}`}>
+                      {fmtPct(l.pct)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <>
+                <div className="pchart__tip-price mono">{fmtPriceVnd(hover.value)}</div>
+                {hover.changePct != null && (
+                  <div className={`pchart__tip-chg mono pchart__tip-chg--${dirOf(hover.changePct)}`}>
+                    {fmtChangeVnd(hover.changeAbs)} ({fmtPct(hover.changePct)})
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {loading && (
           <div className="pchart__overlay" role="status" aria-label="Loading chart">

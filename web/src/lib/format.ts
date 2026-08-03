@@ -109,6 +109,41 @@ export function fmtRelativeTime(iso: string | undefined): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/**
+ * Label a chart point's timestamp for the hover readout.
+ *
+ * Intraday bars are pre-shifted by +7h before they reach the chart so the axis
+ * reads Vietnam exchange time, so we must render in UTC — using local time here
+ * would shift them a second time.
+ */
+export function fmtChartTime(unixSec: number, intraday: boolean): string {
+  if (!Number.isFinite(unixSec)) return "";
+  const d = new Date(unixSec * 1000);
+  return d.toLocaleString("en-US", {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    ...(intraday
+      ? { hour: "numeric", minute: "2-digit", hour12: false }
+      : { year: "numeric" }),
+  });
+}
+
+/** Human label for a range, used as "past 6 months" in the period summary. */
+export function rangeLabel(range: string): string {
+  const map: Record<string, string> = {
+    "1D": "today",
+    "5D": "past 5 days",
+    "1M": "past month",
+    "6M": "past 6 months",
+    YTD: "year to date",
+    "1Y": "past year",
+    "5Y": "past 5 years",
+    MAX: "all time",
+  };
+  return map[range] ?? range;
+}
+
 export type Direction = "up" | "down" | "flat";
 
 /** Sign of a change → semantic direction. */
