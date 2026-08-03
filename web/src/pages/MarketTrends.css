@@ -26,10 +26,17 @@
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--border-subtle);
+  /* The strip is wider than a phone; let it scroll rather than push the page. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.markets__tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .markets__tab {
   position: relative;
+  flex: none;
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 500;
@@ -115,10 +122,21 @@
 }
 
 .markets__th-price,
-.markets__price {
+.markets__price,
+.markets__th-leaders,
+.markets__leaders {
   flex: none;
   width: 132px;
   text-align: right;
+}
+
+/* Constituent tickers standing in for the price column on the sectors tab. */
+.markets__leaders {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .markets__th-change,
@@ -247,6 +265,8 @@
 
   .markets__th-price,
   .markets__price,
+  .markets__th-leaders,
+  .markets__leaders,
   .markets__skel-price {
     width: 108px;
   }
