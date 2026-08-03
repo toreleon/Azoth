@@ -1,5 +1,4 @@
 import "./NewsList.css";
-import NewsThumb from "./NewsThumb";
 import type { NewsItem } from "../lib/types";
 import { fmtRelativeTime } from "../lib/format";
 
@@ -38,7 +37,6 @@ function NewsRowInner({ item, compact }: { item: NewsItem; compact?: boolean }) 
           <div className="newslist__snippet">{item.snippet}</div>
         ) : null}
       </div>
-      <NewsThumb src={item.image} />
     </>
   );
 }
