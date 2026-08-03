@@ -245,6 +245,7 @@ export interface NewsItem {
   publishedAt?: string; // ISO
   source?: string;
   snippet?: string;
+  image?: string; // article thumbnail; absent when the source has no real one
   type?: string;
 }
 
