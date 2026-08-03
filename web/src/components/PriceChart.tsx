@@ -482,13 +482,15 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
     if (range === "1D" || range === "5D") {
       const prev = bars?.prevClose ?? prevCloseHint;
       if (prev != null && Number.isFinite(prev) && mainSeriesRef.current) {
+        // Google Finance labels this line inline at the top-right of the plot
+        // ("Prev. close $333.43") rather than on the price axis.
         priceLineRef.current = mainSeriesRef.current.createPriceLine({
           price: prev,
           color: c.muted,
           lineStyle: LineStyle.Dashed,
           lineWidth: 1,
-          axisLabelVisible: true,
-          title: "Prev close",
+          axisLabelVisible: false,
+          title: "",
         });
       }
     }
@@ -638,6 +640,12 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
 
   const hasData = !!bars && bars.bars.length > 0;
   const overlaysDisabled = intraday;
+
+  // The dashed previous-close line only exists on intraday ranges; label it inline.
+  const prevCloseShown =
+    !compareMode && (range === "1D" || range === "5D")
+      ? (bars?.prevClose ?? prevCloseHint ?? null)
+      : null;
 
   // Place the readout beside the crosshair, kept inside the plot. It flips below
   // the cursor near the top edge so it never clips out of the card.
@@ -806,19 +814,6 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
           </div>
         </div>
 
-        <div className="pchart__group" role="group" aria-label="Chart range">
-          {RANGE_KEYS.map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={`gf-pill pchart__pill${range === r ? " gf-pill--active" : ""}`}
-              aria-pressed={range === r}
-              onClick={() => setRange(r)}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
       </div>
 
       {!compareMode && periodChange && (
@@ -859,6 +854,12 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
 
       <div className="pchart__chart-wrap" onMouseLeave={() => setHover(null)}>
         <div ref={containerRef} className="pchart__chart" />
+
+        {hasData && prevCloseShown != null && (
+          <span className="pchart__prevclose text-muted">
+            Prev. close <span className="mono">{fmtPriceVnd(prevCloseShown)}</span>
+          </span>
+        )}
 
         {hover && (
           <div
@@ -906,6 +907,21 @@ export default function PriceChart({ ticker, prevCloseHint }: PriceChartProps) {
         {!loading && !error && !hasData && (
           <div className="pchart__empty">No price data</div>
         )}
+      </div>
+
+      {/* Google Finance puts the range buttons under the plot, not in the toolbar. */}
+      <div className="pchart__ranges" role="group" aria-label="Chart range">
+        {RANGE_KEYS.map((r) => (
+          <button
+            key={r}
+            type="button"
+            className={`gf-pill pchart__pill${range === r ? " gf-pill--active" : ""}`}
+            aria-pressed={range === r}
+            onClick={() => setRange(r)}
+          >
+            {r}
+          </button>
+        ))}
       </div>
     </div>
   );

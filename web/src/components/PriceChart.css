@@ -353,3 +353,22 @@
 .pchart__tip-pct--flat {
   color: var(--flat);
 }
+
+/* ---- Range row (Google Finance places it under the plot) ---------------- */
+.pchart__ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+/* ---- Inline previous-close label ---------------------------------------- */
+.pchart__prevclose {
+  position: absolute;
+  top: 6px;
+  right: 64px; /* clear of the price axis */
+  z-index: 4;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
