@@ -33,8 +33,9 @@ Finance's information architecture and visual language. The UI defaults to the
   - `pages/Portfolio.tsx` — a manually-entered portfolio (Google-Finance style, **not**
     broker-linked): holdings table with per-position and total gain/loss, day change, and weights;
     add/edit/remove holdings; create/rename/delete and switch between multiple portfolios.
-  - `pages/MarketTrends.tsx` — market-trends tabs (Active / Gainers / Losers / Indexes) with a
-    Liquid/VN30 universe toggle.
+  - `pages/MarketTrends.tsx` — market-trends tabs (Active / Gainers / Losers / Indexes / Sectors)
+    with a Liquid/VN30 universe toggle on the mover tabs. The tab strip scrolls horizontally on
+    phones rather than widening the page.
   - `components/` — TopNav (search + theme toggle), Sidebar (persistent watchlists + portfolios
     with inline add/remove, plus a **SectorRail** mini index-list of stock sectors),
     ResearchPanel, MarketStrip (compact IndexCards), MarketSummary (home news block),
@@ -58,8 +59,9 @@ Finance's information architecture and visual language. The UI defaults to the
 - **Manual portfolios** — track holdings (quantity + average cost) entered by hand and see live
   market value, total and per-position gain/loss, day change, and weights. Portfolios are
   **manual-entry only** and are not linked to any broker account.
-- **Market trends** — dedicated pages for the most active stocks, top gainers/losers, and the
-  market indices, with a liquid/VN30 universe toggle.
+- **Market trends** — dedicated pages for the most active stocks, top gainers/losers, the
+  market indices, and the stock sectors ranked by average daily move, with a liquid/VN30
+  universe toggle on the mover tabs.
 - **Add-to-list from the stock header** and a **Discover** strip on the home page for quick
   navigation into sectors and bluechips.
 - **Chart hover readout** — moving the crosshair over a stock or index chart shows that point's

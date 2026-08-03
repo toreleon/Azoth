@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api";
-import type { IndexSnapshot, MoverRow } from "../lib/types";
+import type { IndexSnapshot, MoverRow, SectorRow } from "../lib/types";
 import { fmtPriceVnd } from "../lib/format";
 import Sparkline from "../components/Sparkline";
 import ChangeBadge from "../components/ChangeBadge";
 import IndexCard from "../components/IndexCard";
 import "./MarketTrends.css";
 
-const KINDS = ["active", "gainers", "losers", "indexes"] as const;
+const KINDS = ["active", "gainers", "losers", "indexes", "sectors"] as const;
 type Kind = (typeof KINDS)[number];
 
 const TABS: { key: Kind; label: string }[] = [
@@ -16,6 +16,7 @@ const TABS: { key: Kind; label: string }[] = [
   { key: "gainers", label: "Gainers" },
   { key: "losers", label: "Losers" },
   { key: "indexes", label: "Indexes" },
+  { key: "sectors", label: "Sectors" },
 ];
 
 const CAPTION: Record<Kind, string> = {
@@ -23,6 +24,7 @@ const CAPTION: Record<Kind, string> = {
   gainers: "Biggest gainers today",
   losers: "Biggest losers today",
   indexes: "Vietnam market indices",
+  sectors: "Stock sectors by average daily move",
 };
 
 type Universe = "default" | "vn30";
@@ -38,6 +40,7 @@ export default function MarketTrends() {
   const [universe, setUniverse] = useState<Universe>("default");
   const [rows, setRows] = useState<MoverRow[] | null>(null);
   const [indices, setIndices] = useState<IndexSnapshot[] | null>(null);
+  const [sectors, setSectors] = useState<SectorRow[] | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -49,6 +52,14 @@ export default function MarketTrends() {
       api
         .indices(ac.signal)
         .then((r) => setIndices(r.indices))
+        .catch((e) => {
+          if (e?.name !== "AbortError") setError(true);
+        });
+    } else if (kind === "sectors") {
+      setSectors(null);
+      api
+        .sectors(ac.signal)
+        .then((r) => setSectors(r.sectors))
         .catch((e) => {
           if (e?.name !== "AbortError") setError(true);
         });
@@ -87,6 +98,8 @@ export default function MarketTrends() {
 
       {kind === "indexes" ? (
         <IndexesView indices={indices} error={error} />
+      ) : kind === "sectors" ? (
+        <SectorsView sectors={sectors} error={error} />
       ) : (
         <>
           <div className="markets__toolbar">
@@ -153,6 +166,55 @@ function MoversView({ rows, error }: { rows: MoverRow[] | null; error: boolean }
               <span className="mono markets__price">{fmtPriceVnd(row.last)}</span>
               <span className="markets__change">
                 <ChangeBadge pct={row.change_pct} size="sm" />
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SectorsView({ sectors, error }: { sectors: SectorRow[] | null; error: boolean }) {
+  return (
+    <section className="gf-card markets__table">
+      <div className="markets__thead">
+        <span className="markets__th markets__th-sym">Sector</span>
+        <span className="markets__th markets__th-spark" aria-hidden="true" />
+        <span className="markets__th markets__th-leaders">Leaders</span>
+        <span className="markets__th markets__th-change">Change</span>
+      </div>
+
+      {error ? (
+        <p className="markets__msg text-muted">Couldn't load sectors.</p>
+      ) : sectors == null ? (
+        <div className="markets__list">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div className="markets__skel-row" key={i}>
+              <div className="markets__skel-sym">
+                <span className="gf-skeleton markets__skel-ticker" />
+              </div>
+              <span className="gf-skeleton markets__skel-spark" />
+              <span className="gf-skeleton markets__skel-price" />
+              <span className="gf-skeleton markets__skel-badge" />
+            </div>
+          ))}
+        </div>
+      ) : sectors.length === 0 ? (
+        <p className="markets__msg text-muted">No sectors to show.</p>
+      ) : (
+        <div className="markets__list">
+          {sectors.map((s) => (
+            <Link key={s.key} to={`/sector/${s.key}`} className="markets__row">
+              <span className="markets__sym">
+                <span className="markets__ticker">{s.name}</span>
+              </span>
+              <span className="markets__spark">
+                <Sparkline data={s.spark} width={96} height={30} fill />
+              </span>
+              <span className="markets__leaders">{s.leaders.join(" · ")}</span>
+              <span className="markets__change">
+                <ChangeBadge pct={s.change_pct} size="sm" />
               </span>
             </Link>
           ))}
