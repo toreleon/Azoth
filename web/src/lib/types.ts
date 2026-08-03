@@ -151,6 +151,8 @@ export interface QuoteStats {
   bvps_thousand_vnd: number | null;
   roe_pct: number | null;
   roa_pct: number | null;
+  /** Year the EPS/BVPS/ROE/ROA above were reported for — CafeF's ratios can lag. */
+  ratios_year: number | null;
   dividend_yield_pct: number | null;
   shares_outstanding: number | null;
   foreign_ownership_pct: number | null;

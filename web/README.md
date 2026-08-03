@@ -74,6 +74,18 @@ Finance's information architecture and visual language. The UI defaults to the
   fails. CafeF substitutes a generic house placeholder for imageless articles; the server filters
   that out so those rows simply have no picture rather than a fake one.
 
+### A note on CafeF's ratio periods
+
+CafeF returns a bucket for every period but fills unreported ones with **zeros across every
+ratio** — VCB's 2025 and 2023 buckets carry EPS, BVPS, ROE, ROA *and* P/E at 0, which cannot be
+real for a company that has a share price. Banks lag like this routinely.
+
+The server therefore treats a bucket whose ratios are *all* zero as "not reported": the stats
+grid falls back to the newest period CafeF has actually filled in (and labels it, e.g. `EPS ’22`,
+so a lagging figure isn't read as current), and the Financials tab omits those periods instead of
+charting a plunge to zero. The test is per bucket, not per metric, so a genuine zero — a
+debt-free company's Debt/Assets — still comes through.
+
 Watchlists and portfolios are persisted in the shared Azoth SQLite database (`~/.azoth/azoth.db`)
 under `web_*` tables — no separate datastore, no broker credentials.
 
@@ -135,7 +147,7 @@ pnpm typecheck # type-check the frontend
 | `GET /api/indicators/:ticker?range=` | SMA/EMA/Bollinger/RSI/MACD |
 | `GET /api/news/:ticker` | Ticker news |
 | `GET /api/about/:ticker` | Company profile + related stocks |
-| `GET /api/financials/:ticker?period=annual` | Annual key metrics (EPS, BVPS, ROE, ROA, margins, P/E) from CafeF |
+| `GET /api/financials/:ticker?period=annual` | Annual key metrics (EPS, BVPS, ROE, ROA, margins, P/E) from CafeF. Periods CafeF hasn't reported are omitted, not charted as zero |
 
 ### Persistent (SQLite-backed `web_*` tables)
 

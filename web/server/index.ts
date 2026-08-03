@@ -31,6 +31,7 @@ import {
   getTickerNews,
   getCompanyIntro,
   getFinancialRatios,
+  type CafefRatioBucket,
 } from "../../src/data/sources/cafef.js";
 import { TICKER_UNIVERSES } from "../../src/tools/discover.js";
 import {
@@ -630,6 +631,7 @@ async function handleQuote(ticker: string) {
       bvps_thousand_vnd: fund.bvps,
       roe_pct: fund.roe,
       roa_pct: fund.roa,
+      ratios_year: fund.ratiosYear,
       dividend_yield_pct: fund.divYield,
       shares_outstanding: fund.shares,
       foreign_ownership_pct: fund.foreignOwn,
@@ -681,10 +683,13 @@ async function fundamentalsBundle(ticker: string): Promise<FundBundle> {
       latestRatio(ticker, RATIOS.FOREIGN_OWNERSHIP),
       getCompanyProfile(ticker).catch(() => null),
       getCompanyIntro(ticker).catch(() => null),
-      getFinancialRatios(ticker, "QUY", 1).catch(() => []),
+      getFinancialRatios(ticker, "QUY", 4).catch(() => []),
     ]);
+    // Newest-first, so the first reported bucket is the latest one CafeF has
+    // actually filled in. Banks routinely lag a year or two behind.
+    const reported = cafef.find(isReportedPeriod);
     const latestCafef: Record<string, number> = {};
-    for (const v of cafef[0]?.Value ?? []) latestCafef[v.Code] = v.Value;
+    for (const v of reported?.Value ?? []) latestCafef[v.Code] = v.Value;
     return {
       company: {
         nameVi: profile?.vnName,
@@ -711,6 +716,8 @@ async function fundamentalsBundle(ticker: string): Promise<FundBundle> {
       bvps: latestCafef.BV ?? null,
       roe: latestCafef.ROE ?? null,
       roa: latestCafef.ROA ?? null,
+      // Which year those four came from — they can lag, so the UI labels them.
+      ratiosYear: reported?.Year ?? null,
       divYield: round(divYield, 2),
       shares: round(shares, 0),
       foreignOwn: round(foreignOwn, 2),
@@ -1008,6 +1015,17 @@ async function handleSearch(q: string) {
 // Financials (quarterly / annual key metrics from CafeF)
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether CafeF actually reported a ratio period. It returns a bucket for every
+ * period but fills unreported ones with zeros across the board — VCB's 2025 and
+ * 2023 buckets carry EPS, BV, ROE, ROA *and* P/E at 0, which cannot be real for
+ * a company with a share price. Judging this per bucket rather than per metric
+ * keeps a genuine zero (a debt-free company's Debt/Assets) intact.
+ */
+function isReportedPeriod(bucket: CafefRatioBucket): boolean {
+  return (bucket.Value ?? []).some((v) => Number.isFinite(v.Value) && v.Value !== 0);
+}
+
 const CAFEF_METRICS: { key: string; code: string; label: string; unit: "kVND" | "%" | "x" }[] = [
   { key: "eps", code: "EPS", label: "EPS", unit: "kVND" },
   { key: "bvps", code: "BV", label: "BVPS", unit: "kVND" },
@@ -1027,9 +1045,10 @@ async function handleFinancials(ticker: string, period: string) {
     () => getFinancialRatios(ticker, reportType, 8).catch(() => []),
   );
   // CafeF returns newest-first; reverse to oldest→newest for charts/tables.
+  // Unreported periods are dropped rather than charted as a plunge to zero.
   // NB: CafeF's ratios dataset is annual (Quater is 0), so we label by year and
   // only prefix a quarter when CafeF actually reports one (1–4).
-  const ordered = [...buckets].reverse();
+  const ordered = buckets.filter(isReportedPeriod).reverse();
   const hasQuarter = (q: number | undefined): q is number => q != null && q >= 1 && q <= 4;
   const columns = ordered.map((b) => ({
     label: hasQuarter(b.Quater) ? `Q${b.Quater} ${b.Year ?? ""}`.trim() : `${b.Year ?? ""}`,
