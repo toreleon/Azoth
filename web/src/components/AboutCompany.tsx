@@ -33,14 +33,17 @@ export default function AboutCompany({ company }: { company: CompanyInfo }) {
   const isLong = !!description && description.length > CLAMP_THRESHOLD;
   const clamped = isLong && !expanded;
 
-  // Google Finance lists these as a small facts grid under the description.
+  // Google Finance's About grid reads: CEO, Employees, Founded / Headquarters,
+  // Sector, Website. VNDirect publishes no CEO, so that row is simply absent;
+  // Exchange and Phone are VN-useful extras it doesn't carry.
   const facts: { label: string; value: string }[] = [];
   const founded = fmtFounded(company.founded);
   if (founded) facts.push({ label: "Founded", value: founded });
-  if (company.address) facts.push({ label: "Headquarters", value: company.address });
   if (company.employees) {
     facts.push({ label: "Employees", value: company.employees.toLocaleString("en-US") });
   }
+  if (company.address) facts.push({ label: "Headquarters", value: company.address });
+  if (company.sector) facts.push({ label: "Sector", value: company.sector });
   if (company.floor) facts.push({ label: "Exchange", value: company.floor });
   if (company.phone) facts.push({ label: "Phone", value: company.phone });
 
@@ -81,11 +84,9 @@ export default function AboutCompany({ company }: { company: CompanyInfo }) {
         </dl>
       )}
 
-      {(company.sector || company.floor || company.website) && (
+      {company.website && (
         <div className="about__meta">
-          {company.sector && <span className="gf-chip">{company.sector}</span>}
-          {company.floor && <span className="gf-chip">{company.floor}</span>}
-          {company.website && (
+          {(
             <a
               className="gf-chip about__link"
               href={normalizeUrl(company.website)}

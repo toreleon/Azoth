@@ -39,7 +39,7 @@ Finance's information architecture and visual language. The UI defaults to the
   - `components/` — TopNav (search + theme toggle), Sidebar (persistent watchlists + portfolios
     with inline add/remove, plus a **SectorRail** mini index-list of stock sectors),
     ResearchPanel, MarketStrip (compact IndexCards), MarketSummary (home news block),
-    NewsList, NewsThumb (shared article thumbnail), QuoteHeader (perf summary line +
+    NewsList, QuoteHeader (perf summary line +
     add-to-list popover), DiscoverStrip, PriceChart (lightweight-charts, with **dropdown**
     chart-type / indicators / compare menus above a range-button row, a **Compare**
     multi-ticker % overlay, and a **crosshair hover readout** + period-change line),
@@ -70,9 +70,11 @@ Finance's information architecture and visual language. The UI defaults to the
   The baseline is the previous close on 1D/5D — so the intraday line matches the header's "Today"
   figure exactly — and the range's first bar otherwise. While comparing, the readout lists every
   overlaid ticker's % instead.
-- **News thumbnails** — article images from CafeF, lazily loaded and dropped silently if the CDN
-  fails. CafeF substitutes a generic house placeholder for imageless articles; the server filters
-  that out so those rows simply have no picture rather than a fake one.
+- **News rows** follow Google Finance's shape: a small round source icon, then source · relative
+  time, then the headline. GF puts the publisher's favicon in that icon; CafeF serves no favicon
+  (`/favicon.ico` is a 404), and every article we carry comes from CafeF anyway, so the icon would
+  repeat rather than distinguish. It holds the source's initial instead — the same honest stand-in
+  the stock header uses for company logos.
 
 ### A note on CafeF's ratio periods
 

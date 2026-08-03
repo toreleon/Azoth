@@ -27,8 +27,8 @@ export default function StatsGrid({ quote }: StatsGridProps) {
     { label: "Ceiling", value: fmtPriceVnd(quote.ceiling), tone: "ceiling" },
     { label: "Floor", value: fmtPriceVnd(quote.floor), tone: "floor" },
     { label: "Volume", value: fmtBigNum(s.volume) },
-    { label: "Avg volume", value: fmtBigNum(s.avg_vol) },
-    { label: "Market cap", value: fmtBigVnd(s.market_cap_vnd) },
+    { label: "Avg. vol", value: fmtBigNum(s.avg_vol) },
+    { label: "Mkt cap", value: fmtBigVnd(s.market_cap_vnd) },
     { label: "P/E ratio", value: fmtNum(s.pe) },
     { label: "P/B ratio", value: fmtNum(s.pb) },
     { label: "P/S ratio", value: fmtNum(s.ps) },
@@ -36,16 +36,16 @@ export default function StatsGrid({ quote }: StatsGridProps) {
     { label: `BVPS${fy}`, value: fmtPriceVnd(s.bvps_thousand_vnd) },
     { label: `ROE${fy}`, value: fmtPctPlain(s.roe_pct) },
     { label: `ROA${fy}`, value: fmtPctPlain(s.roa_pct) },
-    { label: "Div yield", value: fmtPctPlain(s.dividend_yield_pct) },
+    { label: "Dividend yield", value: fmtPctPlain(s.dividend_yield_pct) },
     { label: "Foreign own", value: fmtPctPlain(s.foreign_ownership_pct) },
-    { label: "Shares out", value: fmtBigNum(s.shares_outstanding) },
+    { label: "Shares outstanding", value: fmtBigNum(s.shares_outstanding) },
     { label: "52-wk high", value: fmtPriceVnd(s.week52_high) },
     { label: "52-wk low", value: fmtPriceVnd(s.week52_low) },
   ];
 
   return (
+    // Google Finance runs this grid bare under the tabs, with no section heading.
     <section className="gf-card statsgrid">
-      <h3 className="statsgrid__heading">Stats</h3>
       <div className="statsgrid__grid">
         {cells.map((c) => (
           <div className="statsgrid__row" key={c.label}>

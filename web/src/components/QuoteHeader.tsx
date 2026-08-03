@@ -185,9 +185,11 @@ export default function QuoteHeader({ quote }: Props) {
       <div className="qh__price-row">
         <span className="qh__price mono">{fmtPriceVnd(quote.last)}</span>
         <span className={`qh__change qh__change--${dir}`}>
+          {/* Google Finance leads with the percent and puts the absolute in
+              parentheses — "−7.35% (−24.52)" — not the other way round. */}
           <ChangeBadge
             pct={quote.change_pct}
-            text={`${fmtChangeVnd(quote.change_abs)} (${fmtPct(quote.change_pct)})`}
+            text={`${fmtPct(quote.change_pct)} (${fmtChangeVnd(quote.change_abs)})`}
             size="lg"
           />
           <span className="qh__today">Today</span>

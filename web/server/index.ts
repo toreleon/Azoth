@@ -698,7 +698,10 @@ async function fundamentalsBundle(ticker: string): Promise<FundBundle> {
         website: profile?.website,
         summary: profile?.vnSummary?.slice(0, 800),
         intro: intro?.Intro?.slice(0, 800),
-        sector: intro?.CategoryName as string | undefined,
+        // Google Finance lists a Sector in its About grid. CafeF's CompanyIntro
+        // has no such field (it returns Name/Symbol/Logo/CenterId/Intro/Web/…),
+        // so this reads our own sector basket — the one behind /sector/:key.
+        sector: sectorOf(ticker)?.name,
         // Google Finance's About block lists founded / HQ / employees.
         // NB: the profile also carries a `logo` URL, but VNDirect's CDN is
         // hotlink-protected (403 from any other origin), so we don't surface it —
@@ -767,7 +770,6 @@ async function handleNews(ticker: string) {
         publishedAt: parseDate(n.PublishDate ?? n.DeployDate),
         source: n.Source || "CafeF",
         snippet: n.SubTitle?.slice(0, 240),
-        image: newsImage(n.Image),
         type: "news",
       }))
       .filter((n) => n.title);
@@ -779,16 +781,6 @@ function absUrl(path?: string): string | undefined {
   if (!path) return undefined;
   if (/^https?:\/\//.test(path)) return path;
   return `https://cafef.vn${path.startsWith("/") ? "" : "/"}${path}`;
-}
-
-/**
- * A CafeF article thumbnail, or undefined when there isn't a real one. CafeF
- * substitutes a generic house placeholder (`News_image_default.png`) for articles
- * with no image; showing it would read as a broken card rather than as "no image".
- */
-function newsImage(src?: string): string | undefined {
-  if (!src || !/^https?:\/\//.test(src)) return undefined;
-  return /News_image_default/i.test(src) ? undefined : src;
 }
 
 function parseDate(input?: string): string | undefined {
@@ -812,7 +804,6 @@ async function aggregateNews(cacheKey: string, seeds: string[], limit: number) {
         publishedAt: parseDate(n.PublishDate ?? n.DeployDate),
         source: n.Source || "CafeF",
         snippet: n.SubTitle?.slice(0, 200),
-        image: newsImage(n.Image),
         type: "market",
       }))
       .filter((n) => {
@@ -843,6 +834,12 @@ async function handleSectorNews(key: string) {
 // ---------------------------------------------------------------------------
 // Stock sectors (home sidebar — mini index list)
 // ---------------------------------------------------------------------------
+
+/** Which sector basket a ticker belongs to, if any. */
+function sectorOf(ticker: string): { key: string; name: string } | undefined {
+  const t = ticker.toUpperCase();
+  return SECTOR_MAP.find((s) => s.tickers.includes(t));
+}
 
 const SECTOR_MAP: { key: string; name: string; tickers: string[] }[] = [
   { key: "banks", name: "Banks", tickers: ["VCB", "BID", "CTG", "TCB", "MBB", "ACB", "VPB", "STB", "HDB"] },
