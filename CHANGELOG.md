@@ -1,5 +1,11 @@
 # @toreleon/azoth
 
+## 0.1.4
+
+### Patch Changes
+
+- 1e01fd7: Expand the VNDirect `CompanyProfile` type with fields the endpoint already returns: `enAddress`, `logo`, `employees` and `branches`. Type-only, additive — existing consumers are unaffected.
+
 ## 0.1.3
 
 ### Patch Changes
