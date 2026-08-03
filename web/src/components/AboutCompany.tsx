@@ -18,12 +18,31 @@ function hostnameOf(raw: string): string {
   }
 }
 
+/** Company profile dates arrive as ISO-ish strings; show just the year-month-day. */
+function fmtFounded(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
 export default function AboutCompany({ company }: { company: CompanyInfo }) {
   const [expanded, setExpanded] = useState(false);
 
   const description = company.intro || company.summary;
   const isLong = !!description && description.length > CLAMP_THRESHOLD;
   const clamped = isLong && !expanded;
+
+  // Google Finance lists these as a small facts grid under the description.
+  const facts: { label: string; value: string }[] = [];
+  const founded = fmtFounded(company.founded);
+  if (founded) facts.push({ label: "Founded", value: founded });
+  if (company.address) facts.push({ label: "Headquarters", value: company.address });
+  if (company.employees) {
+    facts.push({ label: "Employees", value: company.employees.toLocaleString("en-US") });
+  }
+  if (company.floor) facts.push({ label: "Exchange", value: company.floor });
+  if (company.phone) facts.push({ label: "Phone", value: company.phone });
 
   return (
     <section className="gf-card about">
@@ -49,6 +68,17 @@ export default function AboutCompany({ company }: { company: CompanyInfo }) {
         <p className="about__empty text-muted">
           No company description available.
         </p>
+      )}
+
+      {facts.length > 0 && (
+        <dl className="about__facts">
+          {facts.map((f) => (
+            <div className="about__fact" key={f.label}>
+              <dt className="about__fact-label">{f.label}</dt>
+              <dd className="about__fact-value">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
       )}
 
       {(company.sector || company.floor || company.website) && (

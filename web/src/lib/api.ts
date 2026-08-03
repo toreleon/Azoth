@@ -5,6 +5,8 @@ import type {
   AboutResponse,
   FinancialsResponse,
   HoldingInput,
+  IndexDetailResponse,
+  IndexOhlcvResponse,
   IndicatorsResponse,
   IndicesResponse,
   MarketNewsResponse,
@@ -17,6 +19,7 @@ import type {
   QuoteResponse,
   RangeKey,
   SearchResponse,
+  SectorDetailResponse,
   SectorsResponse,
   WatchlistDetail,
   WatchlistMeta,
@@ -78,6 +81,21 @@ async function mutate<T>(
 
 export const api = {
   indices: (signal?: AbortSignal) => getJson<IndicesResponse>("/api/indices", signal),
+
+  sector: (key: string, signal?: AbortSignal) =>
+    getJson<SectorDetailResponse>(`/api/sector/${encodeURIComponent(key)}`, signal),
+
+  sectorNews: (key: string, signal?: AbortSignal) =>
+    getJson<MarketNewsResponse>(`/api/sector/${encodeURIComponent(key)}/news`, signal),
+
+  index: (symbol: string, signal?: AbortSignal) =>
+    getJson<IndexDetailResponse>(`/api/index/${encodeURIComponent(symbol)}`, signal),
+
+  indexOhlcv: (symbol: string, range: RangeKey, signal?: AbortSignal) =>
+    getJson<IndexOhlcvResponse>(
+      `/api/index/${encodeURIComponent(symbol)}/ohlcv?range=${range}`,
+      signal,
+    ),
 
   movers: (kind: "gainers" | "losers" | "active", universe = "vn30", signal?: AbortSignal) =>
     getJson<MoversResponse>(`/api/movers?kind=${kind}&universe=${encodeURIComponent(universe)}`, signal),

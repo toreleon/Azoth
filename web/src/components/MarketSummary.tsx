@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import NewsThumb from "./NewsThumb";
 import type { NewsItem } from "../lib/types";
 import { fmtRelativeTime } from "../lib/format";
 import "./MarketSummary.css";
@@ -40,11 +41,13 @@ export default function MarketSummary() {
         <div className="market-summary__rows">
           {Array.from({ length: 6 }).map((_, i) => (
             <div className="market-summary__row market-summary__row--skeleton" key={i}>
-              <div className="market-summary__meta">
-                <span className="gf-skeleton market-summary__sk-line market-summary__sk-line--chip" />
+              <div className="market-summary__text">
+                <div className="market-summary__meta">
+                  <span className="gf-skeleton market-summary__sk-line market-summary__sk-line--chip" />
+                </div>
+                <span className="gf-skeleton market-summary__sk-line market-summary__sk-line--title" />
+                <span className="gf-skeleton market-summary__sk-line market-summary__sk-line--snippet" />
               </div>
-              <span className="gf-skeleton market-summary__sk-line market-summary__sk-line--title" />
-              <span className="gf-skeleton market-summary__sk-line market-summary__sk-line--snippet" />
             </div>
           ))}
         </div>
@@ -58,18 +61,21 @@ export default function MarketSummary() {
             const rel = fmtRelativeTime(item.publishedAt);
             const inner = (
               <>
-                {item.source || rel ? (
-                  <div className="market-summary__meta">
-                    {item.source ? (
-                      <span className="gf-chip market-summary__source">{item.source}</span>
-                    ) : null}
-                    {rel ? <span className="market-summary__time">{rel}</span> : null}
-                  </div>
-                ) : null}
-                <div className="market-summary__headline">{item.title}</div>
-                {item.snippet ? (
-                  <div className="market-summary__snippet">{item.snippet}</div>
-                ) : null}
+                <div className="market-summary__text">
+                  {item.source || rel ? (
+                    <div className="market-summary__meta">
+                      {item.source ? (
+                        <span className="gf-chip market-summary__source">{item.source}</span>
+                      ) : null}
+                      {rel ? <span className="market-summary__time">{rel}</span> : null}
+                    </div>
+                  ) : null}
+                  <div className="market-summary__headline">{item.title}</div>
+                  {item.snippet ? (
+                    <div className="market-summary__snippet">{item.snippet}</div>
+                  ) : null}
+                </div>
+                <NewsThumb src={item.image} />
               </>
             );
             return item.url ? (

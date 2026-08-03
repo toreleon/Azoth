@@ -62,6 +62,9 @@
 .topnav__search {
   position: relative;
   flex: 1;
+  /* Without this the input's placeholder sets an intrinsic min-width and the
+     whole bar overflows the viewport on narrow screens. */
+  min-width: 0;
   max-width: 720px;
   margin: 0 auto;
 }
@@ -137,6 +140,30 @@
   background: var(--surface-hover);
 }
 
+.topnav__results-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topnav__results-label {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Ticker + company name share the flexible middle column. */
+.topnav__result-id {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
 .topnav__result-ticker {
   flex: none;
   min-width: 48px;
@@ -147,12 +174,35 @@
 
 .topnav__result-name {
   flex: 1;
-  min-width: 0;
+  /* Keep a readable stub rather than collapsing to "Vin…" when the price
+     column claims the row. */
+  min-width: 90px;
   color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Narrow viewports: the exchange chip is the first thing to go. */
+@media (max-width: 900px) {
+  .topnav__result-exch {
+    display: none;
+  }
+}
+
+/* Inline price + change, Google-Finance style. */
+.topnav__result-quote {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.topnav__result-price {
+  font-size: 13px;
+  color: var(--text);
 }
 
 .topnav__result-exch {
@@ -195,11 +245,31 @@
     padding: 0 12px;
     gap: 10px;
   }
-  .topnav__wordmark-sub,
-  .topnav__beta {
+  .topnav__wordmark-sub {
+    display: none;
+  }
+  /* Needs the extra class: .gf-chip also sets display and would otherwise win. */
+  .topnav__brand .topnav__beta {
     display: none;
   }
   .topnav__signin {
     padding: 0 14px;
+  }
+  /* Shorten the placeholder's footprint so the field can go really narrow. */
+  .topnav__search-field {
+    padding: 0 12px;
+  }
+}
+
+/* Phone widths: drop Settings and the wordmark so search keeps usable room. */
+@media (max-width: 480px) {
+  .topnav__settings {
+    display: none;
+  }
+  .topnav__wordmark {
+    display: none;
+  }
+  .topnav__search {
+    min-width: 120px;
   }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { SectorRow } from "../lib/types";
 import { dirOf, fmtPct } from "../lib/format";
@@ -6,10 +7,9 @@ import Sparkline from "./Sparkline";
 import "./SectorRail.css";
 
 /**
- * Compact "Stock sectors" rail (Google Finance style): a read-only list of
- * sector names with their average daily % change (+ a tiny sparkline). Rows do
- * not navigate — sectors have no dedicated page. The whole block hides on
- * error/empty so the sidebar never shows a broken section.
+ * Compact "Stock sectors" rail (Google Finance style): sector names with their
+ * average daily % change (+ a tiny sparkline), each linking to its sector page.
+ * The whole block hides on error/empty so the sidebar never shows a broken section.
  */
 export default function SectorRail() {
   const [sectors, setSectors] = useState<SectorRow[] | null>(null);
@@ -50,7 +50,12 @@ export default function SectorRail() {
           : sectors!.map((s) => {
               const dir = dirOf(s.change_pct);
               return (
-                <div className="sector-rail__row" key={s.key} title={s.name}>
+                <Link
+                  to={`/sector/${s.key}`}
+                  className="sector-rail__row"
+                  key={s.key}
+                  title={s.name}
+                >
                   <span className="sector-rail__name">{s.name}</span>
                   {s.spark.length >= 2 && (
                     <span className="sector-rail__spark">
@@ -58,7 +63,7 @@ export default function SectorRail() {
                     </span>
                   )}
                   <span className={`mono sector-rail__pct ${dir}`}>{fmtPct(s.change_pct)}</span>
-                </div>
+                </Link>
               );
             })}
       </div>

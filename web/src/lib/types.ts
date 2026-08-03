@@ -40,6 +40,44 @@ export interface IndicesResponse {
   asOf: string; // ISO
 }
 
+/** A member of an index, ranked by daily move on the index detail page. */
+export interface IndexConstituent {
+  ticker: string;
+  name?: string;
+  last: number | null; // thousand VND
+  change_pct: number | null;
+  spark: number[];
+}
+
+/**
+ * Index detail (/index/:symbol). `hasConstituents` is false for HNX/HNX30/UPCOM,
+ * where no constituent list is available from our sources.
+ */
+export interface IndexDetailResponse extends IndexSnapshot {
+  hasConstituents: boolean;
+  constituents: IndexConstituent[];
+}
+
+/** Sector detail (/sector/:key) — the sector digest plus its ranked members. */
+export interface SectorDetailResponse {
+  key: string;
+  name: string;
+  change_pct: number | null;
+  spark: number[];
+  constituents: IndexConstituent[];
+}
+
+/** Index chart bars — mirrors OhlcvResponse but keyed by index symbol. */
+export interface IndexOhlcvResponse {
+  symbol: string;
+  name: string;
+  range: RangeKey;
+  resolution: string;
+  intraday: boolean;
+  prevClose: number | null;
+  bars: Bar[];
+}
+
 // ---------------------------------------------------------------------------
 // Movers / discover
 // ---------------------------------------------------------------------------
@@ -68,6 +106,8 @@ export interface SearchResult {
   ticker: string;
   name?: string;
   exchange?: string;
+  last?: number | null; // thousand VND — only on the leading matches
+  change_pct?: number | null;
 }
 
 export interface SearchResponse {
@@ -111,6 +151,8 @@ export interface QuoteStats {
   bvps_thousand_vnd: number | null;
   roe_pct: number | null;
   roa_pct: number | null;
+  /** Year the EPS/BVPS/ROE/ROA above were reported for — CafeF's ratios can lag. */
+  ratios_year: number | null;
   dividend_yield_pct: number | null;
   shares_outstanding: number | null;
   foreign_ownership_pct: number | null;
@@ -205,6 +247,7 @@ export interface NewsItem {
   publishedAt?: string; // ISO
   source?: string;
   snippet?: string;
+  image?: string; // article thumbnail; absent when the source has no real one
   type?: string;
 }
 
@@ -225,6 +268,10 @@ export interface CompanyInfo {
   summary?: string;
   intro?: string;
   sector?: string;
+  founded?: string; // ISO-ish date string from the company profile
+  address?: string; // headquarters
+  phone?: string;
+  employees?: number;
 }
 
 export interface RelatedStock {

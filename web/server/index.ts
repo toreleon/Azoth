@@ -31,6 +31,7 @@ import {
   getTickerNews,
   getCompanyIntro,
   getFinancialRatios,
+  type CafefRatioBucket,
 } from "../../src/data/sources/cafef.js";
 import { TICKER_UNIVERSES } from "../../src/tools/discover.js";
 import {
@@ -354,6 +355,80 @@ function resolveUniverse(universe: string): string[] {
   return [...(known.default ?? [])];
 }
 
+/**
+ * Constituent baskets we can actually resolve per index. HNX/HNX30/UPCOM have no
+ * published constituent list in our data sources, so their detail pages render
+ * without a members table rather than showing a wrong one.
+ */
+const INDEX_CONSTITUENTS: Record<string, string> = {
+  VNINDEX: "default",
+  VN30: "vn30",
+};
+
+/** Index detail: the digest plus its constituents ranked by daily move. */
+async function handleIndexDetail(symbol: string) {
+  const digest = await indexDigest(symbol);
+  if (!digest) throw new HttpError(404, `no data for index: ${symbol}`);
+
+  const universe = INDEX_CONSTITUENTS[symbol];
+  let constituents: {
+    ticker: string;
+    name?: string;
+    last: number | null;
+    change_pct: number | null;
+    spark: number[];
+  }[] = [];
+
+  if (universe) {
+    const digests = (await mapLimit(resolveUniverse(universe), 8, miniDigest)).filter(
+      (d) => d.changePct != null,
+    );
+    digests.sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0));
+    const names = await nameIndex().catch(() => [] as NameEntry[]);
+    const nameMap = new Map(names.map((n) => [n.ticker, n.name]));
+    constituents = digests.map((d) => ({
+      ticker: d.ticker,
+      name: nameMap.get(d.ticker),
+      last: d.last,
+      change_pct: d.changePct,
+      spark: d.spark,
+    }));
+  }
+
+  return { ...digest, hasConstituents: Boolean(universe), constituents };
+}
+
+/** Index chart bars for a range (mirrors handleOhlcv, but for an index symbol). */
+async function handleIndexOhlcv(symbol: string, range: RangeKey) {
+  const plan = rangeToPlan(range);
+  const to = nowSec();
+  const bucket = plan.intraday
+    ? Math.floor(to / 120)
+    : new Date(to * 1000).toISOString().slice(0, 10);
+  const key = `web:idxohlcv:${symbol}:${range}:${bucket}`;
+  let bars = await cached(key, plan.intraday ? 120 : 600, () =>
+    getIndexOhlcv(symbol, plan.resolution, plan.fromSec, to),
+  );
+  if (range === "1D") bars = lastSessionOnly(bars);
+
+  // For intraday ranges the baseline is the prior session's close, not the first bar.
+  let prevClose: number | null = bars[0]?.close ?? null;
+  if (range === "1D" || range === "5D") {
+    const daily = await dailyIndexBars(symbol, 30).catch(() => [] as Bar[]);
+    if (daily.length >= 2) prevClose = round(daily[daily.length - 2]!.close, 2);
+  }
+
+  return {
+    symbol,
+    name: INDEX_NAMES[symbol] ?? symbol,
+    range,
+    resolution: plan.resolution,
+    intraday: plan.intraday,
+    prevClose,
+    bars,
+  };
+}
+
 async function handleMovers(kind: string, universe: string) {
   const tickers = resolveUniverse(universe);
   const digests = (await mapLimit(tickers, 8, miniDigest)).filter((d) => d.changePct != null);
@@ -556,6 +631,7 @@ async function handleQuote(ticker: string) {
       bvps_thousand_vnd: fund.bvps,
       roe_pct: fund.roe,
       roa_pct: fund.roa,
+      ratios_year: fund.ratiosYear,
       dividend_yield_pct: fund.divYield,
       shares_outstanding: fund.shares,
       foreign_ownership_pct: fund.foreignOwn,
@@ -569,7 +645,19 @@ async function handleQuote(ticker: string) {
 }
 
 interface FundBundle {
-  company: { nameVi?: string; nameEn?: string; floor?: string; website?: string; summary?: string; intro?: string; sector?: string };
+  company: {
+    nameVi?: string;
+    nameEn?: string;
+    floor?: string;
+    website?: string;
+    summary?: string;
+    intro?: string;
+    sector?: string;
+    founded?: string;
+    address?: string;
+    phone?: string;
+    employees?: number;
+  };
   marketCap: number | null;
   pe: number | null;
   pb: number | null;
@@ -595,10 +683,13 @@ async function fundamentalsBundle(ticker: string): Promise<FundBundle> {
       latestRatio(ticker, RATIOS.FOREIGN_OWNERSHIP),
       getCompanyProfile(ticker).catch(() => null),
       getCompanyIntro(ticker).catch(() => null),
-      getFinancialRatios(ticker, "QUY", 1).catch(() => []),
+      getFinancialRatios(ticker, "QUY", 4).catch(() => []),
     ]);
+    // Newest-first, so the first reported bucket is the latest one CafeF has
+    // actually filled in. Banks routinely lag a year or two behind.
+    const reported = cafef.find(isReportedPeriod);
     const latestCafef: Record<string, number> = {};
-    for (const v of cafef[0]?.Value ?? []) latestCafef[v.Code] = v.Value;
+    for (const v of reported?.Value ?? []) latestCafef[v.Code] = v.Value;
     return {
       company: {
         nameVi: profile?.vnName,
@@ -608,6 +699,14 @@ async function fundamentalsBundle(ticker: string): Promise<FundBundle> {
         summary: profile?.vnSummary?.slice(0, 800),
         intro: intro?.Intro?.slice(0, 800),
         sector: intro?.CategoryName as string | undefined,
+        // Google Finance's About block lists founded / HQ / employees.
+        // NB: the profile also carries a `logo` URL, but VNDirect's CDN is
+        // hotlink-protected (403 from any other origin), so we don't surface it —
+        // the UI draws a ticker monogram instead.
+        founded: profile?.foundDate,
+        address: profile?.vnAddress,
+        phone: profile?.phone,
+        employees: profile?.employees,
       },
       marketCap: round(marketCap, 0),
       pe: round(pe, 2),
@@ -617,6 +716,8 @@ async function fundamentalsBundle(ticker: string): Promise<FundBundle> {
       bvps: latestCafef.BV ?? null,
       roe: latestCafef.ROE ?? null,
       roa: latestCafef.ROA ?? null,
+      // Which year those four came from — they can lag, so the UI labels them.
+      ratiosYear: reported?.Year ?? null,
       divYield: round(divYield, 2),
       shares: round(shares, 0),
       foreignOwn: round(foreignOwn, 2),
@@ -666,6 +767,7 @@ async function handleNews(ticker: string) {
         publishedAt: parseDate(n.PublishDate ?? n.DeployDate),
         source: n.Source || "CafeF",
         snippet: n.SubTitle?.slice(0, 240),
+        image: newsImage(n.Image),
         type: "news",
       }))
       .filter((n) => n.title);
@@ -679,6 +781,16 @@ function absUrl(path?: string): string | undefined {
   return `https://cafef.vn${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
+/**
+ * A CafeF article thumbnail, or undefined when there isn't a real one. CafeF
+ * substitutes a generic house placeholder (`News_image_default.png`) for articles
+ * with no image; showing it would read as a broken card rather than as "no image".
+ */
+function newsImage(src?: string): string | undefined {
+  if (!src || !/^https?:\/\//.test(src)) return undefined;
+  return /News_image_default/i.test(src) ? undefined : src;
+}
+
 function parseDate(input?: string): string | undefined {
   if (!input) return undefined;
   const m = /\/Date\((\d+)\)\//.exec(input);
@@ -687,19 +799,20 @@ function parseDate(input?: string): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
-async function handleMarketNews() {
-  const seeds = ["VCB", "FPT", "VIC", "HPG", "VNM", "MWG"];
-  const items = await cached(`web:marketnews:${Math.floor(nowSec() / 900)}`, 900, async () => {
+/** Aggregate + de-duplicate recent news across a basket of tickers. */
+async function aggregateNews(cacheKey: string, seeds: string[], limit: number) {
+  return cached(`${cacheKey}:${Math.floor(nowSec() / 900)}`, 900, async () => {
     const all = await mapLimit(seeds, 4, (t) => getTickerNews(t, 0, 6, 1).catch(() => []));
-    const flat = all.flat();
     const seen = new Set<string>();
-    const out = flat
+    const out = all
+      .flat()
       .map((n) => ({
         title: n.Title,
         url: n.LinkDetail ? absUrl(n.LinkDetail) : n.Url,
         publishedAt: parseDate(n.PublishDate ?? n.DeployDate),
         source: n.Source || "CafeF",
         snippet: n.SubTitle?.slice(0, 200),
+        image: newsImage(n.Image),
         type: "market",
       }))
       .filter((n) => {
@@ -708,9 +821,23 @@ async function handleMarketNews() {
         return true;
       });
     out.sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
-    return out.slice(0, 14);
+    return out.slice(0, limit);
   });
-  return { items };
+}
+
+async function handleMarketNews() {
+  const seeds = ["VCB", "FPT", "VIC", "HPG", "VNM", "MWG"];
+  return { items: await aggregateNews("web:marketnews", seeds, 14) };
+}
+
+/** News for a sector, seeded from its constituents. */
+async function handleSectorNews(key: string) {
+  const sector = SECTOR_MAP.find((s) => s.key === key);
+  if (!sector) throw new HttpError(404, `unknown sector: ${key}`);
+  return {
+    key: sector.key,
+    items: await aggregateNews(`web:sectornews:${sector.key}`, sector.tickers.slice(0, 6), 10),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -728,6 +855,60 @@ const SECTOR_MAP: { key: string; name: string; tickers: string[] }[] = [
   { key: "technology", name: "Technology", tickers: ["FPT", "CMG", "ELC"] },
 ];
 
+/**
+ * Synthetic sector index: rebase each constituent spark to 100, then average
+ * across constituents at each point (truncated to the shortest series).
+ */
+function sectorSpark(members: MiniDigest[]): number[] {
+  const rebased = members
+    .map((d) => d.spark)
+    .filter((s) => s.length > 0 && s[0]! > 0)
+    .map((s) => s.map((v) => (v / s[0]!) * 100));
+  if (!rebased.length) return [];
+  const minLen = Math.min(...rebased.map((s) => s.length));
+  const spark: number[] = [];
+  for (let i = 0; i < minLen; i++) {
+    const avg = rebased.reduce((a, s) => a + s[i]!, 0) / rebased.length;
+    spark.push(round(avg, 2)!);
+  }
+  return spark;
+}
+
+/** Average daily % change across the members that report one. */
+function averageChange(members: MiniDigest[]): number | null {
+  const changePcts = members.map((d) => d.changePct).filter((v): v is number => v != null);
+  if (!changePcts.length) return null;
+  return round(changePcts.reduce((a, b) => a + b, 0) / changePcts.length, 2);
+}
+
+/** Sector detail: the sector digest plus its members ranked by daily move. */
+async function handleSectorDetail(key: string) {
+  const sector = SECTOR_MAP.find((s) => s.key === key);
+  if (!sector) throw new HttpError(404, `unknown sector: ${key}`);
+
+  const digests = (await mapLimit(sector.tickers, 8, miniDigest)).filter(
+    (d): d is MiniDigest => d.last != null,
+  );
+  digests.sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0));
+
+  const names = await nameIndex().catch(() => [] as NameEntry[]);
+  const nameMap = new Map(names.map((n) => [n.ticker, n.name]));
+
+  return {
+    key: sector.key,
+    name: sector.name,
+    change_pct: averageChange(digests),
+    spark: sectorSpark(digests),
+    constituents: digests.map((d) => ({
+      ticker: d.ticker,
+      name: nameMap.get(d.ticker),
+      last: d.last,
+      change_pct: d.changePct,
+      spark: d.spark,
+    })),
+  };
+}
+
 async function handleSectors() {
   return cached(`web:sectors:${Math.floor(nowSec() / 600)}`, 600, async () => {
     // Compute each unique ticker's digest once, then reuse across sectors.
@@ -741,24 +922,9 @@ async function handleSectors() {
         .filter((d): d is MiniDigest => d != null && d.last != null);
       if (!members.length) return [];
 
-      const changePcts = members.map((d) => d.changePct).filter((v): v is number => v != null);
-      if (!changePcts.length) return [];
-      const change_pct = round(changePcts.reduce((a, b) => a + b, 0) / changePcts.length, 2);
-
-      // Synthetic sector index: rebase each constituent spark to 100, then average
-      // across constituents at each point (truncated to the shortest series).
-      const rebased = members
-        .map((d) => d.spark)
-        .filter((s) => s.length > 0 && s[0]! > 0)
-        .map((s) => s.map((v) => (v / s[0]!) * 100));
-      const spark: number[] = [];
-      if (rebased.length) {
-        const minLen = Math.min(...rebased.map((s) => s.length));
-        for (let i = 0; i < minLen; i++) {
-          const avg = rebased.reduce((a, s) => a + s[i]!, 0) / rebased.length;
-          spark.push(round(avg, 2)!);
-        }
-      }
+      const change_pct = averageChange(members);
+      if (change_pct == null) return [];
+      const spark = sectorSpark(members);
 
       const leaders = [...members]
         .filter((d) => d.changePct != null)
@@ -807,6 +973,10 @@ async function handleAbout(ticker: string) {
       summary: fund.company.summary,
       intro: fund.company.intro,
       sector: fund.company.sector,
+      founded: fund.company.founded,
+      address: fund.company.address,
+      phone: fund.company.phone,
+      employees: fund.company.employees,
     },
     related,
   };
@@ -820,17 +990,41 @@ async function handleSearch(q: string) {
   const nameHits = idx.filter(
     (e) => !e.ticker.startsWith(query) && e.name.toUpperCase().includes(query),
   );
-  const results = [...starts, ...nameHits].slice(0, 12).map((e) => ({
-    ticker: e.ticker,
-    name: e.name,
-    exchange: e.exchange,
-  }));
+  const picked = [...starts, ...nameHits].slice(0, 10);
+
+  // Enrich the leading matches with a live price + daily change (Google Finance
+  // shows these inline). Only the top few, so type-ahead stays responsive; the
+  // digests are TTL-cached so repeat queries are effectively free.
+  const digests = await mapLimit(picked.slice(0, 6), 6, (e) => miniDigest(e.ticker));
+  const byTicker = new Map(digests.map((d) => [d.ticker, d]));
+
+  const results = picked.map((e) => {
+    const d = byTicker.get(e.ticker);
+    return {
+      ticker: e.ticker,
+      name: e.name,
+      exchange: e.exchange,
+      last: d?.last ?? null,
+      change_pct: d?.changePct ?? null,
+    };
+  });
   return { query: q, results };
 }
 
 // ---------------------------------------------------------------------------
 // Financials (quarterly / annual key metrics from CafeF)
 // ---------------------------------------------------------------------------
+
+/**
+ * Whether CafeF actually reported a ratio period. It returns a bucket for every
+ * period but fills unreported ones with zeros across the board — VCB's 2025 and
+ * 2023 buckets carry EPS, BV, ROE, ROA *and* P/E at 0, which cannot be real for
+ * a company with a share price. Judging this per bucket rather than per metric
+ * keeps a genuine zero (a debt-free company's Debt/Assets) intact.
+ */
+function isReportedPeriod(bucket: CafefRatioBucket): boolean {
+  return (bucket.Value ?? []).some((v) => Number.isFinite(v.Value) && v.Value !== 0);
+}
 
 const CAFEF_METRICS: { key: string; code: string; label: string; unit: "kVND" | "%" | "x" }[] = [
   { key: "eps", code: "EPS", label: "EPS", unit: "kVND" },
@@ -851,9 +1045,10 @@ async function handleFinancials(ticker: string, period: string) {
     () => getFinancialRatios(ticker, reportType, 8).catch(() => []),
   );
   // CafeF returns newest-first; reverse to oldest→newest for charts/tables.
+  // Unreported periods are dropped rather than charted as a plunge to zero.
   // NB: CafeF's ratios dataset is annual (Quater is 0), so we label by year and
   // only prefix a quarter when CafeF actually reports one (1–4).
-  const ordered = [...buckets].reverse();
+  const ordered = buckets.filter(isReportedPeriod).reverse();
   const hasQuarter = (q: number | undefined): q is number => q != null && q >= 1 && q <= 4;
   const columns = ordered.map((b) => ({
     label: hasQuarter(b.Quater) ? `Q${b.Quater} ${b.Year ?? ""}`.trim() : `${b.Year ?? ""}`,
@@ -888,6 +1083,18 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
     "cache-control": "no-store",
   });
   res.end(text);
+}
+
+/** Normalize a sector key (lowercase, hyphenated) from the URL. */
+function sectorKey(raw: string): string {
+  return decodeURIComponent(raw).toLowerCase().replace(/[^a-z-]/g, "").slice(0, 24);
+}
+
+/** Validate + normalize an index symbol against the ones we actually serve. */
+function indexSymbol(raw: string): string {
+  const s = decodeURIComponent(raw).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+  if (!INDEX_NAMES[s]) throw new HttpError(404, `unknown index: ${s}`);
+  return s;
 }
 
 function upperTicker(raw: string): string {
@@ -1042,6 +1249,14 @@ async function route(url: URL, method: string, body: BodyObj): Promise<unknown> 
       return { ok: true, service: "azoth-web", time: new Date().toISOString() };
     case "indices":
       return handleIndices();
+    case "index": {
+      if (!arg) throw new HttpError(400, "index symbol required");
+      const symbol = indexSymbol(arg);
+      if (sub === "ohlcv") {
+        return handleIndexOhlcv(symbol, (url.searchParams.get("range") as RangeKey) ?? "6M");
+      }
+      return handleIndexDetail(symbol);
+    }
     case "movers":
       return handleMovers(url.searchParams.get("kind") ?? "gainers", url.searchParams.get("universe") ?? "vn30");
     case "watchlist":
@@ -1056,6 +1271,12 @@ async function route(url: URL, method: string, body: BodyObj): Promise<unknown> 
       return handleMarketNews();
     case "sectors":
       return handleSectors();
+    case "sector": {
+      if (!arg) throw new HttpError(400, "sector key required");
+      const key = sectorKey(arg);
+      if (sub === "news") return handleSectorNews(key);
+      return handleSectorDetail(key);
+    }
     case "search":
       return handleSearch(url.searchParams.get("q") ?? "");
     case "quote":
