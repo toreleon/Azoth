@@ -54,23 +54,34 @@ function pct(now: number, prev: number | undefined): number | null {
   return ((now - prev) / prev) * 100;
 }
 
-function rsi14(closes: number[]): number | null {
-  if (closes.length < 15) return null;
-  const window = closes.slice(-15);
+// Optimization: Avoids intermediate array allocations by iterating directly over the bars array
+function rsi14(bars: readonly { close: number }[]): number | null {
+  const len = bars.length;
+  if (len < 15) return null;
+
   let gains = 0;
   let losses = 0;
-  for (let i = 1; i < window.length; i++) {
-    const d = window[i]! - window[i - 1]!;
+  const start = len - 15;
+  let prev = bars[start]!.close;
+
+  for (let i = start + 1; i < len; i++) {
+    const curr = bars[i]!.close;
+    const d = curr - prev;
     if (d > 0) gains += d;
     else losses -= d;
+    prev = curr;
   }
-  const avgG = gains / 14;
+
   const avgL = losses / 14;
   if (avgL === 0) return 100;
+  const avgG = gains / 14;
   const rs = avgG / avgL;
   return 100 - 100 / (1 + rs);
 }
 
+// Optimization: Computes metrics (volRatio, RSI, pct) using direct index lookups and loops
+// instead of array.map, slice, and reduce, significantly reducing memory allocations in hot paths.
+// Impact: Expected to reduce GC pressure and speed up discovery ticker loops.
 async function buildCandidate(ticker: string): Promise<Candidate> {
   const to = nowSec();
   const from = to - 90 * DAY;
@@ -91,16 +102,25 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
       vol_ratio: null,
     };
   }
-  const closes = bars.map((b) => b.close);
-  const vols = bars.map((b) => b.volume);
-  const last = closes[closes.length - 1]!;
-  const prev1w = closes[closes.length - 6];
-  const prev1m = closes[closes.length - 22];
-  const recentVol = vols.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const priorVol =
-    vols.length >= 25
-      ? vols.slice(-25, -5).reduce((a, b) => a + b, 0) / 20
-      : null;
+  const len = bars.length;
+  const last = bars[len - 1]!.close;
+  const prev1w = bars[len - 6]?.close;
+  const prev1m = bars[len - 22]?.close;
+
+  let recentVolSum = 0;
+  for (let i = Math.max(0, len - 5); i < len; i++) {
+    recentVolSum += bars[i]!.volume;
+  }
+  const recentVol = recentVolSum / 5;
+
+  let priorVol = null;
+  if (len >= 25) {
+    let priorVolSum = 0;
+    for (let i = len - 25; i < len - 5; i++) {
+      priorVolSum += bars[i]!.volume;
+    }
+    priorVol = priorVolSum / 20;
+  }
   const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
   return {
     ticker,
@@ -108,7 +128,7 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
     latest_close: last,
     ret_1w: pct(last, prev1w),
     ret_1m: pct(last, prev1m),
-    rsi14: rsi14(closes),
+    rsi14: rsi14(bars),
     vol_ratio: volRatio,
   };
 }
