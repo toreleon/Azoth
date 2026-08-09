@@ -9,3 +9,7 @@
 ## 2024-05-18 - Avoid unnecessary array allocations in frequent I/O paths
 **Learning:** `upsertSession` in `src/runtime/sessionStore.ts` is called very frequently (every time a session record is appended, which happens constantly during agent streaming). The original implementation used `.filter()` to remove the existing session and then pushed the updated one, resulting in significant garbage collection overhead and an O(N) array allocation on every single token/event stream chunk. Since this function is the bottleneck for chat interactivity, replacing `.filter()` with `.findIndex()` and in-place assignment yielded a > 2x speedup on session updates.
 **Action:** When updating arrays that back frequent disk I/O operations (like the session store), always prefer in-place mutation and sorting over immutable array recreation (`.filter()`, `.map()`) to minimize garbage collection pauses.
+
+## 2026-08-09 - Avoiding Chained Array Allocations in High-Frequency Math
+**Learning:** In signal processing like `buildCandidate` (used heavily during stock discovery), chained array methods (`.map().slice().reduce()`) over hundreds of time-series data points cause rapid short-lived allocations, triggering GC pauses.
+**Action:** Replace primitive array `.map()` allocations with source object arrays, and use in-place `for` loops indexed with `Math.max(0, len - N)` to emulate `.slice()` gracefully without allocations.
