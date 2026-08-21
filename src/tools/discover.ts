@@ -54,13 +54,15 @@ function pct(now: number, prev: number | undefined): number | null {
   return ((now - prev) / prev) * 100;
 }
 
-function rsi14(closes: number[]): number | null {
-  if (closes.length < 15) return null;
-  const window = closes.slice(-15);
+// ⚡ Bolt: Use direct array indexing to avoid object allocations in hot path
+function rsi14(bars: readonly { close: number }[]): number | null {
+  const len = bars.length;
+  if (len < 15) return null;
+  const start = Math.max(0, len - 15);
   let gains = 0;
   let losses = 0;
-  for (let i = 1; i < window.length; i++) {
-    const d = window[i]! - window[i - 1]!;
+  for (let i = start + 1; i < len; i++) {
+    const d = bars[i]!.close - bars[i - 1]!.close;
     if (d > 0) gains += d;
     else losses -= d;
   }
@@ -91,24 +93,39 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
       vol_ratio: null,
     };
   }
-  const closes = bars.map((b) => b.close);
-  const vols = bars.map((b) => b.volume);
-  const last = closes[closes.length - 1]!;
-  const prev1w = closes[closes.length - 6];
-  const prev1m = closes[closes.length - 22];
-  const recentVol = vols.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const priorVol =
-    vols.length >= 25
-      ? vols.slice(-25, -5).reduce((a, b) => a + b, 0) / 20
-      : null;
+  // ⚡ Bolt: Eliminate `.map().slice().reduce()` chains in favor of fast indexed loops
+  const len = bars.length;
+  const last = bars[len - 1]?.close;
+  const prev1w = bars[len - 6]?.close;
+  const prev1m = bars[len - 22]?.close;
+
+  let recentVolSum = 0;
+  const recentStart = Math.max(0, len - 5);
+  for (let i = recentStart; i < len; i++) {
+    recentVolSum += bars[i]!.volume;
+  }
+  const recentVol = recentVolSum / 5;
+
+  let priorVol: number | null = null;
+  if (len >= 25) {
+    let priorVolSum = 0;
+    const priorStart = len - 25;
+    const priorEnd = len - 5;
+    for (let i = priorStart; i < priorEnd; i++) {
+      priorVolSum += bars[i]!.volume;
+    }
+    priorVol = priorVolSum / 20;
+  }
+
   const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
+
   return {
     ticker,
     metric: null,
-    latest_close: last,
-    ret_1w: pct(last, prev1w),
-    ret_1m: pct(last, prev1m),
-    rsi14: rsi14(closes),
+    latest_close: last ?? null,
+    ret_1w: last != null ? pct(last, prev1w) : null,
+    ret_1m: last != null ? pct(last, prev1m) : null,
+    rsi14: rsi14(bars),
     vol_ratio: volRatio,
   };
 }
@@ -166,47 +183,69 @@ export async function discoverTickers(input: {
   const limit = input.limit ?? 8;
   const { universe, tickers } = await resolveUniverse(input.universe, input.tickers);
   const candidates = await mapLimit(tickers, 12, buildCandidate);
-  const valid = candidates.filter((c) => c.latest_close != null);
 
-  let scored: Candidate[];
+  // ⚡ Bolt: Optimized by combining filtering/mapping into a single pass and mutating objects in-place
+  const scored: Candidate[] = new Array(candidates.length);
+  let count = 0;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]!;
+    if (c.latest_close == null) continue;
+
+    let include = false;
+    switch (criterion) {
+      case "momentum":
+        if (c.rsi14 != null && c.rsi14 >= 50 && c.rsi14 <= 75) {
+          c.metric = c.ret_1m ?? -Infinity;
+          include = true;
+        }
+        break;
+      case "breakout":
+        if ((c.vol_ratio ?? 0) > 1.3) {
+          c.metric = c.ret_1w ?? -Infinity;
+          include = true;
+        }
+        break;
+      case "oversold":
+        c.metric = c.rsi14 ?? Infinity;
+        include = true;
+        break;
+      case "low_volatility":
+        if ((c.ret_1w ?? -Infinity) > 0) {
+          c.metric = Math.abs(c.ret_1m ?? Infinity);
+          include = true;
+        }
+        break;
+      case "high_volume":
+        c.metric = c.vol_ratio ?? -Infinity;
+        include = true;
+        break;
+      case "top_gainers":
+        c.metric = c.ret_1w ?? -Infinity;
+        include = true;
+        break;
+      case "top_losers":
+        c.metric = c.ret_1w ?? Infinity;
+        include = true;
+        break;
+    }
+    if (include) {
+      scored[count++] = c;
+    }
+  }
+  scored.length = count;
+
   switch (criterion) {
     case "momentum":
-      scored = valid
-        .filter((c) => c.rsi14 != null && c.rsi14 >= 50 && c.rsi14 <= 75)
-        .map((c) => ({ ...c, metric: c.ret_1m ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
-      break;
     case "breakout":
-      scored = valid
-        .filter((c) => (c.vol_ratio ?? 0) > 1.3)
-        .map((c) => ({ ...c, metric: c.ret_1w ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
+    case "high_volume":
+    case "top_gainers":
+      scored.sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
       break;
     case "oversold":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.rsi14 ?? Infinity }))
-        .sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
-      break;
     case "low_volatility":
-      scored = valid
-        .filter((c) => (c.ret_1w ?? -Infinity) > 0)
-        .map((c) => ({ ...c, metric: Math.abs(c.ret_1m ?? Infinity) }))
-        .sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
-      break;
-    case "high_volume":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.vol_ratio ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
-      break;
-    case "top_gainers":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.ret_1w ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
-      break;
     case "top_losers":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.ret_1w ?? Infinity }))
-        .sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
+      scored.sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
       break;
   }
 
