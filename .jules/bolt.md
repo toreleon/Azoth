@@ -9,3 +9,7 @@
 ## 2024-05-18 - Avoid unnecessary array allocations in frequent I/O paths
 **Learning:** `upsertSession` in `src/runtime/sessionStore.ts` is called very frequently (every time a session record is appended, which happens constantly during agent streaming). The original implementation used `.filter()` to remove the existing session and then pushed the updated one, resulting in significant garbage collection overhead and an O(N) array allocation on every single token/event stream chunk. Since this function is the bottleneck for chat interactivity, replacing `.filter()` with `.findIndex()` and in-place assignment yielded a > 2x speedup on session updates.
 **Action:** When updating arrays that back frequent disk I/O operations (like the session store), always prefer in-place mutation and sorting over immutable array recreation (`.filter()`, `.map()`) to minimize garbage collection pauses.
+
+## 2026-08-26 - Avoid O(N) array allocations in candidate discovery
+**Learning:** In `src/tools/discover.ts`, the `buildCandidate` function was chaining `.map()`, `.slice()`, and `.reduce()` on large OHLCV bars arrays for every ticker in the universe (hundreds of stocks). This caused unnecessary O(N) memory allocations and garbage collection overhead in a hot path that runs at the start of every session.
+**Action:** Replaced the chained array methods with indexed `for` loops that read directly from the source `bars` array. Updated the `rsi14` function to accept the source array and calculate its window iteratively to avoid `.slice(-15)` allocations.
