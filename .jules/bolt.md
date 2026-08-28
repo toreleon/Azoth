@@ -12,3 +12,7 @@
 ## 2024-05-19 - Avoid redundant array allocations in time-series metric calculations
 **Learning:** `src/tools/discover.ts` used chained `.map()`, `.slice()`, and `.reduce()` operations to extract `close` and `volume` streams to calculate metrics. Since `buildCandidate` runs over hundreds of stocks, these O(n) array operations create significant heap allocation overhead and garbage collection pauses.
 **Action:** Replace chains of `.map()`/`.slice()` with index-based reverse `for` loops against the original object array to sum and calculate metrics efficiently without allocating temporary arrays. Pass the object array directly to metric functions (like `rsi14`) and adjust their signatures to avoid cloning.
+
+## 2024-05-19 - Strict type preservation when falling back numeric values
+**Learning:** During optimization of `src/tools/discover.ts`, using optional chaining (`bars[len - 1]?.close`) produced a type of `number | undefined`. Supplying `0` as a fallback to satisfy the compiler (`last ?? 0`) for financial return calculations like `pct()` creates severe silent logic errors (e.g., `-100%` return) if the data is genuinely missing.
+**Action:** When replacing non-null assertions (`!`) with optional chaining, and the result is passed into math formulas, always maintain the original non-null assertion or explicitly guard the computation. Never inject `0` as a placeholder for price or volume metrics.

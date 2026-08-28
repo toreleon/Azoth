@@ -122,9 +122,9 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
   return {
     ticker,
     metric: null,
-    latest_close: last ?? null,
-    ret_1w: pct(last ?? 0, prev1w),
-    ret_1m: pct(last ?? 0, prev1m),
+    latest_close: last!,
+    ret_1w: pct(last!, prev1w),
+    ret_1m: pct(last!, prev1m),
     rsi14: rsi14(bars),
     vol_ratio: volRatio,
   };
