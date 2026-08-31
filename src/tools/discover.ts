@@ -100,14 +100,14 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
   let pVol = 0;
   const startR = Math.max(0, len - 5);
   for (let i = startR; i < len; i++) rVol += bars[i]!.volume;
-  const recentVol = rVol / Math.min(5, len);
+  const recentVol = rVol / 5;
 
   let priorVol: number | null = null;
   if (len >= 25) {
     const startP = Math.max(0, len - 25);
     const endP = Math.max(0, len - 5);
     for (let i = startP; i < endP; i++) pVol += bars[i]!.volume;
-    priorVol = pVol / Math.min(20, endP - startP);
+    priorVol = pVol / 20;
   }
 
   const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
