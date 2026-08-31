@@ -54,13 +54,13 @@ function pct(now: number, prev: number | undefined): number | null {
   return ((now - prev) / prev) * 100;
 }
 
-function rsi14(closes: number[]): number | null {
-  if (closes.length < 15) return null;
-  const window = closes.slice(-15);
+function rsi14(bars: readonly { close: number }[], len: number): number | null {
+  if (len < 15) return null;
   let gains = 0;
   let losses = 0;
-  for (let i = 1; i < window.length; i++) {
-    const d = window[i]! - window[i - 1]!;
+  const start = Math.max(0, len - 15);
+  for (let i = start + 1; i < len; i++) {
+    const d = bars[i]!.close - bars[i - 1]!.close;
     if (d > 0) gains += d;
     else losses -= d;
   }
@@ -91,16 +91,25 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
       vol_ratio: null,
     };
   }
-  const closes = bars.map((b) => b.close);
-  const vols = bars.map((b) => b.volume);
-  const last = closes[closes.length - 1]!;
-  const prev1w = closes[closes.length - 6];
-  const prev1m = closes[closes.length - 22];
-  const recentVol = vols.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const priorVol =
-    vols.length >= 25
-      ? vols.slice(-25, -5).reduce((a, b) => a + b, 0) / 20
-      : null;
+  const len = bars.length;
+  const last = bars[len - 1]!.close;
+  const prev1w = bars[len - 6]?.close;
+  const prev1m = bars[len - 22]?.close;
+
+  let rVol = 0;
+  let pVol = 0;
+  const startR = Math.max(0, len - 5);
+  for (let i = startR; i < len; i++) rVol += bars[i]!.volume;
+  const recentVol = rVol / Math.min(5, len);
+
+  let priorVol: number | null = null;
+  if (len >= 25) {
+    const startP = Math.max(0, len - 25);
+    const endP = Math.max(0, len - 5);
+    for (let i = startP; i < endP; i++) pVol += bars[i]!.volume;
+    priorVol = pVol / Math.min(20, endP - startP);
+  }
+
   const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
   return {
     ticker,
@@ -108,7 +117,7 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
     latest_close: last,
     ret_1w: pct(last, prev1w),
     ret_1m: pct(last, prev1m),
-    rsi14: rsi14(closes),
+    rsi14: rsi14(bars, len),
     vol_ratio: volRatio,
   };
 }
