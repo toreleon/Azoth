@@ -12,3 +12,7 @@
 ## 2024-05-19 - Avoid array map and reduce allocations in discovery loops
 **Learning:** In high-volume scanning tools like `src/tools/discover.ts`, using `.map()` to pluck properties (e.g. `bars.map(b => b.close)`) followed by `.slice().reduce()` chains creates significant intermediate garbage collection overhead. Since this runs over hundreds of tickers per execution, it impacts memory and performance heavily.
 **Action:** Replace `map` and `slice` operations with standard `for` loops bounded dynamically (e.g., `Math.max(0, len - N)`) and iterate directly over the original objects to achieve O(1) space complexity.
+
+## 2024-05-19 - Undici audit fix
+**Learning:** `pnpm audit` occasionally flags nested dependencies. Resolving `undici` issues by blindly overriding to the latest version (e.g., `8.0.0`) can break testing on Node 20 because Vitest and JSDOM rely on older Node internals.
+**Action:** When fixing `undici` vulnerabilities in `package.json`, use an `overrides` range that forces the patched secure version of 7.x (e.g., `>=7.29.0 <8.0.0`) instead of allowing 8.x, to maintain compatibility with Node 20 test runners.
