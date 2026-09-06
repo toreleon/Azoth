@@ -49,18 +49,18 @@ interface Candidate {
 
 const DAY = 86400;
 
-function pct(now: number, prev: number | undefined): number | null {
-  if (prev == null || prev === 0) return null;
+function pct(now: number | null, prev: number | undefined): number | null {
+  if (now == null || prev == null || prev === 0) return null;
   return ((now - prev) / prev) * 100;
 }
 
-function rsi14(closes: number[]): number | null {
-  if (closes.length < 15) return null;
-  const window = closes.slice(-15);
+function rsi14(bars: readonly { close: number }[]): number | null {
+  if (bars.length < 15) return null;
+  const start = Math.max(0, bars.length - 15);
   let gains = 0;
   let losses = 0;
-  for (let i = 1; i < window.length; i++) {
-    const d = window[i]! - window[i - 1]!;
+  for (let i = start + 1; i < bars.length; i++) {
+    const d = bars[i]!.close - bars[i - 1]!.close;
     if (d > 0) gains += d;
     else losses -= d;
   }
@@ -80,7 +80,9 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
     600,
     () => getStockOhlcv(ticker, "1D", from, to),
   ).catch(() => [] as Awaited<ReturnType<typeof getStockOhlcv>>);
-  if (bars.length < 25) {
+
+  const len = bars.length;
+  if (len < 25) {
     return {
       ticker,
       metric: null,
@@ -91,16 +93,30 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
       vol_ratio: null,
     };
   }
-  const closes = bars.map((b) => b.close);
-  const vols = bars.map((b) => b.volume);
-  const last = closes[closes.length - 1]!;
-  const prev1w = closes[closes.length - 6];
-  const prev1m = closes[closes.length - 22];
-  const recentVol = vols.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const priorVol =
-    vols.length >= 25
-      ? vols.slice(-25, -5).reduce((a, b) => a + b, 0) / 20
-      : null;
+
+  // Avoid allocating intermediate arrays like .map, .slice, or .reduce
+  const last = bars[len - 1]?.close ?? null;
+  const prev1w = bars[len - 6]?.close;
+  const prev1m = bars[len - 22]?.close;
+
+  let recentVolSum = 0;
+  const recentStart = Math.max(0, len - 5);
+  for (let i = recentStart; i < len; i++) {
+    recentVolSum += bars[i]!.volume;
+  }
+  const recentVol = recentVolSum / 5;
+
+  let priorVol = null;
+  if (len >= 25) {
+    let priorVolSum = 0;
+    const priorStart = Math.max(0, len - 25);
+    const priorEnd = len - 5;
+    for (let i = priorStart; i < priorEnd; i++) {
+      priorVolSum += bars[i]!.volume;
+    }
+    priorVol = priorVolSum / 20;
+  }
+
   const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
   return {
     ticker,
@@ -108,7 +124,7 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
     latest_close: last,
     ret_1w: pct(last, prev1w),
     ret_1m: pct(last, prev1m),
-    rsi14: rsi14(closes),
+    rsi14: rsi14(bars),
     vol_ratio: volRatio,
   };
 }
@@ -166,59 +182,94 @@ export async function discoverTickers(input: {
   const limit = input.limit ?? 8;
   const { universe, tickers } = await resolveUniverse(input.universe, input.tickers);
   const candidates = await mapLimit(tickers, 12, buildCandidate);
-  const valid = candidates.filter((c) => c.latest_close != null);
+  const valid: Candidate[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]!;
+    if (c.latest_close != null) {
+      valid.push(c);
+    }
+  }
 
-  let scored: Candidate[];
+  const scored: Candidate[] = [];
   switch (criterion) {
     case "momentum":
-      scored = valid
-        .filter((c) => c.rsi14 != null && c.rsi14 >= 50 && c.rsi14 <= 75)
-        .map((c) => ({ ...c, metric: c.ret_1m ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i]!;
+        if (c.rsi14 != null && c.rsi14 >= 50 && c.rsi14 <= 75) {
+          c.metric = c.ret_1m ?? -Infinity;
+          scored.push(c);
+        }
+      }
+      scored.sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
       break;
     case "breakout":
-      scored = valid
-        .filter((c) => (c.vol_ratio ?? 0) > 1.3)
-        .map((c) => ({ ...c, metric: c.ret_1w ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i]!;
+        if ((c.vol_ratio ?? 0) > 1.3) {
+          c.metric = c.ret_1w ?? -Infinity;
+          scored.push(c);
+        }
+      }
+      scored.sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
       break;
     case "oversold":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.rsi14 ?? Infinity }))
-        .sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i]!;
+        c.metric = c.rsi14 ?? Infinity;
+        scored.push(c);
+      }
+      scored.sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
       break;
     case "low_volatility":
-      scored = valid
-        .filter((c) => (c.ret_1w ?? -Infinity) > 0)
-        .map((c) => ({ ...c, metric: Math.abs(c.ret_1m ?? Infinity) }))
-        .sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i]!;
+        if ((c.ret_1w ?? -Infinity) > 0) {
+          c.metric = Math.abs(c.ret_1m ?? Infinity);
+          scored.push(c);
+        }
+      }
+      scored.sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
       break;
     case "high_volume":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.vol_ratio ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i]!;
+        c.metric = c.vol_ratio ?? -Infinity;
+        scored.push(c);
+      }
+      scored.sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
       break;
     case "top_gainers":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.ret_1w ?? -Infinity }))
-        .sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i]!;
+        c.metric = c.ret_1w ?? -Infinity;
+        scored.push(c);
+      }
+      scored.sort((a, b) => (b.metric ?? -Infinity) - (a.metric ?? -Infinity));
       break;
     case "top_losers":
-      scored = valid
-        .map((c) => ({ ...c, metric: c.ret_1w ?? Infinity }))
-        .sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
+      for (let i = 0; i < valid.length; i++) {
+        const c = valid[i]!;
+        c.metric = c.ret_1w ?? Infinity;
+        scored.push(c);
+      }
+      scored.sort((a, b) => (a.metric ?? Infinity) - (b.metric ?? Infinity));
       break;
   }
 
-  const top = scored.slice(0, limit).map((c) => ({
-    ticker: c.ticker,
-    metric: c.metric != null ? Number(c.metric.toFixed(3)) : null,
-    latest_close: c.latest_close,
-    ret_1w_pct: c.ret_1w != null ? Number(c.ret_1w.toFixed(2)) : null,
-    ret_1m_pct: c.ret_1m != null ? Number(c.ret_1m.toFixed(2)) : null,
-    rsi14: c.rsi14 != null ? Number(c.rsi14.toFixed(1)) : null,
-    vol_ratio_5_20: c.vol_ratio != null ? Number(c.vol_ratio.toFixed(2)) : null,
-  }));
+  const top = [];
+  const limitCount = Math.min(scored.length, limit);
+  for (let i = 0; i < limitCount; i++) {
+    const c = scored[i]!;
+    top.push({
+      ticker: c.ticker,
+      metric: c.metric != null ? Number(c.metric.toFixed(3)) : null,
+      latest_close: c.latest_close,
+      ret_1w_pct: c.ret_1w != null ? Number(c.ret_1w.toFixed(2)) : null,
+      ret_1m_pct: c.ret_1m != null ? Number(c.ret_1m.toFixed(2)) : null,
+      rsi14: c.rsi14 != null ? Number(c.rsi14.toFixed(1)) : null,
+      vol_ratio_5_20: c.vol_ratio != null ? Number(c.vol_ratio.toFixed(2)) : null,
+    });
+  }
 
   return {
     criterion,
