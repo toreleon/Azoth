@@ -54,23 +54,6 @@ function pct(now: number, prev: number | undefined): number | null {
   return ((now - prev) / prev) * 100;
 }
 
-function rsi14(closes: number[]): number | null {
-  if (closes.length < 15) return null;
-  const window = closes.slice(-15);
-  let gains = 0;
-  let losses = 0;
-  for (let i = 1; i < window.length; i++) {
-    const d = window[i]! - window[i - 1]!;
-    if (d > 0) gains += d;
-    else losses -= d;
-  }
-  const avgG = gains / 14;
-  const avgL = losses / 14;
-  if (avgL === 0) return 100;
-  const rs = avgG / avgL;
-  return 100 - 100 / (1 + rs);
-}
-
 async function buildCandidate(ticker: string): Promise<Candidate> {
   const to = nowSec();
   const from = to - 90 * DAY;
@@ -80,7 +63,8 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
     600,
     () => getStockOhlcv(ticker, "1D", from, to),
   ).catch(() => [] as Awaited<ReturnType<typeof getStockOhlcv>>);
-  if (bars.length < 25) {
+  const len = bars.length;
+  if (len < 25) {
     return {
       ticker,
       metric: null,
@@ -91,24 +75,53 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
       vol_ratio: null,
     };
   }
-  const closes = bars.map((b) => b.close);
-  const vols = bars.map((b) => b.volume);
-  const last = closes[closes.length - 1]!;
-  const prev1w = closes[closes.length - 6];
-  const prev1m = closes[closes.length - 22];
-  const recentVol = vols.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const priorVol =
-    vols.length >= 25
-      ? vols.slice(-25, -5).reduce((a, b) => a + b, 0) / 20
-      : null;
-  const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
+
+  // ⚡ Bolt Optimization: Avoid allocating intermediate arrays for close prices and volume
+  // O(N) .map() and .slice() allocations are expensive in hot path. We extract values using
+  // in-place indices instead.
+
+  const last = bars[len - 1]!.close;
+  const prev1w = bars[len - 6]?.close;
+  const prev1m = bars[len - 22]?.close;
+
+  let recentVolSum = 0;
+  for (let i = len - 5; i < len; i++) {
+    recentVolSum += bars[i]!.volume;
+  }
+  const recentVol = recentVolSum / 5;
+
+  let priorVolSum = 0;
+  for (let i = len - 25; i < len - 5; i++) {
+    priorVolSum += bars[i]!.volume;
+  }
+  const priorVol = priorVolSum / 20;
+
+  const volRatio = priorVol > 0 ? recentVol / priorVol : null;
+
+  let rsi: number | null = null;
+  let gains = 0;
+  let losses = 0;
+  for (let i = len - 14; i < len; i++) {
+    const d = bars[i]!.close - bars[i - 1]!.close;
+    if (d > 0) gains += d;
+    else losses -= d;
+  }
+  const avgG = gains / 14;
+  const avgL = losses / 14;
+  if (avgL === 0) {
+    rsi = 100;
+  } else {
+    const rs = avgG / avgL;
+    rsi = 100 - 100 / (1 + rs);
+  }
+
   return {
     ticker,
     metric: null,
     latest_close: last,
     ret_1w: pct(last, prev1w),
     ret_1m: pct(last, prev1m),
-    rsi14: rsi14(closes),
+    rsi14: rsi,
     vol_ratio: volRatio,
   };
 }
