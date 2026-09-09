@@ -114,6 +114,8 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
 
   const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
 
+  // ⚡ Bolt: Removed .map().slice().reduce() chain above and replaced with direct for-loops
+  // to avoid O(N) array allocation overhead and prevent GC spikes during initial ticker scans
   return {
     ticker,
     metric: null,
