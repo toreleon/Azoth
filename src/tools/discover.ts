@@ -49,18 +49,21 @@ interface Candidate {
 
 const DAY = 86400;
 
-function pct(now: number, prev: number | undefined): number | null {
-  if (prev == null || prev === 0) return null;
+function pct(now: number | undefined, prev: number | undefined): number | null {
+  if (now == null || prev == null || prev === 0) return null;
   return ((now - prev) / prev) * 100;
 }
 
-function rsi14(closes: number[]): number | null {
-  if (closes.length < 15) return null;
-  const window = closes.slice(-15);
+function rsi14(bars: readonly { close: number }[]): number | null {
+  const len = bars.length;
+  if (len < 15) return null;
   let gains = 0;
   let losses = 0;
-  for (let i = 1; i < window.length; i++) {
-    const d = window[i]! - window[i - 1]!;
+  for (let i = Math.max(1, len - 14); i < len; i++) {
+    const curr = bars[i]?.close;
+    const prev = bars[i - 1]?.close;
+    if (curr == null || prev == null) continue;
+    const d = curr - prev;
     if (d > 0) gains += d;
     else losses -= d;
   }
@@ -80,7 +83,8 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
     600,
     () => getStockOhlcv(ticker, "1D", from, to),
   ).catch(() => [] as Awaited<ReturnType<typeof getStockOhlcv>>);
-  if (bars.length < 25) {
+  const len = bars.length;
+  if (len < 25) {
     return {
       ticker,
       metric: null,
@@ -91,24 +95,32 @@ async function buildCandidate(ticker: string): Promise<Candidate> {
       vol_ratio: null,
     };
   }
-  const closes = bars.map((b) => b.close);
-  const vols = bars.map((b) => b.volume);
-  const last = closes[closes.length - 1]!;
-  const prev1w = closes[closes.length - 6];
-  const prev1m = closes[closes.length - 22];
-  const recentVol = vols.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const priorVol =
-    vols.length >= 25
-      ? vols.slice(-25, -5).reduce((a, b) => a + b, 0) / 20
-      : null;
+
+  const last = bars[len - 1]?.close;
+  const prev1w = bars[len - 6]?.close;
+  const prev1m = bars[len - 22]?.close;
+
+  let recentVolSum = 0;
+  for (let i = Math.max(0, len - 5); i < len; i++) {
+    recentVolSum += bars[i]?.volume ?? 0;
+  }
+  const recentVol = recentVolSum / 5;
+
+  let priorVolSum = 0;
+  for (let i = Math.max(0, len - 25); i < len - 5; i++) {
+    priorVolSum += bars[i]?.volume ?? 0;
+  }
+  const priorVol = len >= 25 ? priorVolSum / 20 : null;
+
   const volRatio = priorVol != null && priorVol > 0 ? recentVol / priorVol : null;
+
   return {
     ticker,
     metric: null,
-    latest_close: last,
+    latest_close: last ?? null,
     ret_1w: pct(last, prev1w),
     ret_1m: pct(last, prev1m),
-    rsi14: rsi14(closes),
+    rsi14: rsi14(bars),
     vol_ratio: volRatio,
   };
 }
