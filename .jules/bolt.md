@@ -12,3 +12,6 @@
 ## 2024-05-19 - Avoid array map and slice in hot loops
 **Learning:** Chained `.map()`, `.slice()`, and `.reduce()` inside tight functions like `buildCandidate` create significant intermediate array allocations and GC overhead for each ticker processed.
 **Action:** Replace functional array pipelines with direct indexed `for` loops against the original data structures (e.g., `bars[i]`) combined with safe `?.` chaining or explicitly calculating `len` and using `Math.max(0, len - N)` for sliding windows.
+## 2024-05-19 - Undici audit failure
+**Learning:** `pnpm audit` fails on `undici` versions `< 7.29.0` due to a vulnerability.
+**Action:** The overrides object in `package.json` needs to be `">=7.29.0 <8.0.0"` for undici to pass the audit without causing vitest breakage on Node 20.
