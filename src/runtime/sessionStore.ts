@@ -186,10 +186,27 @@ export function appendSessionRecord(id: string, record: SessionRecord, cwd = pro
 export function readSessionRecords(id: string, cwd = process.cwd()): SessionRecord[] {
   const path = sessionFile(id, cwd);
   if (!existsSync(path)) return [];
-  return readFileSync(path, "utf8")
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as SessionRecord);
+
+  const text = readFileSync(path, "utf8");
+  const records: SessionRecord[] = [];
+  let lastIndex = 0;
+  let index = text.indexOf('\n');
+
+  // Avoid .split().filter().map() to reduce memory allocation
+  // and garbage collection overhead during frequent reads.
+  while (index !== -1) {
+    if (index > lastIndex) {
+      records.push(JSON.parse(text.substring(lastIndex, index)) as SessionRecord);
+    }
+    lastIndex = index + 1;
+    index = text.indexOf('\n', lastIndex);
+  }
+
+  if (lastIndex < text.length) {
+    records.push(JSON.parse(text.substring(lastIndex)) as SessionRecord);
+  }
+
+  return records;
 }
 
 export function activateSession(id: string, cwd = process.cwd()): SessionIndexEntry | undefined {
