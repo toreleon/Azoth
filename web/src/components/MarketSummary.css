@@ -1,0 +1,114 @@
+/* MarketSummary — Google-Finance-style market news block (home page) */
+
+.market-summary {
+  padding: 8px 8px 4px;
+}
+
+.market-summary__title {
+  font-size: 18px;
+  padding: 8px 12px 4px;
+  margin: 0;
+}
+
+.market-summary__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Each row: a stacked link (meta → headline → snippet) */
+.market-summary__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border-top: 1px solid var(--border-subtle);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.12s ease;
+}
+
+.market-summary__row:first-child {
+  border-top: none;
+}
+
+a.market-summary__row:hover {
+  background: var(--surface-hover);
+}
+
+.market-summary__row--skeleton {
+  pointer-events: none;
+}
+
+/* Meta line: source chip + relative time */
+.market-summary__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.market-summary__source {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.market-summary__time {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* Headline — near-black, clamp to 2 lines */
+.market-summary__headline {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Snippet — muted secondary text, clamp to 2 lines */
+.market-summary__snippet {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.market-summary__empty {
+  padding: 16px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Skeleton */
+.market-summary__sk-line {
+  display: block;
+  height: 13px;
+  border-radius: 6px;
+}
+
+.market-summary__sk-line--chip {
+  width: 72px;
+  height: 18px;
+  border-radius: var(--pill);
+}
+
+.market-summary__sk-line--title {
+  width: 88%;
+  height: 15px;
+}
+
+.market-summary__sk-line--snippet {
+  width: 70%;
+  height: 13px;
+}

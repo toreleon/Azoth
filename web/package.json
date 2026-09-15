@@ -1,0 +1,36 @@
+{
+  "name": "@toreleon/azoth-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Google-Finance-style web dashboard for Azoth (Vietnam market data)",
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"node --import tsx server/index.ts\" \"vite\"",
+    "server": "node --import tsx server/index.ts",
+    "server:watch": "tsx watch server/index.ts",
+    "client": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "lightweight-charts": "^4.2.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "technicalindicators": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

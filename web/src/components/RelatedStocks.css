@@ -1,0 +1,65 @@
+.related {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.related__row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.related__card {
+  flex: 0 0 auto;
+  width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  scroll-snap-align: start;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.related__card:hover {
+  box-shadow: var(--shadow-2);
+  background: var(--surface-hover);
+}
+
+.related__ticker {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.related__name {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.related__spark {
+  display: block;
+  width: 100%;
+}
+
+.related__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.related__last {
+  color: var(--text);
+  font-size: 13px;
+}

@@ -1,0 +1,160 @@
+.holdings {
+  padding: 8px;
+}
+
+.holdings--empty {
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.holdings__empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.holdings__err {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.holdings__scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.holdings__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.holdings__th {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.holdings__th--left {
+  text-align: left;
+}
+
+.holdings__th--num {
+  text-align: right;
+}
+
+.holdings__th--trend {
+  text-align: center;
+}
+
+.holdings__th--actions {
+  width: 76px;
+}
+
+.holdings__row {
+  transition: background 0.12s ease;
+}
+
+.holdings__row:hover {
+  background: var(--surface-hover);
+}
+
+.holdings__td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.holdings__row:last-child .holdings__td {
+  border-bottom: none;
+}
+
+.holdings__td--left {
+  text-align: left;
+}
+
+.holdings__td--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.holdings__td--trend {
+  text-align: center;
+}
+
+.holdings__td--num .gf-badge {
+  justify-content: flex-end;
+}
+
+.holdings__sym {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.holdings__ticker {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.holdings__sym:hover .holdings__ticker {
+  color: var(--accent);
+}
+
+.holdings__name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holdings__gain {
+  display: block;
+  font-weight: 500;
+}
+
+.holdings__gain-pct {
+  display: block;
+  font-size: 11px;
+}
+
+.holdings__actions {
+  display: inline-flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.holdings__act {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.holdings__act:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.holdings__act:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

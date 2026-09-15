@@ -1,0 +1,84 @@
+.sect {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.sect__crumb {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.sect__crumb-link {
+  color: var(--text-secondary);
+}
+.sect__crumb-link:hover {
+  color: var(--accent);
+}
+
+.sect__head-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sect__head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sect__name {
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.sect__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.sect__count {
+  font-size: 12.5px;
+}
+
+/* Synthetic sector index shape — no axis, it's a relative trend not a level. */
+.sect__spark {
+  width: 100%;
+  max-width: 640px;
+}
+
+.sect__spark svg {
+  display: block;
+  width: 100%;
+  height: 72px;
+}
+
+.sect__members {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sect__members-title {
+  margin: 0;
+}
+
+.sect__error {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sect__back {
+  margin-top: 8px;
+  color: var(--accent);
+  font-weight: 500;
+}

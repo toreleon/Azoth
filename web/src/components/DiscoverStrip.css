@@ -1,0 +1,122 @@
+.discover {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding: 2px 2px 8px;
+  margin: 0 -2px;
+  /* Thin scrollbar (Firefox) */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Thin scrollbar (WebKit) */
+.discover::-webkit-scrollbar {
+  height: 6px;
+}
+
+.discover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.discover::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--pill);
+}
+
+.discover::-webkit-scrollbar-thumb:hover {
+  background: var(--border-subtle);
+}
+
+.discover__card {
+  flex: 0 0 auto;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  scroll-snap-align: start;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+a.discover__card:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.discover__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.discover__ticker {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.discover__name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discover__spark {
+  display: block;
+  height: 36px;
+}
+
+.discover__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.discover__price {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discover__msg {
+  padding: 20px 2px;
+  font-size: 13px;
+}
+
+/* Skeleton card */
+.discover__card--skel {
+  pointer-events: none;
+}
+
+.discover__skel-ticker {
+  width: 46px;
+  height: 14px;
+  border-radius: var(--radius-sm);
+}
+
+.discover__skel-name {
+  width: 90px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+}
+
+.discover__skel-spark {
+  width: 100%;
+  height: 36px;
+  border-radius: var(--radius-sm);
+}
+
+.discover__skel-price {
+  width: 70px;
+  height: 14px;
+  border-radius: var(--radius-sm);
+}

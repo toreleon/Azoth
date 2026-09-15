@@ -1,0 +1,72 @@
+.quote {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.quote__header-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.quote__error {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.quote__back {
+  margin-top: 8px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* GF-style underline tab bar */
+.quote__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-top: -6px;
+}
+
+.quote__tab {
+  position: relative;
+  border: none;
+  background: none;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: 8px 8px 0 0;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.quote__tab:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.quote__tab--active {
+  color: var(--accent);
+}
+
+.quote__tab--active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+}
+
+.quote__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}

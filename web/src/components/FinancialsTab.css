@@ -1,0 +1,164 @@
+.fin {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fin__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fin__period {
+  font-size: 11px;
+}
+
+.fin__empty {
+  padding: 8px 0 4px;
+}
+
+.fin__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fin__metric-pill {
+  height: 30px;
+  font-size: 12.5px;
+}
+
+/* ---- Bar chart --------------------------------------------------------- */
+.fin__chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fin__chart-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.fin__unit {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.fin__chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 200px;
+  padding-top: 18px;
+  overflow-x: auto;
+}
+
+.fin__col {
+  flex: 1 1 0;
+  min-width: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  gap: 6px;
+}
+
+.fin__val {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.fin__bar {
+  width: 62%;
+  max-width: 44px;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 65%, transparent));
+  border-radius: 4px 4px 0 0;
+  transition: height 0.25s ease;
+}
+
+.fin__bar--neg {
+  background: linear-gradient(180deg, var(--down-strong), color-mix(in srgb, var(--down-strong) 65%, transparent));
+}
+
+.fin__year {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---- Table ------------------------------------------------------------- */
+.fin__table-wrap {
+  overflow-x: auto;
+}
+
+.fin__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fin__table th,
+.fin__table td {
+  padding: 9px 12px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fin__table thead th {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.fin__th-metric,
+.fin__row-label {
+  text-align: left;
+  color: var(--text-secondary);
+  font-weight: 500;
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+}
+
+.fin__row-label {
+  color: var(--text);
+}
+
+.fin__row-unit {
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.fin__table tbody tr {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.fin__table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.fin__table tbody tr:hover .fin__row-label {
+  background: var(--surface-hover);
+}
+
+.fin__row--active .fin__row-label,
+.fin__row--active td {
+  color: var(--accent);
+}
+
+.fin__table tbody td {
+  color: var(--text);
+}
+
+.fin__source {
+  font-size: 11px;
+}

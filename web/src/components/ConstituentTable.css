@@ -1,0 +1,99 @@
+/* ConstituentTable — ranked members of an index or sector. */
+
+.ctable__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+}
+
+.ctable__row-skel {
+  height: 38px;
+  border-radius: 8px;
+}
+
+.ctable__empty {
+  font-size: 13px;
+}
+
+/* Wide table scrolls inside its own container, never the page body. */
+.ctable__wrap {
+  overflow-x: auto;
+}
+
+.ctable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ctable thead th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.ctable tbody td {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.ctable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ctable tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.ctable__num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ctable thead th.ctable__num {
+  text-align: right;
+}
+
+.ctable__sym {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ctable__sym-ticker {
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.ctable__sym-name {
+  font-size: 11.5px;
+  line-height: 1.3;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctable__td-spark,
+.ctable__th-spark {
+  width: 84px;
+}
+
+@media (max-width: 640px) {
+  .ctable__td-spark,
+  .ctable__th-spark {
+    display: none;
+  }
+  .ctable__sym-name {
+    max-width: 140px;
+  }
+}

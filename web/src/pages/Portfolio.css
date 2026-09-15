@@ -1,0 +1,119 @@
+.portfolio {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Header -------------------------------------------------------------- */
+.portfolio__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.portfolio__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.portfolio__title {
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio__title-skel {
+  width: 200px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+}
+
+.portfolio__chip {
+  flex: none;
+}
+
+.portfolio__actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.portfolio__act {
+  font-size: 13px;
+}
+
+/* ---- Portfolio switcher -------------------------------------------------- */
+.portfolio__switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.portfolio__switch-pill {
+  font-size: 13px;
+}
+
+/* ---- Disclaimer caption -------------------------------------------------- */
+.portfolio__disclaimer {
+  font-size: 12px;
+  margin: -6px 2px 0;
+}
+
+/* ---- Empty + error states ----------------------------------------------- */
+.portfolio__empty {
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.portfolio__empty-title {
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.portfolio__empty-copy {
+  max-width: 460px;
+  font-size: 14px;
+}
+
+.portfolio__empty-btn {
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.portfolio__error {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.portfolio__back {
+  margin-top: 8px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ---- Skeletons ----------------------------------------------------------- */
+.portfolio__skel-head {
+  width: 220px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+}
+
+.portfolio__skel-card {
+  width: 100%;
+  height: 220px;
+  border-radius: var(--radius);
+}

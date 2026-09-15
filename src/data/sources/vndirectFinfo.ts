@@ -73,8 +73,13 @@ export interface CompanyProfile {
   enName?: string;
   foundDate?: string;
   vnAddress?: string;
+  enAddress?: string;
   phone?: string;
   website?: string;
+  /** CDN URL of the company logo, served by VNDirect. */
+  logo?: string;
+  employees?: number;
+  branches?: number;
   vnSummary?: string;
   enSummary?: string;
 }

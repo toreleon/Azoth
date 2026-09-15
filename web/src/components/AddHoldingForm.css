@@ -1,0 +1,69 @@
+.addhold {
+  padding: 16px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.addhold__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.addhold__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.addhold__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 130px;
+  min-width: 110px;
+}
+
+.addhold__field--sym {
+  flex: 0 1 130px;
+}
+
+.addhold__label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.addhold__input {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+
+.addhold__input:focus {
+  border-color: var(--accent);
+}
+
+.addhold__submit {
+  height: 38px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.addhold__hint {
+  font-size: 12px;
+}
+
+.addhold__error {
+  font-size: 13px;
+  font-weight: 500;
+}
