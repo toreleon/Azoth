@@ -16,3 +16,6 @@
 ## 2026-09-15 - Replace Chained Array Methods with In-Place Loops for Ticker Scoring
 **Learning:** `discoverTickers` in `src/tools/discover.ts` used chained `.filter().map().sort()` operations and object spreads (`{...c, metric: ...}`) to compute ticker metrics and rankings. This caused unnecessary $O(N)$ object allocations and garbage collection overhead across hundreds of ticker candidates on every discovery cycle.
 **Action:** Replace chained `.filter().map()` calls with a single indexed `for` loop that mutates the freshly created `Candidate` objects in-place (`c.metric = ...`) and manually builds the resulting array before sorting, significantly reducing GC pressure. Also applied this pattern to `.slice().map()` and `.slice().reduce()` in `buildCandidate` and `top` result building.
+## 2026-09-17 - Avoid chained slice and map in backtest interval generation
+**Learning:** In `src/agent/backtestRunner.ts`, the `intervalCloses` function used `.slice().map()` to construct an array of timestamps. This creates two intermediate arrays, causing unnecessary garbage collection overhead, particularly when running backtests over long periods or with high frequency.
+**Action:** Use a single indexed `for` loop to populate the resulting array directly from the original `vnindexBars` array without allocating intermediate structures.
