@@ -16,3 +16,6 @@
 ## 2026-09-15 - Replace Chained Array Methods with In-Place Loops for Ticker Scoring
 **Learning:** `discoverTickers` in `src/tools/discover.ts` used chained `.filter().map().sort()` operations and object spreads (`{...c, metric: ...}`) to compute ticker metrics and rankings. This caused unnecessary $O(N)$ object allocations and garbage collection overhead across hundreds of ticker candidates on every discovery cycle.
 **Action:** Replace chained `.filter().map()` calls with a single indexed `for` loop that mutates the freshly created `Candidate` objects in-place (`c.metric = ...`) and manually builds the resulting array before sorting, significantly reducing GC pressure. Also applied this pattern to `.slice().map()` and `.slice().reduce()` in `buildCandidate` and `top` result building.
+## 2026-09-20 - Optimize intermediate array allocations
+**Learning:** When using functional array methods like .map() and .filter() before putting data into a Set, Node creates temporary arrays that get immediately thrown away, causing unnecessary garbage collection pressure.
+**Action:** Replaced chained array manipulations with direct initialization via an empty Set and a single loop for array transformation and constraint checking before invoking set.add().

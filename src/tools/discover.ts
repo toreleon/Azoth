@@ -303,13 +303,17 @@ function criterionForStrategy(strategy: DiscoverStrategy | undefined): DiscoverC
 }
 
 function normalizeTickers(tickers: readonly string[]): string[] {
-  return Array.from(
-    new Set(
-      tickers
-        .map((t) => t.trim().toUpperCase())
-        .filter((t) => /^[A-Z0-9]{2,8}$/.test(t)),
-    ),
-  );
+  // ⚡ Bolt: Replaced chained .map() and .filter() with a single loop to avoid intermediate array allocations.
+  // Reduces GC overhead when normalizing large ticker lists (e.g. O(N) allocations down to O(1) beyond the output set).
+  const set = new Set<string>();
+  const regex = /^[A-Z0-9]{2,8}$/;
+  for (let i = 0; i < tickers.length; i++) {
+    const t = tickers[i]!.trim().toUpperCase();
+    if (regex.test(t)) {
+      set.add(t);
+    }
+  }
+  return Array.from(set);
 }
 
 async function listedTickers(floors: readonly ListedExchange[]): Promise<string[]> {
