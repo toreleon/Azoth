@@ -106,14 +106,27 @@ function intervalCloses(vnindexBars: Bar[], startSec: number, endSec: number, in
 
   if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return [];
 
-  const base = vnindexBars.slice(startIdx, endIdx + 1).map((b) => b.time);
   const step = Math.max(1, Math.round(intervalMinutes / 30));
-  if (step === 1) return base;
 
+  // ⚡ Bolt: Removed .slice().map() to avoid allocating large intermediate arrays in backtests
   const out: number[] = [];
-  for (let i = step - 1; i < base.length; i += step) out.push(base[i]!);
-  const last = base[base.length - 1];
-  if (last != null && out[out.length - 1] !== last) out.push(last);
+  const count = endIdx - startIdx + 1;
+
+  if (step === 1) {
+    for (let i = startIdx; i <= endIdx; i++) {
+      out.push(vnindexBars[i]!.time);
+    }
+    return out;
+  }
+
+  for (let i = step - 1; i < count; i += step) {
+    out.push(vnindexBars[startIdx + i]!.time);
+  }
+
+  const last = vnindexBars[endIdx]?.time;
+  if (last != null && out[out.length - 1] !== last) {
+    out.push(last);
+  }
   return out;
 }
 
