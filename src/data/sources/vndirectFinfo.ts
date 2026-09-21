@@ -107,8 +107,13 @@ export async function getListedEquityTickers(
   floors: readonly ListedExchange[] = ["HOSE", "HNX", "UPCOM"],
 ): Promise<string[]> {
   const profiles = (await Promise.all(floors.map((floor) => getCompanyProfilesByFloor(floor)))).flat();
-  const tickers = profiles
-    .map((p) => p.code.toUpperCase())
-    .filter((code) => /^[A-Z]{3}$/.test(code));
-  return Array.from(new Set(tickers)).sort();
+  // Avoid chained .map().filter() before Set initialization to reduce memory allocation
+  const set = new Set<string>();
+  for (let i = 0; i < profiles.length; i++) {
+    const code = profiles[i]!.code.toUpperCase();
+    if (/^[A-Z]{3}$/.test(code)) {
+      set.add(code);
+    }
+  }
+  return Array.from(set).sort();
 }

@@ -19,3 +19,7 @@
 ## 2026-09-17 - Avoid chained slice and map in backtest interval generation
 **Learning:** In `src/agent/backtestRunner.ts`, the `intervalCloses` function used `.slice().map()` to construct an array of timestamps. This creates two intermediate arrays, causing unnecessary garbage collection overhead, particularly when running backtests over long periods or with high frequency.
 **Action:** Use a single indexed `for` loop to populate the resulting array directly from the original `vnindexBars` array without allocating intermediate structures.
+
+## 2026-09-19 - Avoid chained array methods before Set initialization
+**Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
+**Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.

@@ -303,13 +303,15 @@ function criterionForStrategy(strategy: DiscoverStrategy | undefined): DiscoverC
 }
 
 function normalizeTickers(tickers: readonly string[]): string[] {
-  return Array.from(
-    new Set(
-      tickers
-        .map((t) => t.trim().toUpperCase())
-        .filter((t) => /^[A-Z0-9]{2,8}$/.test(t)),
-    ),
-  );
+  // Avoid chained .map().filter() before Set initialization to reduce memory allocation
+  const set = new Set<string>();
+  for (let i = 0; i < tickers.length; i++) {
+    const t = tickers[i]!.trim().toUpperCase();
+    if (/^[A-Z0-9]{2,8}$/.test(t)) {
+      set.add(t);
+    }
+  }
+  return Array.from(set);
 }
 
 async function listedTickers(floors: readonly ListedExchange[]): Promise<string[]> {
