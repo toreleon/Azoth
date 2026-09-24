@@ -347,10 +347,19 @@ export async function runBacktestSession(
           universe: BACKTEST_DISCOVERY_UNIVERSE,
           limit: maxCandidates,
         });
-        const held = (await broker.snapshot()).positions.map((p) => p.ticker);
-        const tickers = Array.from(
-          new Set([...held, ...discovery.candidates.map((c) => c.ticker)]),
-        ).slice(0, maxCandidates);
+
+        const positions = (await broker.snapshot()).positions;
+        const set = new Set<string>();
+
+        for (let i = 0; i < positions.length; i++) {
+          set.add(positions[i]!.ticker);
+        }
+
+        for (let i = 0; i < discovery.candidates.length; i++) {
+          set.add(discovery.candidates[i]!.ticker);
+        }
+
+        const tickers = Array.from(set).slice(0, maxCandidates);
 
         const decisions: FinalDecision[] = [];
         for (const ticker of tickers) {
