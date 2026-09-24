@@ -23,3 +23,6 @@
 ## 2026-09-19 - Avoid chained array methods before Set initialization
 **Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
 **Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.
+## 2026-09-20 - Avoid chained array operations before Set initialization in backtestRunner
+**Learning:** `src/agent/backtestRunner.ts` was using `new Set([...held, ...discovery.candidates.map(c => c.ticker)])` to gather tickers. This creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in backtests.
+**Action:** Replace this pattern with a direct loop, iterating over `held` (which are `positions`) and `discovery.candidates`, and use `set.add()` to insert elements without creating intermediate arrays.
