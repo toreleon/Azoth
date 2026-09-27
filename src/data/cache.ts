@@ -1,7 +1,21 @@
+import type { Database, Statement } from "better-sqlite3";
 import { getDb } from "../storage/db.js";
 import { isAsOfOverridden, asOfClock, nowSec } from "../agent/clock.js";
 
 const inflight = new Map<string, Promise<unknown>>();
+
+let _cachedDb: Database | null = null;
+let _getStmt: Statement | null = null;
+let _setStmt: Statement | null = null;
+
+function getStmts(db: Database) {
+  if (db !== _cachedDb) {
+    _cachedDb = db;
+    _getStmt = db.prepare("SELECT value, expires_at FROM kv_cache WHERE key = ?");
+    _setStmt = db.prepare("INSERT OR REPLACE INTO kv_cache (key, value, expires_at) VALUES (?, ?, ?)");
+  }
+  return { getStmt: _getStmt!, setStmt: _setStmt! };
+}
 
 const stats = {
   hits: 0,
@@ -47,11 +61,10 @@ export async function cached<T>(
   }
 
   const db = getDb();
+  const { getStmt, setStmt } = getStmts(db);
   const now = Math.floor(Date.now() / 1000);
 
-  const row = db
-    .prepare("SELECT value, expires_at FROM kv_cache WHERE key = ?")
-    .get(nsKey) as { value: string; expires_at: number } | undefined;
+  const row = getStmt.get(nsKey) as { value: string; expires_at: number } | undefined;
 
   if (row && row.expires_at > now) {
     stats.hits++;
@@ -69,9 +82,7 @@ export async function cached<T>(
       effectiveTtl >= Number.MAX_SAFE_INTEGER - now
         ? Number.MAX_SAFE_INTEGER
         : now + effectiveTtl;
-    db.prepare(
-      "INSERT OR REPLACE INTO kv_cache (key, value, expires_at) VALUES (?, ?, ?)",
-    ).run(nsKey, JSON.stringify(value), expiresAt);
+    setStmt.run(nsKey, JSON.stringify(value), expiresAt);
     return value;
   })().finally(() => {
     inflight.delete(nsKey);

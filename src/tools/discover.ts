@@ -60,10 +60,13 @@ function rsi14(bars: readonly { close: number }[]): number | null {
   let gains = 0;
   let losses = 0;
   const startIdx = Math.max(0, len - 15);
+  let prevClose = bars[startIdx]!.close;
   for (let i = startIdx + 1; i < len; i++) {
-    const d = bars[i]!.close - bars[i - 1]!.close;
+    const currentClose = bars[i]!.close;
+    const d = currentClose - prevClose;
     if (d > 0) gains += d;
     else losses -= d;
+    prevClose = currentClose;
   }
   const avgG = gains / 14;
   const avgL = losses / 14;
