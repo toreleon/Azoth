@@ -75,12 +75,27 @@ export const indicatorsTool = tool(
     bbStdDev,
   }) => {
     const series = await loadCloses(symbol, kind, resolution as Resolution, bars);
-    const closes = series.map((b) => b.close);
+
+    const len = series.length;
+    // Avoid chained .map() and .slice().map() to reduce memory allocation
+    const closes = new Array(len);
+    for (let i = 0; i < len; i++) {
+      closes[i] = series[i]!.close;
+    }
+
+    const sliceLen = Math.min(len, bars);
+    const startIdx = len - sliceLen;
+    const outBars = new Array(sliceLen);
+    for (let i = 0; i < sliceLen; i++) {
+      const b = series[startIdx + i]!;
+      outBars[i] = { time: b.time, close: b.close };
+    }
+
     const out: Record<string, unknown> = {
       symbol,
       kind,
       resolution,
-      bars: series.slice(-bars).map((b) => ({ time: b.time, close: b.close })),
+      bars: outBars,
       latest_close: last(closes),
     };
 

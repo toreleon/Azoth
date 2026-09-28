@@ -26,3 +26,8 @@
 ## 2024-05-18 - [SQLite Statement Caching]
 **Learning:** better-sqlite3 `db.prepare()` is expensive enough that calling it in a hot loop (like `cached()`) causes significant performance overhead (~4x slower). Statement caching per-database instance is required for hot path queries.
 **Action:** When using better-sqlite3 in frequently called functions (e.g. `cached()` wrapper or event loop hooks), lazily initialize and reuse prepared statements bound to the current database instance instead of preparing the statement on every call.
+
+## 2026-09-28 - Avoid chained map and slice in hot paths
+**Learning:** In `src/tools/technical.ts`, the `indicatorsTool` used chained array methods like `.map()` and `.slice().map()` to extract closes and construct the resulting bars array. This created intermediate array allocations causing significant garbage collection overhead during hot-path technical indicator computation.
+**Action:** Replaced the chained array methods with a single, highly optimized indexed `for` loop to reduce memory allocations and avoid GC pressure.
+
