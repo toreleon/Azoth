@@ -347,10 +347,18 @@ export async function runBacktestSession(
           universe: BACKTEST_DISCOVERY_UNIVERSE,
           limit: maxCandidates,
         });
-        const held = (await broker.snapshot()).positions.map((p) => p.ticker);
-        const tickers = Array.from(
-          new Set([...held, ...discovery.candidates.map((c) => c.ticker)]),
-        ).slice(0, maxCandidates);
+        const snap = await broker.snapshot();
+        // ⚡ Bolt: Removed .map(), spread, and .slice() chain to avoid allocating large intermediate arrays in backtests
+        const tickersSet = new Set<string>();
+        const positions = snap.positions;
+        for (let i = 0; i < positions.length && tickersSet.size < maxCandidates; i++) {
+          tickersSet.add(positions[i]!.ticker);
+        }
+        const candidates = discovery.candidates;
+        for (let i = 0; i < candidates.length && tickersSet.size < maxCandidates; i++) {
+          tickersSet.add(candidates[i]!.ticker);
+        }
+        const tickers = Array.from(tickersSet);
 
         const decisions: FinalDecision[] = [];
         for (const ticker of tickers) {

@@ -23,3 +23,4 @@
 ## 2026-09-19 - Avoid chained array methods before Set initialization
 **Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
 **Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.
+## 2025-09-29 - [Avoid chained array allocations in backtests]\n**Learning:** High-frequency backtests suffer when allocating intermediate arrays in hot loops (e.g., using chained `.map()`, array spreads, and `.slice()`). These create significant GC overhead.\n**Action:** Replace functional array pipelines with bounded `for` loops and `Set`s with early-exit conditions when extracting deduplicated bounded subsets.
