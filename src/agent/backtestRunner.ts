@@ -347,10 +347,25 @@ export async function runBacktestSession(
           universe: BACKTEST_DISCOVERY_UNIVERSE,
           limit: maxCandidates,
         });
-        const held = (await broker.snapshot()).positions.map((p) => p.ticker);
-        const tickers = Array.from(
-          new Set([...held, ...discovery.candidates.map((c) => c.ticker)]),
-        ).slice(0, maxCandidates);
+        const snapshotPositions = (await broker.snapshot()).positions;
+        const tickers: string[] = [];
+        const seen = new Set<string>();
+
+        // ⚡ Bolt: Optimize ticker extraction by avoiding chained .map(), Set spread, and .slice() allocations
+        for (let i = 0; i < snapshotPositions.length && tickers.length < maxCandidates; i++) {
+          const ticker = snapshotPositions[i]?.ticker;
+          if (ticker && !seen.has(ticker)) {
+            seen.add(ticker);
+            tickers.push(ticker);
+          }
+        }
+        for (let i = 0; i < discovery.candidates.length && tickers.length < maxCandidates; i++) {
+          const ticker = discovery.candidates[i]?.ticker;
+          if (ticker && !seen.has(ticker)) {
+            seen.add(ticker);
+            tickers.push(ticker);
+          }
+        }
 
         const decisions: FinalDecision[] = [];
         for (const ticker of tickers) {

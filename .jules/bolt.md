@@ -23,3 +23,7 @@
 ## 2026-09-19 - Avoid chained array methods before Set initialization
 **Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
 **Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.
+
+## 2026-09-30 - Avoid chained array operations during unique subset generation
+**Learning:** Generating a subset of unique elements by mapping arrays, concatenating via spread operators into a Set, converting back via Array.from(), and slicing creates multiple intermediate objects and unneeded iterations. This creates excessive garbage collection, particularly when dealing with large inner loops like backtesting tickers.
+**Action:** When extracting a unique, bounded subset from multiple arrays, use an explicitly bounded `for` loop and track seen elements with a `Set` to terminate iteration exactly when the limit is reached, skipping allocations for discarded elements.
