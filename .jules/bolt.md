@@ -23,3 +23,6 @@
 ## 2026-09-19 - Avoid chained array methods before Set initialization
 **Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
 **Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.
+## 2026-10-01 - Optimize ticker extraction in backtest hot loop
+**Learning:** In hot loops like the backtest runner, chaining declarative array and Set methods (e.g., `Array.from(new Set([...arr1, ...arr2]))`) creates unnecessary intermediate arrays and causes GC overhead. Even with small arrays, these micro-allocations add up in tight loops.
+**Action:** Use imperative bounded `for` loops with early-exit conditions and a tracking `Set` to prevent unnecessary iteration and allocations. While this slightly increases code verbosity, the performance trade-off is often justified in critical simulation paths.
