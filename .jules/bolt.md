@@ -23,3 +23,7 @@
 ## 2026-09-19 - Avoid chained array methods before Set initialization
 **Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
 **Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.
+
+## 2026-10-02 - Avoid chained array operations during duplicate filtering
+**Learning:** When generating a bounded, deduplicated array in hot paths (like ticker generation in `src/agent/backtestRunner.ts`), chaining `.map()`, spreads, `new Set()`, `Array.from()`, and `.slice()` causes excessive array allocations and garbage collection overhead, converting an O(K) process to O(N).
+**Action:** Replaced the chained methods with an imperative, bounded `for` loop and early loop exit. This significantly reduced allocations in the hot path without sacrificing correctness.
