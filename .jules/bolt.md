@@ -23,3 +23,6 @@
 ## 2026-09-19 - Avoid chained array methods before Set initialization
 **Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
 **Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.
+## 2026-10-03 - [Optimized array-to-Set conversion in hot paths]
+**Learning:** Chained array methods like `.map().slice()` followed by array-to-Set conversion create substantial intermediate array allocations and increase GC pressure in tight loops (such as backtesting engines).
+**Action:** When extracting bounded, deduplicated subsets, avoid `Array.from(new Set(arr.map(...))).slice()`. Instead, initialize an empty `Set` and `Array` to track uniqueness and use a bounded `for` loop to iteratively append to the array with an early-exit length condition.
