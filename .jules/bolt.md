@@ -31,3 +31,7 @@
 **Learning:** In `src/tools/technical.ts`, the `indicatorsTool` used chained array methods like `.map()` and `.slice().map()` to extract closes and construct the resulting bars array. This created intermediate array allocations causing significant garbage collection overhead during hot-path technical indicator computation.
 **Action:** Replaced the chained array methods with a single, highly optimized indexed `for` loop to reduce memory allocations and avoid GC pressure.
 
+## 2026-10-04 - Optimize hot loop array to Set extraction
+**Learning:** When generating a bounded, deduplicated subset (Set) from an array in hot paths, avoid array method chains like `Array.from(new Set([...arr1, ...arr2.map(f)])).slice(0, N)`. This causes several intermediate array allocations that create significant GC pressure during long loops (e.g., historical backtests).
+**Action:** Use an empty `Set` along with bounded `for` loops and a results array that implement an early exit (`tickers.length < maxCandidates`) to directly stream unique items. This processes fewer elements and generates zero intermediate arrays.
+

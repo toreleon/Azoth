@@ -347,10 +347,26 @@ export async function runBacktestSession(
           universe: BACKTEST_DISCOVERY_UNIVERSE,
           limit: maxCandidates,
         });
-        const held = (await broker.snapshot()).positions.map((p) => p.ticker);
-        const tickers = Array.from(
-          new Set([...held, ...discovery.candidates.map((c) => c.ticker)]),
-        ).slice(0, maxCandidates);
+        // ⚡ Bolt: Use bounded Set and loop to avoid array allocations in hot loop
+        const snap = await broker.snapshot();
+        const seen = new Set<string>();
+        const tickers: string[] = [];
+
+        for (let i = 0; i < snap.positions.length && tickers.length < maxCandidates; i++) {
+          const t = snap.positions[i]!.ticker;
+          if (!seen.has(t)) {
+            seen.add(t);
+            tickers.push(t);
+          }
+        }
+
+        for (let i = 0; i < discovery.candidates.length && tickers.length < maxCandidates; i++) {
+          const t = discovery.candidates[i]!.ticker;
+          if (!seen.has(t)) {
+            seen.add(t);
+            tickers.push(t);
+          }
+        }
 
         const decisions: FinalDecision[] = [];
         for (const ticker of tickers) {
