@@ -80,6 +80,7 @@
       "better-sqlite3"
     ],
     "overrides": {
+      "@modelcontextprotocol/sdk": "1.32.1",
       "undici": ">=7.29.0 <8.0.0",
       "ws": ">=8.21.0"
     }
