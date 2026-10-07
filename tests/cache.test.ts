@@ -34,11 +34,13 @@ describe("cache stats", () => {
 
   it("resetCacheStats correctly resets mutated stats", async () => {
     // We need to mutate the stats by simulating a miss, hit, and inflight collapse
+    let mockGetResult: any = undefined;
+    const stmtMock = {
+      get: vi.fn().mockImplementation(() => mockGetResult),
+      run: vi.fn()
+    };
     const dbMock = {
-      prepare: vi.fn().mockReturnValue({
-        get: vi.fn().mockReturnValue(undefined), // Simulating a miss
-        run: vi.fn(),
-      }),
+      prepare: vi.fn().mockReturnValue(stmtMock),
     };
     (getDb as any).mockReturnValue(dbMock);
 
@@ -56,9 +58,7 @@ describe("cache stats", () => {
     expect(currentStats.hits).toBe(0);
 
     // Now simulate a hit
-    dbMock.prepare = vi.fn().mockReturnValue({
-      get: vi.fn().mockReturnValue({ value: JSON.stringify("value2"), expires_at: Math.floor(Date.now() / 1000) + 100 }), // Simulating a hit
-    });
+    mockGetResult = { value: JSON.stringify("value2"), expires_at: Math.floor(Date.now() / 1000) + 100 };
 
     await cached("key2", 60, fetcher1);
 

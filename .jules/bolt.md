@@ -23,3 +23,6 @@
 ## 2026-09-19 - Avoid chained array methods before Set initialization
 **Learning:** Chaining `.map().filter()` inside a `new Set()` constructor creates multiple intermediate arrays, causing unnecessary memory allocation and garbage collection overhead in hot paths (like ticker normalization during discovery).
 **Action:** Replace chained array methods with a direct indexed `for` loop that transforms, validates, and `.add()`s directly to a freshly initialized `Set`.
+## 2024-05-18 - [SQLite Statement Caching]
+**Learning:** better-sqlite3 `db.prepare()` is expensive enough that calling it in a hot loop (like `cached()`) causes significant performance overhead (~4x slower). Statement caching per-database instance is required for hot path queries.
+**Action:** When using better-sqlite3 in frequently called functions (e.g. `cached()` wrapper or event loop hooks), lazily initialize and reuse prepared statements bound to the current database instance instead of preparing the statement on every call.

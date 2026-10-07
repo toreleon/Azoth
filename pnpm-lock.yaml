@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@modelcontextprotocol/sdk': '>=1.31.0'
   undici: '>=7.29.0 <8.0.0'
   ws: '>=8.21.0'
 
