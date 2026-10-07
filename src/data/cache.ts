@@ -41,7 +41,10 @@ export function resetCacheStats() {
  */
 function namespaced(key: string): string {
   if (asOfClock.getStore()?.asOfSec != null || isAsOfOverridden()) {
-    const day = new Date(nowSec() * 1000).toISOString().slice(0, 10);
+    // ⚡ Bolt: Optimize cache key generation by replacing slow Date/String
+    // allocations (new Date(...).toISOString().slice(0, 10)) with integer math,
+    // grouping by UTC day since epoch to maintain the same invalidation semantics.
+    const day = Math.floor(nowSec() / 86400);
     return `asof=${day}|${key}`;
   }
   return key;

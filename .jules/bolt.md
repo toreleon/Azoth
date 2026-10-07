@@ -35,3 +35,9 @@
 **Learning:** When generating a bounded, deduplicated subset (Set) from an array in hot paths, avoid array method chains like `Array.from(new Set([...arr1, ...arr2.map(f)])).slice(0, N)`. This causes several intermediate array allocations that create significant GC pressure during long loops (e.g., historical backtests).
 **Action:** Use an empty `Set` along with bounded `for` loops and a results array that implement an early exit (`tickers.length < maxCandidates`) to directly stream unique items. This processes fewer elements and generates zero intermediate arrays.
 
+## 2024-05-15 - DNSE API returns null instead of empty arrays
+**Learning:** The DNSE API (entrade.com.vn) returns `{ t: null, c: null }` instead of `{ t: [], c: [] }` when there is no data (e.g. for weekends/holidays). Attempting to read `.length` on `t` throws a TypeError inside `seriesToBars` that can abort the entire backtest runner.
+**Action:** Always verify if API arrays from external sources exist (`if (!s.t) return []`) before iterating, even if the TypeScript interface implies they are arrays.
+## 2024-05-15 - Fast cache keys using integer math
+**Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
+**Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
