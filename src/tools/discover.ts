@@ -78,7 +78,7 @@ function rsi14(bars: readonly { close: number }[]): number | null {
 async function buildCandidate(ticker: string): Promise<Candidate> {
   const to = nowSec();
   const from = to - 90 * DAY;
-  const day = new Date(to * 1000).toISOString().slice(0, 10);
+  const day = Math.floor(to / 86400);
   const bars = await cached(
     `ohlcv:stock:${ticker}:1D:90d:date=${day}`,
     600,

@@ -41,3 +41,6 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+## 2025-02-18 - Schwartzian Transform for Expensive Sorts
+**Learning:** Sorting an array based on an expensive parsing or mapping function (like regex extraction in `parseCafefDate`) inside the comparator callback evaluates that function O(N*log(N)) times.
+**Action:** When a sort comparator depends on a computed value, cache the computed value first by creating a mapped array, sorting that array, and then extracting the original items. This is known as the Schwartzian Transform and reduces the expensive computations from O(N*log(N)) to O(N).

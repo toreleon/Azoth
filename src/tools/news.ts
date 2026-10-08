@@ -56,19 +56,25 @@ export const newsTool = tool(
         const all = (await Promise.all(buckets)).flat();
         // Dedup by Title+Url, sort by publishedAt desc.
         const seen = new Set<string>();
-        const merged: CafefNewsItem[] = [];
+        const merged: Array<{ item: CafefNewsItem; parsedDate: string }> = [];
         for (const item of all) {
           const key = `${item.Title}|${item.LinkDetail ?? item.Url ?? ""}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          merged.push(item);
+          // ⚡ Bolt: Schwartzian transform to avoid calling parseCafefDate (which does regex
+          // and string allocations) inside the O(N*log(N)) sort comparator.
+          merged.push({
+            item,
+            parsedDate: parseCafefDate(item.DeployDate ?? item.PublishDate) ?? "",
+          });
         }
-        merged.sort((a, b) => {
-          const ka = parseCafefDate(a.DeployDate ?? a.PublishDate) ?? "";
-          const kb = parseCafefDate(b.DeployDate ?? b.PublishDate) ?? "";
-          return kb.localeCompare(ka);
-        });
-        return merged.slice(0, limit).map(shapeItem);
+        merged.sort((a, b) => b.parsedDate.localeCompare(a.parsedDate));
+
+        const out: ReturnType<typeof shapeItem>[] = new Array(Math.min(merged.length, limit));
+        for (let i = 0; i < out.length; i++) {
+          out[i] = shapeItem(merged[i]!.item);
+        }
+        return out;
       },
     );
     return asText({ ticker, count: result.length, items: result });

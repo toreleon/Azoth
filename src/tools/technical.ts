@@ -33,7 +33,7 @@ async function loadCloses(
     resolution === "1D" || resolution === "1W" || resolution === "1M";
   const ttl = isDailyBucket ? 600 : 60;
   const bucket = isDailyBucket
-    ? `date=${new Date(to * 1000).toISOString().slice(0, 10)}`
+    ? `date=${Math.floor(to / 86400)}`
     : `bucket=${Math.floor(to / ttl)}`;
   const key = `ohlcv:${kind}:${symbol}:${resolution}:${bars + 200}:${bucket}`;
   return cached(key, ttl, async () => {
