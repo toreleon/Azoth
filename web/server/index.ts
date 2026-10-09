@@ -16,6 +16,7 @@ import { getDb } from "../../src/storage/db.js";
 import {
   getStockOhlcv,
   getIndexOhlcv,
+  findFirstBarIndex,
   type Bar,
   type Resolution,
 } from "../../src/data/sources/dnsePublic.js";
@@ -272,8 +273,11 @@ function rangeToPlan(range: RangeKey): { resolution: Resolution; fromSec: number
 /** For a 1D range, keep only bars from the latest calendar day present. */
 function lastSessionOnly(bars: Bar[]): Bar[] {
   if (!bars.length) return bars;
-  const lastDay = new Date(bars[bars.length - 1]!.time * 1000).toISOString().slice(0, 10);
-  return bars.filter((b) => new Date(b.time * 1000).toISOString().slice(0, 10) === lastDay);
+  // Use O(log n) binary search on chronologically sorted time-series arrays
+  // rather than an O(n) array filter with string date allocations.
+  const lastDayStartSec = Math.floor(bars[bars.length - 1]!.time / 86400) * 86400;
+  const idx = findFirstBarIndex(bars, lastDayStartSec);
+  return idx === -1 ? bars : bars.slice(idx);
 }
 
 // ---------------------------------------------------------------------------
