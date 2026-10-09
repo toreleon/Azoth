@@ -41,3 +41,6 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+## 2024-05-20 - Fast O(log n) lookups for day boundaries in time-series arrays
+**Learning:** `lastSessionOnly` in `web/server/index.ts` previously used a chained `bars.filter` with `new Date(b.time * 1000).toISOString().slice(0, 10)` to keep only the bars from the last calendar day. This resulted in O(N) array traversal with extremely heavy Date and String allocations for every bar, causing significant performance overhead on large historical ranges.
+**Action:** Replace `Date` and `toISOString()` string allocations with fast integer math (`Math.floor(time / 86400) * 86400`) to find the UTC day boundary in seconds. Since the time-series arrays are chronologically sorted, use O(log n) binary search (`findFirstBarIndex`) to locate the first matching bar and `.slice()` the rest, completely eliminating the allocation bottleneck.
