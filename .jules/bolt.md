@@ -41,3 +41,7 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+
+## 2026-10-12 - Replace .reduce() with for-loops to prevent object accumulation overhead
+**Learning:** Using `.reduce()` to accumulate state across an array of objects (like calculating portfolio totals in `src/tools/portfolio.ts`) often involves destructuring or object mutations inside the reducer, which causes unnecessary garbage collection and performance degradation in hot paths.
+**Action:** Replace `.reduce()` operations over arrays with a standard `for` loop and accumulate directly into scalar variables (`let total_a = 0`, etc.), then construct the final object once at the end.
