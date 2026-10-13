@@ -19,17 +19,6 @@ function absUrl(u?: string): string | undefined {
   return `https://cafef.vn${u.startsWith("/") ? "" : "/"}${u}`;
 }
 
-function shapeItem(n: CafefNewsItem) {
-  return {
-    title: n.Title,
-    url: absUrl(n.LinkDetail ?? n.Url),
-    publishedAt: parseCafefDate(n.DeployDate ?? n.PublishDate),
-    source: n.Source,
-    snippet: n.SubTitle?.slice(0, 280),
-    type: n.NewsType,
-  };
-}
-
 export const newsTool = tool(
   "ticker_news",
   "Fetch recent news for a Vietnamese stock ticker from CafeF. Use this to surface catalysts, earnings, regulatory events, or sector news that could affect a decision. Returns up to `limit` recent articles with title, URL, source, publish date, and snippet.",
@@ -54,21 +43,37 @@ export const newsTool = tool(
         if (include.includes("industry")) buckets.push(getTickerNews(ticker, 96, limit));
         if (include.includes("disclosure")) buckets.push(getTickerNews(ticker, 97, limit));
         const all = (await Promise.all(buckets)).flat();
+        // ⚡ Bolt: Implement Schwartzian Transform to cache parsed dates for sorting,
+        // avoiding O(N log N) regex and allocation overhead from parseCafefDate.
         // Dedup by Title+Url, sort by publishedAt desc.
         const seen = new Set<string>();
-        const merged: CafefNewsItem[] = [];
+        const merged: { item: CafefNewsItem; parsedDate: string }[] = [];
         for (const item of all) {
           const key = `${item.Title}|${item.LinkDetail ?? item.Url ?? ""}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          merged.push(item);
+          merged.push({
+            item,
+            parsedDate: parseCafefDate(item.DeployDate ?? item.PublishDate) ?? "",
+          });
         }
-        merged.sort((a, b) => {
-          const ka = parseCafefDate(a.DeployDate ?? a.PublishDate) ?? "";
-          const kb = parseCafefDate(b.DeployDate ?? b.PublishDate) ?? "";
-          return kb.localeCompare(ka);
-        });
-        return merged.slice(0, limit).map(shapeItem);
+        merged.sort((a, b) => b.parsedDate.localeCompare(a.parsedDate));
+
+        // ⚡ Bolt: Replace chained .slice().map() with bounded loop to avoid intermediate arrays
+        const sliceLen = Math.min(merged.length, limit);
+        const resultItems = new Array(sliceLen);
+        for (let i = 0; i < sliceLen; i++) {
+          const { item: n, parsedDate } = merged[i]!;
+          resultItems[i] = {
+            title: n.Title,
+            url: absUrl(n.LinkDetail ?? n.Url),
+            publishedAt: parsedDate || undefined,
+            source: n.Source,
+            snippet: n.SubTitle?.slice(0, 280),
+            type: n.NewsType,
+          };
+        }
+        return resultItems;
       },
     );
     return asText({ ticker, count: result.length, items: result });

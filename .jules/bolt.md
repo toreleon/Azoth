@@ -41,3 +41,6 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+## 2026-10-13 - Schwartzian Transform for expensive date parsing during sorting
+**Learning:** In `src/tools/news.ts`, the `newsTool` was sorting an array of news items by comparing parsed date strings. `parseCafefDate()` uses regex matching and `new Date().toISOString()` allocations. Calling this inside the `.sort()` comparator resulted in expensive operations running (N \log N)$ times, increasing CPU usage and garbage collection pauses.
+**Action:** Apply the Schwartzian Transform. Map the raw array into an intermediate array of objects that cache the computed parsed date string alongside the raw item, sort this intermediate array, and then construct the final result. This reduces the expensive date parsing to (N)$.
