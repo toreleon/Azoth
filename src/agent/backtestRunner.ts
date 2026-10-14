@@ -147,10 +147,12 @@ async function markToMarket(
   priceAt: (ticker: string) => number | null,
 ): Promise<number> {
   const snap = await broker.snapshot();
-  return snap.positions.reduce(
-    (sum, p) => sum + positionValue(p, priceAt(p.ticker)),
-    snap.cashVnd,
-  );
+  let sum = snap.cashVnd;
+  for (let i = 0; i < snap.positions.length; i++) {
+    const p = snap.positions[i]!;
+    sum += positionValue(p, priceAt(p.ticker));
+  }
+  return sum;
 }
 
 async function recordGuardrailReject(
@@ -464,14 +466,24 @@ export async function runBacktestSession(
   const finalBench = last?.benchmark_mtm_vnd ?? opts.initialCash;
   const totalReturn = (finalMtm / opts.initialCash - 1) * 100;
   const benchReturn = (finalBench / opts.initialCash - 1) * 100;
+
   let runningPeak = opts.initialCash;
-  const maxDD = equityRows.reduce((mn, r) => {
+  let maxDD = 0;
+  for (let i = 0; i < equityRows.length; i++) {
+    const r = equityRows[i]!;
     runningPeak = Math.max(runningPeak, r.mtm_vnd);
-    return Math.min(mn, r.mtm_vnd / runningPeak - 1);
-  }, 0);
-  const totalCost = turnRows.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
-  const totalIn = turnRows.reduce((s, r) => s + (r.in_tokens ?? 0), 0);
-  const totalOut = turnRows.reduce((s, r) => s + (r.out_tokens ?? 0), 0);
+    maxDD = Math.min(maxDD, r.mtm_vnd / runningPeak - 1);
+  }
+
+  let totalCost = 0;
+  let totalIn = 0;
+  let totalOut = 0;
+  for (let i = 0; i < turnRows.length; i++) {
+    const r = turnRows[i]!;
+    totalCost += r.cost_usd ?? 0;
+    totalIn += r.in_tokens ?? 0;
+    totalOut += r.out_tokens ?? 0;
+  }
 
   const summary: SummaryPayload = {
     runId,
