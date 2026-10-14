@@ -41,3 +41,6 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+# 2024-05-18 - Avoid O(n) array filtering and sorting on time-series market data
+**Learning:** Avoid `reduce` loops that create objects in hot paths. Array reduce causes unnecessary object allocations and GC.
+**Action:** Use a `for` loop.
