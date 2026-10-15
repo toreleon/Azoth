@@ -97,15 +97,22 @@ function blocksFromRecords(records: SessionRecord[]): ChatBlock[] {
 }
 
 function statsFromRecords(records: SessionRecord[]): TurnStats {
-  return records.reduce<TurnStats>((acc, r) => {
-    if (r.type !== "result") return acc;
-    return {
-      inTokens: acc.inTokens + (r.usage?.inputTokens ?? 0),
-      outTokens: acc.outTokens + (r.usage?.outputTokens ?? 0),
-      costUsd: acc.costUsd + (r.costUsd ?? 0),
-      sessionId: r.sdkSessionId ?? acc.sessionId,
-    };
-  }, { inTokens: 0, outTokens: 0, costUsd: 0 });
+  // ⚡ Bolt: Replaced .reduce() with standard loop to avoid object allocation and GC overhead per record
+  let inTokens = 0;
+  let outTokens = 0;
+  let costUsd = 0;
+  let sessionId: string | undefined;
+
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]!;
+    if (r.type !== "result") continue;
+    inTokens += r.usage?.inputTokens ?? 0;
+    outTokens += r.usage?.outputTokens ?? 0;
+    costUsd += r.costUsd ?? 0;
+    if (r.sdkSessionId) sessionId = r.sdkSessionId;
+  }
+
+  return { inTokens, outTokens, costUsd, sessionId };
 }
 
 function truncateText(value: string, max = 120): string {
