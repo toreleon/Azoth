@@ -41,3 +41,6 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+## 2025-01-01 - Consolidating Array Operations
+**Learning:** Replacing chained `.reduce()` calls that iterate over the same array multiple times with a single `for` loop reduces iterations from O(N*K) to O(N). Additionally, avoiding object allocations inside hot loops (like in `statsFromRecords`) prevents unnecessary garbage collection overhead.
+**Action:** When extracting multiple aggregates from a single array in a hot path, always favor a single `for` loop over chaining multiple `.reduce()` or `.map()` passes.
