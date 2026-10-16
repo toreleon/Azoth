@@ -46,15 +46,14 @@ export async function shapeBrokerPortfolio(
     }),
   );
 
-  const totals = positions.reduce(
-    (a, p) => {
-      a.cost_basis_vnd += p.cost_basis_vnd;
-      if (p.market_value_vnd != null) a.market_value_vnd += p.market_value_vnd;
-      if (p.unrealized_pnl_vnd != null) a.unrealized_pnl_vnd += p.unrealized_pnl_vnd;
-      return a;
-    },
-    { cost_basis_vnd: 0, market_value_vnd: 0, unrealized_pnl_vnd: 0 },
-  );
+  const totals = { cost_basis_vnd: 0, market_value_vnd: 0, unrealized_pnl_vnd: 0 };
+  // ⚡ Bolt: Replaced .reduce() accumulating into an object with a for-loop mutating scalar variables directly
+  for (let i = 0; i < positions.length; i++) {
+    const p = positions[i]!;
+    totals.cost_basis_vnd += p.cost_basis_vnd;
+    if (p.market_value_vnd != null) totals.market_value_vnd += p.market_value_vnd;
+    if (p.unrealized_pnl_vnd != null) totals.unrealized_pnl_vnd += p.unrealized_pnl_vnd;
+  }
   const total_equity_vnd = snap.cashVnd + totals.market_value_vnd;
 
   return {

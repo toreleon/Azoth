@@ -41,3 +41,6 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+## 2026-10-05 - Replace chained reduce with single loop
+**Learning:** In `src/agent/backtestRunner.ts`, multiple passes of `.reduce()` were executed on large backtest output arrays (`turnRows`, `equityRows`), resulting in unnecessary O(N) traversals.
+**Action:** Replace multiple `.reduce()` calls mapping over the same array with a single `for` loop that mutates scalar variables, turning O(K*N) into O(N).
