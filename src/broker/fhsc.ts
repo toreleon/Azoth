@@ -771,13 +771,16 @@ export class FHSCBroker implements Broker {
   ): Promise<Order[]> {
     const { from, to } = todayRange();
     const rows = await this.orderHistoryForSubAccount(this.accountId, from, to, 1).catch(() => []);
-    let orders = rows.map(normalizeOrder);
-    if (filter.ticker) {
-      const t = filter.ticker.toUpperCase();
-      orders = orders.filter((o) => o.ticker === t);
+    const limit = filter.limit ?? 50;
+    const out: Order[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const o = normalizeOrder(rows[i]!);
+      if (filter.ticker && o.ticker !== filter.ticker.toUpperCase()) continue;
+      if (filter.status && o.status !== filter.status) continue;
+      out.push(o);
+      if (out.length >= limit) break;
     }
-    if (filter.status) orders = orders.filter((o) => o.status === filter.status);
-    return orders.slice(0, filter.limit ?? 50);
+    return out;
   }
 
   async placeOrder(input: PlaceOrderInput): Promise<Order> {

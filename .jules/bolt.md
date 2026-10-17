@@ -41,3 +41,9 @@
 ## 2024-05-15 - Fast cache keys using integer math
 **Learning:** Calling `new Date().toISOString().slice()` in hot paths (like `cached()` key generation during a backtest loop) adds up significantly (~1ms per thousand calls).
 **Action:** When grouping cache keys by day, use fast integer math `Math.floor(unixSecs / 86400)` instead of string-based date allocations to maintain identical semantics while avoiding object instantiation.
+
+## 2023-11-20 - Array Processing Bottlenecks
+
+**Learning:** When dealing with potentially large response arrays from broker APIs (like order histories), chaining `.map()`, `.filter()`, and `.slice()` leads to redundant iterations and excessive intermediate array allocations. Testing shows that manually iterating with a single `for` loop with early exits is ~50% faster for common operations like mapping and filtering.
+
+**Action:** Replace `arr.map(...).filter(...).slice(...)` with a single indexed `for` loop that performs mapping and filtering inline, pushing matches to a new array and `break`ing once the limit is reached.

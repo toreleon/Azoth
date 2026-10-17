@@ -464,14 +464,24 @@ export async function runBacktestSession(
   const finalBench = last?.benchmark_mtm_vnd ?? opts.initialCash;
   const totalReturn = (finalMtm / opts.initialCash - 1) * 100;
   const benchReturn = (finalBench / opts.initialCash - 1) * 100;
+  // Use a for loop instead of multiple reduce passes for better performance in hot path
   let runningPeak = opts.initialCash;
-  const maxDD = equityRows.reduce((mn, r) => {
-    runningPeak = Math.max(runningPeak, r.mtm_vnd);
-    return Math.min(mn, r.mtm_vnd / runningPeak - 1);
-  }, 0);
-  const totalCost = turnRows.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
-  const totalIn = turnRows.reduce((s, r) => s + (r.in_tokens ?? 0), 0);
-  const totalOut = turnRows.reduce((s, r) => s + (r.out_tokens ?? 0), 0);
+  let maxDD = 0;
+  for (let i = 0; i < equityRows.length; i++) {
+    const mtm = equityRows[i].mtm_vnd;
+    if (mtm > runningPeak) runningPeak = mtm;
+    const dd = mtm / runningPeak - 1;
+    if (dd < maxDD) maxDD = dd;
+  }
+  let totalCost = 0;
+  let totalIn = 0;
+  let totalOut = 0;
+  for (let i = 0; i < turnRows.length; i++) {
+    const r = turnRows[i];
+    totalCost += r.cost_usd ?? 0;
+    totalIn += r.in_tokens ?? 0;
+    totalOut += r.out_tokens ?? 0;
+  }
 
   const summary: SummaryPayload = {
     runId,
