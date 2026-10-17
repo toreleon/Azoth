@@ -251,15 +251,23 @@ export class DNSEBroker implements Broker {
     const resp = await this.getJson<{ orders?: OrderListItem[] }>(
       `/order-service/v2/orders?accountNo=${encodeURIComponent(this.accountNo)}`,
     ).catch(() => ({ orders: [] as OrderListItem[] }));
-    const all = (resp.orders ?? []).map((o): Order => {
+    const out: Order[] = [];
+    const orders = resp.orders ?? [];
+    const limit = filter.limit ?? 50;
+    for (let i = 0; i < orders.length; i++) {
+      const o = orders[i]!;
       const status = mapStatus(o.orderStatus ?? o.status);
+      if (filter.status && status !== filter.status) continue;
+      const ticker = String(o.symbol ?? "").toUpperCase();
+      if (filter.ticker && ticker !== filter.ticker.toUpperCase()) continue;
+
       const id = String(o.id ?? o.orderId ?? "");
       const filledQty = Number(o.filledQuantity ?? 0);
       const filledPrice = o.averagePrice ? vndToThousand(o.averagePrice) : null;
-      return {
+      out.push({
         id,
         broker: NAME,
-        ticker: String(o.symbol ?? "").toUpperCase(),
+        ticker,
         side: o.side === "NS" ? "SELL" : "BUY",
         type: (o.orderType === "LO" ? "LIMIT" : "MARKET") as Order["type"],
         quantity: Number(o.quantity ?? 0),
@@ -274,15 +282,10 @@ export class DNSEBroker implements Broker {
         filledPrice,
         filledQty: filledQty || null,
         notes: null,
-      };
-    });
-    let out = all;
-    if (filter.ticker) {
-      const t = filter.ticker.toUpperCase();
-      out = out.filter((o) => o.ticker === t);
+      });
+      if (out.length >= limit) break;
     }
-    if (filter.status) out = out.filter((o) => o.status === filter.status);
-    return out.slice(0, filter.limit ?? 50);
+    return out;
   }
 
   // ---- Order placement ----------------------------------------------------
