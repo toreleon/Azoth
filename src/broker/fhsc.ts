@@ -653,11 +653,16 @@ export class FHSCBroker implements Broker {
     const account = accountResult.status === "fulfilled" ? accountResult.value : ({} as FhscSubAccount);
     const portfolio = portfolioResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
     const positions = this.normalizePositions(portfolio);
-    const paymentCash = paymentAccounts.reduce(
-      (sum, account) => sum + numberOf(account.balance ?? account.total_balance),
-      0,
-    );
-    const blockedBalance = paymentAccounts.reduce((sum, account) => sum + numberOf(account.blocked_balance), 0);
+
+    // ⚡ Bolt: Consolidated two separate .reduce() passes into a single for...of loop
+    // to improve execution speed when aggregating sub-account balances.
+    let paymentCash = 0;
+    let blockedBalance = 0;
+    for (const pa of paymentAccounts) {
+      paymentCash += numberOf(pa.balance ?? pa.total_balance);
+      blockedBalance += numberOf(pa.blocked_balance);
+    }
+
     return {
       broker: NAME,
       cashVnd:
