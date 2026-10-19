@@ -469,9 +469,17 @@ export async function runBacktestSession(
     runningPeak = Math.max(runningPeak, r.mtm_vnd);
     return Math.min(mn, r.mtm_vnd / runningPeak - 1);
   }, 0);
-  const totalCost = turnRows.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
-  const totalIn = turnRows.reduce((s, r) => s + (r.in_tokens ?? 0), 0);
-  const totalOut = turnRows.reduce((s, r) => s + (r.out_tokens ?? 0), 0);
+
+  // ⚡ Bolt: Consolidated multiple .reduce() passes into a single for loop to reduce iteration complexity from O(N*K) to O(N)
+  let totalCost = 0;
+  let totalIn = 0;
+  let totalOut = 0;
+  for (let i = 0; i < turnRows.length; i++) {
+    const r = turnRows[i]!;
+    totalCost += r.cost_usd ?? 0;
+    totalIn += r.in_tokens ?? 0;
+    totalOut += r.out_tokens ?? 0;
+  }
 
   const summary: SummaryPayload = {
     runId,
