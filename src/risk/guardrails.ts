@@ -15,13 +15,13 @@ function equityValue(
   ticker: string,
   refPriceVnd: number,
 ): number {
-  return (
-    snapshot.cashVnd +
-    snapshot.positions.reduce((sum, p) => {
-      const px = p.ticker.toUpperCase() === ticker ? refPriceVnd : p.avgCost;
-      return sum + px * p.quantity * 1000;
-    }, 0)
-  );
+  let value = snapshot.cashVnd;
+  for (let i = 0; i < snapshot.positions.length; i++) {
+    const p = snapshot.positions[i]!;
+    const px = p.ticker.toUpperCase() === ticker ? refPriceVnd : p.avgCost;
+    value += px * p.quantity * 1000;
+  }
+  return value;
 }
 
 /**
