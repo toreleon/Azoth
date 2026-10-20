@@ -46,15 +46,16 @@ export async function shapeBrokerPortfolio(
     }),
   );
 
-  const totals = positions.reduce(
-    (a, p) => {
-      a.cost_basis_vnd += p.cost_basis_vnd;
-      if (p.market_value_vnd != null) a.market_value_vnd += p.market_value_vnd;
-      if (p.unrealized_pnl_vnd != null) a.unrealized_pnl_vnd += p.unrealized_pnl_vnd;
-      return a;
-    },
-    { cost_basis_vnd: 0, market_value_vnd: 0, unrealized_pnl_vnd: 0 },
-  );
+  let cost_basis_vnd = 0;
+  let market_value_vnd = 0;
+  let unrealized_pnl_vnd = 0;
+  for (let i = 0; i < positions.length; i++) {
+    const p = positions[i]!;
+    cost_basis_vnd += p.cost_basis_vnd;
+    if (p.market_value_vnd != null) market_value_vnd += p.market_value_vnd;
+    if (p.unrealized_pnl_vnd != null) unrealized_pnl_vnd += p.unrealized_pnl_vnd;
+  }
+  const totals = { cost_basis_vnd, market_value_vnd, unrealized_pnl_vnd };
   const total_equity_vnd = snap.cashVnd + totals.market_value_vnd;
 
   return {
